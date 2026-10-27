@@ -205,6 +205,7 @@ def get_opts():
     return [
         ("mingw_prefix", "MinGW prefix", mingw),
         EnumVariable("windows_subsystem", "Windows subsystem", "gui", ["gui", "console"], ignorecase=2),
+        ("windows_binary_name", "Override the executable filename stem (without .exe)", ""),
         ("msvc_version", "MSVC version to use. Handled automatically by SCons if omitted.", ""),
         ("mssdk_version", "Windows SDK version to use. Handled automatically by SCons if omitted.", ""),
         BoolVariable("use_mingw", "Use the Mingw compiler, even if MSVC is installed.", False),

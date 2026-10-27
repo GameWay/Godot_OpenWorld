@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <OEngineWorkspace Condition="'$(OEngineWorkspace)' == ''">@WORKSPACE@</OEngineWorkspace>
+    <OEnginePlatformToolset Condition="'$(OEnginePlatformToolset)' == ''">@TOOLSET@</OEnginePlatformToolset>
+    <PlatformToolset>$(OEnginePlatformToolset)</PlatformToolset>
+    <EngineScript>$(MSBuildProjectDirectory)\tools\oengine\Godot.ps1</EngineScript>
+    <EngineShell>$(SystemRoot)\System32\WindowsPowerShell\v1.0\powershell.exe</EngineShell>
+    <NMakeBuildCommandLine>&quot;$(EngineShell)&quot; -NoLogo -NoProfile -ExecutionPolicy Bypass -File &quot;$(EngineScript)&quot; -Action Build -Configuration &quot;$(Configuration)&quot; -Workspace &quot;$(OEngineWorkspace)&quot;</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>&quot;$(EngineShell)&quot; -NoLogo -NoProfile -ExecutionPolicy Bypass -File &quot;$(EngineScript)&quot; -Action Rebuild -Configuration &quot;$(Configuration)&quot; -Workspace &quot;$(OEngineWorkspace)&quot;</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>&quot;$(EngineShell)&quot; -NoLogo -NoProfile -ExecutionPolicy Bypass -File &quot;$(EngineScript)&quot; -Action Clean -Configuration &quot;$(Configuration)&quot; -Workspace &quot;$(OEngineWorkspace)&quot;</NMakeCleanCommandLine>
+    <NMakeOutput>$(OEngineWorkspace)\Package\$(EnginePackageFolder)\$(EngineBinaryName).exe</NMakeOutput>
+    <OutDir>$(OEngineWorkspace)\Package\$(EnginePackageFolder)\</OutDir>
+    <IntDir>$(MSBuildProjectDirectory)\bin\obj\$(Configuration)\</IntDir>
+    <LocalDebuggerCommand>$(NMakeOutput)</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>--project-manager</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <Import Project="$(MSBuildProjectDirectory)\godot.vs.local.props" Condition="Exists('$(MSBuildProjectDirectory)\godot.vs.local.props')" />
+</Project>

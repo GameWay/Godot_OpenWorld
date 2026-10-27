@@ -24,6 +24,13 @@
 
 /custom.py
 
+# OEngine local dependencies, outputs and generated Rider settings.
+/.tools/
+/Package/
+/.run/
+/godot.vs.user.props
+/godot.vs.local.props
+
 #############################
 ### Godot generated files ###
 #############################

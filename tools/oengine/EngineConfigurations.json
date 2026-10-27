@@ -1,0 +1,6 @@
+[
+  { "name": "Engine", "key": "engine", "mono": false, "shipping": false, "folder": "Gd/Dev", "binary": "oengine.editor.dev" },
+  { "name": "Engine Shipping", "key": "engine-shipping", "mono": false, "shipping": true, "folder": "Gd/Shipping", "binary": "oengine.editor" },
+  { "name": "Engine Mono", "key": "engine-mono", "mono": true, "shipping": false, "folder": "Mono/Dev", "binary": "oengine.editor.dev.mono" },
+  { "name": "Engine Mono Shipping", "key": "engine-mono-shipping", "mono": true, "shipping": true, "folder": "Mono/Shipping", "binary": "oengine.editor.mono" }
+]

@@ -1037,10 +1037,15 @@ def generate_vs_project(env, original_args, project_name="godot"):
             return v[0] if len(v) == 1 else f"{v[0]}={v[1]}"
         return v
 
-    def get_dependencies(file, env, exts, headers, sources, others):
+    def get_dependencies(file, env, exts, headers, sources, others, visited=None):
+        if visited is None:
+            visited = set()
+        if id(file) in visited:
+            return
+        visited.add(id(file))
         for child in file.children():
             if isinstance(child, str):
-                child = env.File(x)
+                child = env.File(child)
             fname = ""
             try:
                 fname = child.path
@@ -1059,7 +1064,7 @@ def generate_vs_project(env, original_args, project_name="godot"):
                     elif ext in exts["others"]:
                         others += [fname]
 
-            get_dependencies(child, env, exts, headers, sources, others)
+            get_dependencies(child, env, exts, headers, sources, others, visited)
 
     filtered_args = original_args.copy()
 
@@ -1231,9 +1236,10 @@ def generate_vs_project(env, original_args, project_name="godot"):
     sources_active = []
     others_active = []
 
-    get_dependencies(
-        env.File(f"#bin/godot{env['PROGSUFFIX']}"), env, extensions, headers_active, sources_active, others_active
-    )
+    program_path = f"bin/godot{env['PROGSUFFIX']}"
+    if platform == "windows" and env.get("windows_binary_name") and env["library_type"] == "executable":
+        program_path = f"bin/{env['windows_binary_name']}.exe"
+    get_dependencies(env.File("#" + program_path), env, extensions, headers_active, sources_active, others_active)
 
     all_items = []
     properties = []
@@ -1291,7 +1297,7 @@ def generate_vs_project(env, original_args, project_name="godot"):
 
         for x in itemlist.keys():
             properties.append(f"<ActiveProjectItemList_{x}>;{';'.join(itemlist[x])};</ActiveProjectItemList_{x}>")
-        output = os.path.join("bin", f"godot{env['PROGSUFFIX']}")
+        output = program_path.replace("/", os.sep)
 
         # The modules_enabled.gen.h header containing the defines is only generated on build, and only for the most recently built
         # platform, which means VS can't properly render code that's inside module-specific ifdefs. This adds those defines to the

@@ -92,7 +92,13 @@ if env["library_type"] == "static_library":
 elif env["library_type"] == "shared_library":
     prog = env.add_shared_library("#bin/godot", sources, PROGSUFFIX=env["PROGSUFFIX"])
 else:
-    prog = env.add_program("#bin/godot", sources, PROGSUFFIX=env["PROGSUFFIX"])
+    binary_name = env["windows_binary_name"]
+    if binary_name:
+        if Path(binary_name).name != binary_name or binary_name in (".", ".."):
+            raise ValueError("windows_binary_name must be a filename stem, not a path")
+        prog = env.add_program("#bin/" + binary_name + ".exe", sources, PROGSUFFIX=".exe")
+    else:
+        prog = env.add_program("#bin/godot", sources, PROGSUFFIX=env["PROGSUFFIX"])
 arrange_program_clean(prog)
 
 env.Depends(prog, "godot.manifest")
@@ -117,7 +123,12 @@ if env["windows_subsystem"] == "gui":
         env_wrap.Append(LINKFLAGS=["-Wl,--subsystem,console"])
         env_wrap.Append(LIBS=["version"])
 
-    prog_wrap = env_wrap.add_program("#bin/godot", common_win_wrap + res_wrap_obj, PROGSUFFIX=env["PROGSUFFIX_WRAP"])
+    if env["library_type"] == "executable" and env["windows_binary_name"]:
+        prog_wrap = env_wrap.add_program(
+            "#bin/" + env["windows_binary_name"] + ".console.exe", common_win_wrap + res_wrap_obj, PROGSUFFIX=".exe"
+        )
+    else:
+        prog_wrap = env_wrap.add_program("#bin/godot", common_win_wrap + res_wrap_obj, PROGSUFFIX=env["PROGSUFFIX_WRAP"])
     arrange_program_clean(prog_wrap)
     env_wrap.Depends(prog_wrap, prog)
     sources += common_win_wrap + res_wrap_obj
