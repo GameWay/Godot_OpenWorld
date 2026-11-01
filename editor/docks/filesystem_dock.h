@@ -408,6 +408,10 @@ public:
 	static FileSystemDock *get_singleton() { return singleton; }
 	static DependencyEditorOwners *get_owners_dialog() { return singleton->owners_editor; }
 
+	// OEngine: renames items in place (parent folders stay the same) and remaps dependencies once.
+	// A folder and items inside it may be renamed together; p_paths and p_new_names are parallel.
+	void batch_rename(const Vector<String> &p_paths, const Vector<String> &p_new_names);
+
 protected:
 	void _notification(int p_what);
 	static void _bind_methods();

@@ -2134,6 +2134,137 @@ void FileSystemDock::_move_operation_confirm(const String &p_to_path, bool p_cop
 	}
 }
 
+void FileSystemDock::batch_rename(const Vector<String> &p_paths, const Vector<String> &p_new_names) {
+	ERR_FAIL_COND(p_paths.size() != p_new_names.size());
+
+	struct RenameStep {
+		FileOrFolder item;
+		String new_path;
+		int depth = 0;
+	};
+	Vector<RenameStep> file_steps;
+	Vector<RenameStep> folder_steps;
+	for (int i = 0; i < p_paths.size(); i++) {
+		const String path = p_paths[i].trim_suffix("/");
+		if (path.is_empty() || path == "res:" || p_new_names[i].is_empty()) {
+			continue;
+		}
+		const String new_path = path.get_base_dir().path_join(p_new_names[i]);
+		if (new_path == path) {
+			continue;
+		}
+		RenameStep step;
+		step.item = FileOrFolder(path, !DirAccess::dir_exists_absolute(path));
+		step.new_path = new_path;
+		step.depth = path.count("/");
+		if (step.item.is_file) {
+			if (EditorFileSystem::get_singleton()->is_group_file(path)) {
+				EditorFileSystem::get_singleton()->move_group_file(path, new_path);
+			}
+			file_steps.push_back(step);
+		} else {
+			step.item.path += "/";
+			step.new_path += "/";
+			folder_steps.push_back(step);
+		}
+	}
+	if (file_steps.is_empty() && folder_steps.is_empty()) {
+		return;
+	}
+
+	// Deepest folders first: each folder is still at its original parent path when renamed.
+	struct DeeperFirst {
+		bool operator()(const RenameStep &p_a, const RenameStep &p_b) const { return p_a.depth > p_b.depth; }
+	};
+	folder_steps.sort_custom<DeeperFirst>();
+
+	to_move.clear();
+	for (const RenameStep &step : file_steps) {
+		to_move.push_back(step.item);
+	}
+	for (const RenameStep &step : folder_steps) {
+		to_move.push_back(step.item);
+	}
+	HashSet<String> file_owners;
+	_before_move(file_owners);
+
+	// Everything that changes path, collected while EditorFileSystem still holds the old tree.
+	Vector<String> affected_files;
+	Vector<String> affected_folders;
+	for (const RenameStep &step : folder_steps) {
+		affected_folders.push_back(step.item.path);
+		_get_all_items_in_dir(EditorFileSystem::get_singleton()->get_filesystem_path(step.item.path), affected_files, affected_folders);
+	}
+
+	HashMap<String, String> moved_files;
+	HashMap<String, String> moved_folders;
+	HashMap<String, String> renamed_files;
+	for (const RenameStep &step : file_steps) {
+		_try_move_item(step.item, step.new_path, moved_files, moved_folders);
+		if (moved_files.has(step.item.path)) {
+			renamed_files[step.item.path] = step.new_path;
+			affected_files.push_back(step.item.path);
+		}
+	}
+	Vector<Pair<String, String>> renamed_folders;
+	for (const RenameStep &step : folder_steps) {
+		_try_move_item(step.item, step.new_path, moved_files, moved_folders);
+		if (moved_folders.has(step.item.path)) {
+			renamed_folders.push_back(Pair<String, String>(step.item.path, step.new_path));
+		}
+	}
+
+	// _try_move_item only knows single moves; compose own and parent renames into final paths.
+	auto remap = [&renamed_folders](String p_path) {
+		for (const Pair<String, String> &folder : renamed_folders) {
+			if (p_path.begins_with(folder.first)) {
+				p_path = folder.second + p_path.substr(folder.first.length());
+			}
+		}
+		return p_path;
+	};
+	HashMap<String, String> file_renames;
+	for (const String &file : affected_files) {
+		const HashMap<String, String>::ConstIterator renamed = renamed_files.find(file);
+		const String final_path = remap(renamed ? renamed->value : file);
+		if (final_path != file) {
+			file_renames[file] = final_path;
+		}
+	}
+	HashMap<String, String> folder_renames;
+	for (const String &folder : affected_folders) {
+		const String final_path = remap(folder);
+		if (final_path != folder) {
+			folder_renames[folder] = final_path;
+		}
+	}
+
+	// Open scenes may already hold an intermediate path set by _try_move_item.
+	EditorData &editor_data = EditorNode::get_editor_data();
+	for (int i = 0; i < editor_data.get_edited_scene_count(); i++) {
+		const String scene_path = editor_data.get_scene_path(i);
+		const HashMap<String, String>::ConstIterator renamed = file_renames.find(scene_path);
+		const String final_path = renamed ? renamed->value : remap(scene_path);
+		if (final_path != scene_path && editor_data.get_edited_scene_root(i)) {
+			editor_data.get_edited_scene_root(i)->set_scene_file_path(final_path);
+			EditorNode::get_singleton()->save_editor_layout_delayed();
+		}
+	}
+
+	if (file_renames.is_empty() && folder_renames.is_empty()) {
+		return;
+	}
+	int current_tab = EditorSceneTabs::get_singleton()->get_current_tab();
+	_update_resource_paths_after_move(file_renames);
+	_update_dependencies_after_move(file_renames, file_owners);
+	_update_project_settings_after_move(file_renames, folder_renames);
+	_update_favorites_after_move(file_renames, folder_renames);
+	EditorSceneTabs::get_singleton()->set_current_tab(current_tab);
+
+	print_verbose("FileSystem: calling rescan.");
+	_rescan();
+}
+
 void FileSystemDock::_before_move(HashSet<String> &r_file_owners) const {
 	HashSet<String> renamed_files;
 	for (int i = 0; i < to_move.size(); i++) {
