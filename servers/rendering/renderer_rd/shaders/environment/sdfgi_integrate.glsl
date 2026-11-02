@@ -79,6 +79,9 @@ layout(push_constant, std430) uniform Params {
 
 	vec2 sky_irradiance_border_size;
 	bool store_ambient_texture;
+	float sky_mix;
+
+	vec3 ambient_color;
 	uint pad;
 }
 params;
@@ -279,7 +282,7 @@ void main() {
 #else
 			light.rgb = textureLod(sampler2D(sky_irradiance, linear_sampler_mipmaps), vec3_to_oct_with_border(sky_dir, params.sky_irradiance_border_size), 2.0).rgb; // Use second mipmap because we don't usually throw a lot of rays, so this compensates.
 #endif
-			light.rgb *= params.sky_energy;
+			light.rgb = mix(params.ambient_color, light.rgb * params.sky_energy, params.sky_mix);
 			light.a = 0.0;
 
 		} else if (bool(params.sky_flags & SKY_FLAGS_MODE_COLOR)) {

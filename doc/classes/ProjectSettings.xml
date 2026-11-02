@@ -3112,6 +3112,10 @@
 			The number of rays to throw per frame when computing signed distance field global illumination. Higher values lead to a less noisy result, at the cost of performance. See also [member rendering/global_illumination/sdfgi/frames_to_converge] and [member rendering/global_illumination/sdfgi/frames_to_update_lights].
 			[b]Note:[/b] This property is only read when the project starts. To control SDFGI quality at runtime, call [method RenderingServer.environment_set_sdfgi_ray_count] instead.
 		</member>
+		<member name="rendering/global_illumination/sdfgi/sky_reflections" type="bool" setter="" getter="" default="true">
+			If [code]true[/code], reflections on rough surfaces (roughness of [code]0.2[/code] and above) trace the signed distance field along the reflected direction. Where that direction is not occluded, the environment reflection selected by [member Environment.reflected_light_source] is used instead of SDFGI probe radiance. If [code]false[/code], SDFGI probe radiance replaces the environment reflection on rough surfaces. Enabling this costs additional GPU time in the SDFGI pass.
+			[b]Note:[/b] This property is only read when the project starts.
+		</member>
 		<member name="rendering/global_illumination/voxel_gi/quality" type="int" setter="" getter="" default="0">
 			The VoxelGI quality to use. High quality leads to more precise lighting and better reflections, but is slower to render. This setting does not affect the baked data and doesn't require baking the [VoxelGI] again to apply.
 			[b]Note:[/b] This property is only read when the project starts. To control VoxelGI quality at runtime, call [method RenderingServer.voxel_gi_set_quality] instead.

@@ -65,7 +65,7 @@ layout(set = 0, binding = 15, std140) uniform SDFGI {
 	float y_mult;
 
 	vec3 occlusion_clamp;
-	uint pad3;
+	uint sky_reflections;
 
 	vec3 occlusion_renormalize;
 	uint pad4;
@@ -367,9 +367,17 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 
 		ambient_light.rgb = diffuse;
 
-		if (roughness < 0.2) {
+		// OEngine: rough surfaces also trace the SDF, but only to find out whether the reflected
+		// direction is blocked; open directions keep the environment reflection of the scene shader.
+		bool smooth_reflection = roughness < 0.2;
+		if (smooth_reflection || sdfgi.sky_reflections != 0u) {
 			vec3 pos_to_uvw = 1.0 / sdfgi.grid_size;
 			vec4 light_accum = vec4(0.0);
+			float occlusion_accum = 0.0;
+			// In cells; smaller than the start bias so open directions do not occlude themselves.
+			const float occlusion_softness = 1.0;
+			const uint max_rough_steps = 256u;
+			uint steps = 0u;
 
 			float blend_size = (sdfgi.grid_size.x / float(sdfgi.probe_axis_size - 1)) * 0.5;
 
@@ -402,9 +410,13 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 			uint i = 0;
 			bool found = false;
 			while (true) {
-				if (length(ray_pos) >= max_distance || light_accum.a > 0.99) {
+				if (length(ray_pos) >= max_distance || (smooth_reflection ? light_accum.a : occlusion_accum) > 0.99) {
 					break;
 				}
+				if (!smooth_reflection && steps >= max_rough_steps) {
+					break;
+				}
+				steps++;
 				if (!found && i >= cascade && length(ray_pos) < radius_sizes[i]) {
 					uint next_i = min(i + 1, sdfgi.max_cascades - 1);
 					cascade = max(i, cascade); //never go down
@@ -421,6 +433,7 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 						hit_light.a = clamp(1.0 - (fdistance / softness), 0.0, 1.0);
 						hit_light.rgb *= hit_light.a;
 					}
+					float hit_occlusion = clamp(1.0 - fdistance / occlusion_softness, 0.0, 1.0);
 
 					fdistance /= sdfgi.cascades[i].to_cell;
 
@@ -437,6 +450,7 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 							hit_light2.a = clamp(1.0 - (fdistance2 / softness), 0.0, 1.0);
 							hit_light2.rgb *= hit_light2.a;
 						}
+						float hit_occlusion2 = clamp(1.0 - fdistance2 / occlusion_softness, 0.0, 1.0);
 
 						float prev_radius = i == 0 ? 0.0 : radius_sizes[max(0, i - 1)];
 						float blend = clamp((length(ray_pos) - prev_radius) / (radius_sizes[i] - prev_radius), 0.0, 1.0);
@@ -444,10 +458,12 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 						fdistance2 /= sdfgi.cascades[next_i].to_cell;
 
 						hit_light = mix(hit_light, hit_light2, blend);
+						hit_occlusion = mix(hit_occlusion, hit_occlusion2, blend);
 						fdistance = mix(fdistance, fdistance2, blend);
 					}
 
 					light_accum += hit_light;
+					occlusion_accum += hit_occlusion;
 					ray_pos += ray_dir * fdistance;
 					found = true;
 				}
@@ -458,18 +474,22 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 				}
 			}
 
-			vec3 light = light_accum.rgb / max(light_accum.a, 0.00001);
-			float alpha = min(1.0, light_accum.a);
+			if (smooth_reflection) {
+				vec3 light = light_accum.rgb / max(light_accum.a, 0.00001);
+				float alpha = min(1.0, light_accum.a);
 
-			float b = min(1.0, roughness * 5.0);
+				float b = min(1.0, roughness * 5.0);
 
-			float sa = 1.0 - b;
+				float sa = 1.0 - b;
 
-			reflection_light.a = alpha * sa + b;
-			if (reflection_light.a == 0) {
-				specular = vec3(0.0);
+				reflection_light.a = alpha * sa + b;
+				if (reflection_light.a == 0) {
+					specular = vec3(0.0);
+				} else {
+					specular = (light * alpha * sa + specular * b) / reflection_light.a;
+				}
 			} else {
-				specular = (light * alpha * sa + specular * b) / reflection_light.a;
+				reflection_light.a *= min(1.0, occlusion_accum);
 			}
 		}
 

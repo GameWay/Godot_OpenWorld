@@ -429,6 +429,9 @@ private:
 
 			float sky_irradiance_border_size[2];
 			uint32_t store_ambient_texture;
+			float sky_mix; // Environment ambient sky contribution, used in SKY_FLAGS_MODE_SKY.
+
+			float ambient_color[3]; // Environment ambient color premultiplied by its energy.
 			uint32_t pad;
 		};
 
@@ -708,6 +711,7 @@ public:
 	RSE::EnvironmentSDFGIRayCount sdfgi_ray_count = RSE::ENV_SDFGI_RAY_COUNT_16;
 	RSE::EnvironmentSDFGIFramesToConverge sdfgi_frames_to_converge = RSE::ENV_SDFGI_CONVERGE_IN_30_FRAMES;
 	RSE::EnvironmentSDFGIFramesToUpdateLight sdfgi_frames_to_update_light = RSE::ENV_SDFGI_UPDATE_LIGHT_IN_4_FRAMES;
+	bool sdfgi_sky_reflections = true;
 
 	float sdfgi_solid_cell_ratio = 0.25;
 	Vector3 sdfgi_debug_probe_pos;
@@ -738,7 +742,7 @@ public:
 		float y_mult;
 
 		float occlusion_clamp[3];
-		uint32_t pad3;
+		uint32_t sky_reflections;
 
 		float occlusion_renormalize[3];
 		uint32_t pad4;

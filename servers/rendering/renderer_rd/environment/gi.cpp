@@ -1335,24 +1335,48 @@ void GI::SDFGI::update_probes(RID p_env, SkyRD::Sky *p_sky) {
 	RID sky_uniform_set = gi->sdfgi_shader.integrate_default_sky_uniform_set;
 	push_constant.sky_flags = 0;
 	push_constant.y_mult = y_mult;
+	push_constant.sky_mix = 1.0;
+	push_constant.ambient_color[0] = 0.0;
+	push_constant.ambient_color[1] = 0.0;
+	push_constant.ambient_color[2] = 0.0;
+	push_constant.pad = 0;
 
 	if (reads_sky && p_env.is_valid()) {
-		push_constant.sky_energy = RendererSceneRenderRD::get_singleton()->environment_get_bg_energy_multiplier(p_env);
+		RendererSceneRenderRD *scene_render = RendererSceneRenderRD::get_singleton();
+		const RSE::EnvironmentBG env_bg = scene_render->environment_get_background(p_env);
+		const RSE::EnvironmentAmbientSource ambient_src = scene_render->environment_get_ambient_source(p_env);
+		const bool ambient_from_bg = ambient_src == RSE::ENV_AMBIENT_SOURCE_BG;
+		push_constant.sky_energy = scene_render->environment_get_bg_energy_multiplier(p_env);
 
-		if (RendererSceneRenderRD::get_singleton()->environment_get_background(p_env) == RSE::ENV_BG_CLEAR_COLOR) {
+		// OEngine: light that probe rays receive from the sky follows the environment ambient
+		// settings, matching forward shading without SDFGI (see RenderSceneDataRD::update_ubo).
+		Color ambient_color = scene_render->environment_get_ambient_light(p_env).srgb_to_linear() * scene_render->environment_get_ambient_light_energy(p_env);
+		push_constant.ambient_color[0] = ambient_color.r;
+		push_constant.ambient_color[1] = ambient_color.g;
+		push_constant.ambient_color[2] = ambient_color.b;
+
+		if (ambient_from_bg && env_bg == RSE::ENV_BG_CLEAR_COLOR) {
 			push_constant.sky_flags |= SDFGIShader::IntegratePushConstant::SKY_FLAGS_MODE_COLOR;
 			Color c = RSG::texture_storage->get_default_clear_color().srgb_to_linear();
 			push_constant.sky_color_or_orientation[0] = c.r;
 			push_constant.sky_color_or_orientation[1] = c.g;
 			push_constant.sky_color_or_orientation[2] = c.b;
-		} else if (RendererSceneRenderRD::get_singleton()->environment_get_background(p_env) == RSE::ENV_BG_COLOR) {
+		} else if (ambient_from_bg && env_bg == RSE::ENV_BG_COLOR) {
 			push_constant.sky_flags |= SDFGIShader::IntegratePushConstant::SKY_FLAGS_MODE_COLOR;
-			Color c = RendererSceneRenderRD::get_singleton()->environment_get_bg_color(p_env);
+			Color c = scene_render->environment_get_bg_color(p_env);
 			push_constant.sky_color_or_orientation[0] = c.r;
 			push_constant.sky_color_or_orientation[1] = c.g;
 			push_constant.sky_color_or_orientation[2] = c.b;
 
-		} else if (RendererSceneRenderRD::get_singleton()->environment_get_background(p_env) == RSE::ENV_BG_SKY) {
+		} else if (ambient_src == RSE::ENV_AMBIENT_SOURCE_COLOR) {
+			push_constant.sky_flags |= SDFGIShader::IntegratePushConstant::SKY_FLAGS_MODE_COLOR;
+			push_constant.sky_energy = 1.0;
+			push_constant.sky_color_or_orientation[0] = ambient_color.r;
+			push_constant.sky_color_or_orientation[1] = ambient_color.g;
+			push_constant.sky_color_or_orientation[2] = ambient_color.b;
+
+		} else if ((ambient_from_bg && env_bg == RSE::ENV_BG_SKY) || ambient_src == RSE::ENV_AMBIENT_SOURCE_SKY) {
+			push_constant.sky_mix = scene_render->environment_get_ambient_sky_contribution(p_env);
 			if (p_sky && p_sky->radiance.is_valid()) {
 				if (integrate_sky_uniform_set.is_null() || !RD::get_singleton()->uniform_set_is_valid(integrate_sky_uniform_set)) {
 					Vector<RD::Uniform> uniforms;
@@ -1857,6 +1881,7 @@ void GI::SDFGI::pre_process_gi(const Transform3D &p_transform, RenderDataRD *p_r
 	sdfgi_data.occlusion_clamp[0] = occlusion_clamp;
 	sdfgi_data.occlusion_clamp[1] = occlusion_clamp;
 	sdfgi_data.occlusion_clamp[2] = occlusion_clamp;
+	sdfgi_data.sky_reflections = gi->sdfgi_sky_reflections;
 	sdfgi_data.normal_bias = (normal_bias / csize) * sdfgi_data.cascade_probe_size[0];
 
 	//vec2 tex_pixel_size = 1.0 / vec2(ivec2( (OCT_SIZE+2) * params.probe_axis_size * params.probe_axis_size, (OCT_SIZE+2) * params.probe_axis_size ) );
@@ -3517,6 +3542,7 @@ GI::GI() {
 	sdfgi_ray_count = RSE::EnvironmentSDFGIRayCount(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/probe_ray_count")), 0, int32_t(RSE::ENV_SDFGI_RAY_COUNT_MAX - 1)));
 	sdfgi_frames_to_converge = RSE::EnvironmentSDFGIFramesToConverge(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/frames_to_converge")), 0, int32_t(RSE::ENV_SDFGI_CONVERGE_MAX - 1)));
 	sdfgi_frames_to_update_light = RSE::EnvironmentSDFGIFramesToUpdateLight(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/frames_to_update_lights")), 0, int32_t(RSE::ENV_SDFGI_UPDATE_LIGHT_MAX - 1)));
+	sdfgi_sky_reflections = GLOBAL_GET("rendering/global_illumination/sdfgi/sky_reflections");
 }
 
 GI::~GI() {
