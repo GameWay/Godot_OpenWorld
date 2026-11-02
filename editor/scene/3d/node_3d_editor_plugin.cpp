@@ -2808,6 +2808,24 @@ void Node3DEditor::move_control_to_right_panel(Control *p_control) {
 	add_control_to_right_panel(p_control);
 }
 
+// OEngine: preview children that @tool scripts add in the editor have no owner and used to get
+// no gizmos, so they could not be clicked. They get gizmos when every node up to the nearest
+// owned ancestor is non-internal; a click selects that ancestor (see _select_clicked). Internal
+// helpers (terrain chunks, collision bodies, MultiMesh views) keep having none.
+static bool _is_editor_preview(const Node *p_node, const Node *p_edited_scene) {
+	const Node *node = p_node;
+	while (node && node != p_edited_scene) {
+		if (node->is_internal()) {
+			return false;
+		}
+		if (node->get_owner()) {
+			return true;
+		}
+		node = node->get_parent();
+	}
+	return node == p_edited_scene;
+}
+
 void Node3DEditor::_request_gizmo(Object *p_obj) {
 	Node3D *sp = Object::cast_to<Node3D>(p_obj);
 	if (!sp) {
@@ -2817,7 +2835,7 @@ void Node3DEditor::_request_gizmo(Object *p_obj) {
 	bool is_selected = (sp == selected);
 
 	Node *edited_scene = EditorNode::get_singleton()->get_edited_scene();
-	if (edited_scene && (sp == edited_scene || (sp->get_owner() && edited_scene->is_ancestor_of(sp)))) {
+	if (edited_scene && (sp == edited_scene || (edited_scene->is_ancestor_of(sp) && (sp->get_owner() || _is_editor_preview(sp, edited_scene))))) {
 		for (int i = 0; i < gizmo_plugins_by_priority.size(); ++i) {
 			Ref<EditorNode3DGizmo> seg = gizmo_plugins_by_priority.write[i]->get_gizmo(sp);
 

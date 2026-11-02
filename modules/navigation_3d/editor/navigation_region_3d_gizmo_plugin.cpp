@@ -137,8 +137,13 @@ void NavigationRegion3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 	Ref<TriangleMesh> tmesh = memnew(TriangleMesh);
 	tmesh->create(tmeshfaces);
 
-	p_gizmo->add_collision_triangles(tmesh);
-	p_gizmo->add_collision_segments(lines);
+	// OEngine: an unselected navmesh is drawn faintly and covers the ground and every obstacle
+	// outline, so it stole clicks from objects standing on it. Only a selected region, whose
+	// navmesh is shown in full, takes part in viewport picking.
+	if (p_gizmo->is_selected()) {
+		p_gizmo->add_collision_triangles(tmesh);
+		p_gizmo->add_collision_segments(lines);
+	}
 
 	Ref<ArrayMesh> debug_mesh = Ref<ArrayMesh>(memnew(ArrayMesh));
 	int polygon_count = navigationmesh->get_polygon_count();
