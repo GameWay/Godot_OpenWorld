@@ -563,7 +563,6 @@ public:
 		enum {
 			MAX_CASCADES = 8,
 			CASCADE_SIZE = 128,
-			PROBE_DIVISOR = 16,
 			ANISOTROPY_SIZE = 6,
 			MAX_DYNAMIC_LIGHTS = 128,
 			MAX_STATIC_LIGHTS = 1024,
@@ -712,6 +711,9 @@ public:
 	RSE::EnvironmentSDFGIFramesToConverge sdfgi_frames_to_converge = RSE::ENV_SDFGI_CONVERGE_IN_30_FRAMES;
 	RSE::EnvironmentSDFGIFramesToUpdateLight sdfgi_frames_to_update_light = RSE::ENV_SDFGI_UPDATE_LIGHT_IN_4_FRAMES;
 	bool sdfgi_sky_reflections = true;
+	// OEngine: probe intervals per cascade axis (upstream 16). 32 places a probe every 4 cells
+	// instead of 8, so narrow pits stay lit in coarser cascades, at extra integration cost.
+	int32_t sdfgi_probe_divisor = 16;
 
 	float sdfgi_solid_cell_ratio = 0.25;
 	Vector3 sdfgi_debug_probe_pos;

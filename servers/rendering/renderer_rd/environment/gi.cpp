@@ -424,7 +424,7 @@ void GI::SDFGI::create(RID p_env, const Vector3 &p_world_position, uint32_t p_re
 	y_mult = y_scale[y_scale_mode];
 	version = gi->sdfgi_current_version;
 	cascades.resize(num_cascades);
-	probe_axis_count = SDFGI::PROBE_DIVISOR + 1;
+	probe_axis_count = gi->sdfgi_probe_divisor + 1;
 	solid_cell_ratio = gi->sdfgi_solid_cell_ratio;
 	solid_cell_count = uint32_t(float(cascade_size * cascade_size * cascade_size) * solid_cell_ratio);
 
@@ -565,7 +565,7 @@ void GI::SDFGI::create(RID p_env, const Vector3 &p_world_position, uint32_t p_re
 		cascade.cell_size = base_cell_size;
 		Vector3 world_position = p_world_position;
 		world_position.y *= y_mult;
-		int32_t probe_cells = cascade_size / SDFGI::PROBE_DIVISOR;
+		int32_t probe_cells = cascade_size / gi->sdfgi_probe_divisor;
 		Vector3 probe_size = Vector3(1, 1, 1) * cascade.cell_size * probe_cells;
 		Vector3i probe_pos = Vector3i((world_position / probe_size + Vector3(0.5, 0.5, 0.5)).floor());
 		cascade.position = probe_pos * probe_cells;
@@ -1198,12 +1198,12 @@ void GI::SDFGI::update(RID p_env, const Vector3 &p_world_position) {
 	probe_bias = RendererSceneRenderRD::get_singleton()->environment_get_sdfgi_probe_bias(p_env);
 	reads_sky = RendererSceneRenderRD::get_singleton()->environment_get_sdfgi_read_sky_light(p_env);
 
-	int32_t drag_margin = (cascade_size / SDFGI::PROBE_DIVISOR) / 2;
+	int32_t drag_margin = (cascade_size / gi->sdfgi_probe_divisor) / 2;
 
 	for (SDFGI::Cascade &cascade : cascades) {
 		cascade.dirty_regions = Vector3i();
 
-		Vector3 probe_half_size = Vector3(1, 1, 1) * cascade.cell_size * float(cascade_size / SDFGI::PROBE_DIVISOR) * 0.5;
+		Vector3 probe_half_size = Vector3(1, 1, 1) * cascade.cell_size * float(cascade_size / gi->sdfgi_probe_divisor) * 0.5;
 		probe_half_size = Vector3(0, 0, 0);
 
 		Vector3 world_position = p_world_position;
@@ -1420,7 +1420,7 @@ void GI::SDFGI::update_probes(RID p_env, SkyRD::Sky *p_sky) {
 	RD::ComputeListID compute_list = RD::get_singleton()->compute_list_begin();
 	RD::get_singleton()->compute_list_bind_compute_pipeline(compute_list, gi->sdfgi_shader.integrate_pipeline[SDFGIShader::INTEGRATE_MODE_PROCESS].get_rid());
 
-	int32_t probe_divisor = cascade_size / SDFGI::PROBE_DIVISOR;
+	int32_t probe_divisor = cascade_size / gi->sdfgi_probe_divisor;
 	for (uint32_t i = 0; i < cascades.size(); i++) {
 		push_constant.cascade = i;
 		push_constant.world_offset[0] = cascades[i].position.x / probe_divisor;
@@ -1541,7 +1541,7 @@ int GI::SDFGI::get_pending_region_data(int p_region, Vector3i &r_local_offset, V
 void GI::SDFGI::update_cascades() {
 	//update cascades
 	SDFGI::Cascade::UBO cascade_data[SDFGI::MAX_CASCADES];
-	int32_t probe_divisor = cascade_size / SDFGI::PROBE_DIVISOR;
+	int32_t probe_divisor = cascade_size / gi->sdfgi_probe_divisor;
 
 	for (uint32_t i = 0; i < cascades.size(); i++) {
 		Vector3 pos = Vector3((Vector3i(1, 1, 1) * -int32_t(cascade_size >> 1) + cascades[i].position)) * cascades[i].cell_size;
@@ -1792,17 +1792,17 @@ void GI::SDFGI::debug_probes(RID p_framebuffer, const uint32_t p_view_count, con
 	if (gi->sdfgi_debug_probe_dir != Vector3()) {
 		uint32_t cascade = 0;
 		Vector3 offset = Vector3((Vector3i(1, 1, 1) * -int32_t(cascade_size >> 1) + cascades[cascade].position)) * cascades[cascade].cell_size * Vector3(1.0, 1.0 / y_mult, 1.0);
-		Vector3 probe_size = cascades[cascade].cell_size * (cascade_size / SDFGI::PROBE_DIVISOR) * Vector3(1.0, 1.0 / y_mult, 1.0);
+		Vector3 probe_size = cascades[cascade].cell_size * (cascade_size / gi->sdfgi_probe_divisor) * Vector3(1.0, 1.0 / y_mult, 1.0);
 		Vector3 ray_from = gi->sdfgi_debug_probe_pos;
 		Vector3 ray_to = gi->sdfgi_debug_probe_pos + gi->sdfgi_debug_probe_dir * cascades[cascade].cell_size * Math::sqrt(3.0) * cascade_size;
 		float sphere_radius = 0.2;
 		float closest_dist = 1e20;
 		gi->sdfgi_debug_probe_enabled = false;
 
-		Vector3i probe_from = cascades[cascade].position / (cascade_size / SDFGI::PROBE_DIVISOR);
-		for (int i = 0; i < (SDFGI::PROBE_DIVISOR + 1); i++) {
-			for (int j = 0; j < (SDFGI::PROBE_DIVISOR + 1); j++) {
-				for (int k = 0; k < (SDFGI::PROBE_DIVISOR + 1); k++) {
+		Vector3i probe_from = cascades[cascade].position / (cascade_size / gi->sdfgi_probe_divisor);
+		for (int i = 0; i < (gi->sdfgi_probe_divisor + 1); i++) {
+			for (int j = 0; j < (gi->sdfgi_probe_divisor + 1); j++) {
+				for (int k = 0; k < (gi->sdfgi_probe_divisor + 1); k++) {
 					Vector3 pos = offset + probe_size * Vector3(i, j, k);
 					Vector3 res;
 					if (Geometry3D::segment_intersects_sphere(ray_from, ray_to, pos, sphere_radius, &res)) {
@@ -1822,17 +1822,17 @@ void GI::SDFGI::debug_probes(RID p_framebuffer, const uint32_t p_view_count, con
 
 	if (gi->sdfgi_debug_probe_enabled) {
 		uint32_t cascade = 0;
-		uint32_t probe_cells = (cascade_size / SDFGI::PROBE_DIVISOR);
+		uint32_t probe_cells = (cascade_size / gi->sdfgi_probe_divisor);
 		Vector3i probe_from = cascades[cascade].position / probe_cells;
 		Vector3i ofs = gi->sdfgi_debug_probe_index - probe_from;
 		if (ofs.x < 0 || ofs.y < 0 || ofs.z < 0) {
 			return;
 		}
-		if (ofs.x > SDFGI::PROBE_DIVISOR || ofs.y > SDFGI::PROBE_DIVISOR || ofs.z > SDFGI::PROBE_DIVISOR) {
+		if (ofs.x > gi->sdfgi_probe_divisor || ofs.y > gi->sdfgi_probe_divisor || ofs.z > gi->sdfgi_probe_divisor) {
 			return;
 		}
 
-		uint32_t mult = (SDFGI::PROBE_DIVISOR + 1);
+		uint32_t mult = (gi->sdfgi_probe_divisor + 1);
 		uint32_t index = ofs.z * mult * mult + ofs.y * mult + ofs.x;
 
 		push_constant.probe_debug_index = index;
@@ -1904,7 +1904,7 @@ void GI::SDFGI::pre_process_gi(const Transform3D &p_transform, RenderDataRD *p_r
 	sdfgi_data.occlusion_renormalize[1] = 1.0;
 	sdfgi_data.occlusion_renormalize[2] = 1.0 / float(sdfgi_data.max_cascades);
 
-	int32_t probe_divisor = cascade_size / SDFGI::PROBE_DIVISOR;
+	int32_t probe_divisor = cascade_size / gi->sdfgi_probe_divisor;
 
 	for (uint32_t i = 0; i < sdfgi_data.max_cascades; i++) {
 		SDFGIData::ProbeCascadeData &c = sdfgi_data.cascades[i];
@@ -2192,7 +2192,7 @@ void GI::SDFGI::render_region(Ref<RenderSceneBuffersRD> p_render_buffers, int p_
 				ipush_constant.image_size[0] = probe_axis_count * probe_axis_count;
 				ipush_constant.image_size[1] = probe_axis_count;
 
-				int32_t probe_divisor = cascade_size / SDFGI::PROBE_DIVISOR;
+				int32_t probe_divisor = cascade_size / gi->sdfgi_probe_divisor;
 				ipush_constant.cascade = cascade;
 				ipush_constant.world_offset[0] = cascades[cascade].position.x / probe_divisor;
 				ipush_constant.world_offset[1] = cascades[cascade].position.y / probe_divisor;
@@ -2370,7 +2370,7 @@ void GI::SDFGI::render_region(Ref<RenderSceneBuffersRD> p_render_buffers, int p_
 
 		// occlusion
 		{
-			uint32_t probe_size = cascade_size / SDFGI::PROBE_DIVISOR;
+			uint32_t probe_size = cascade_size / gi->sdfgi_probe_divisor;
 			Vector3i probe_global_pos = cascades[cascade].position / probe_size;
 
 			RD::get_singleton()->compute_list_bind_compute_pipeline(compute_list, gi->sdfgi_shader.preprocess_pipeline[SDFGIShader::PRE_PROCESS_OCCLUSION].get_rid());
@@ -3544,6 +3544,7 @@ GI::GI() {
 	sdfgi_frames_to_converge = RSE::EnvironmentSDFGIFramesToConverge(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/frames_to_converge")), 0, int32_t(RSE::ENV_SDFGI_CONVERGE_MAX - 1)));
 	sdfgi_frames_to_update_light = RSE::EnvironmentSDFGIFramesToUpdateLight(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/frames_to_update_lights")), 0, int32_t(RSE::ENV_SDFGI_UPDATE_LIGHT_MAX - 1)));
 	sdfgi_sky_reflections = GLOBAL_GET("rendering/global_illumination/sdfgi/sky_reflections");
+	sdfgi_probe_divisor = int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/probe_density")) == 1 ? 32 : 16;
 }
 
 GI::~GI() {
@@ -3669,7 +3670,7 @@ void GI::init(SkyRD *p_sky) {
 		preprocess_modes.push_back("\n#define MODE_UPSCALE_JUMP_FLOOD\n");
 		preprocess_modes.push_back("\n#define MODE_OCCLUSION\n");
 		preprocess_modes.push_back("\n#define MODE_STORE\n");
-		String defines = "\n#define OCCLUSION_SIZE " + itos(SDFGI::CASCADE_SIZE / SDFGI::PROBE_DIVISOR) + "\n";
+		String defines = "\n#define OCCLUSION_SIZE " + itos(SDFGI::CASCADE_SIZE / sdfgi_probe_divisor) + "\n";
 		sdfgi_shader.preprocess.initialize(preprocess_modes, defines);
 		sdfgi_shader.preprocess_shader = sdfgi_shader.preprocess.version_create();
 		for (int i = 0; i < SDFGIShader::PRE_PROCESS_MAX; i++) {
