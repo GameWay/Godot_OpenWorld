@@ -432,7 +432,7 @@ private:
 			float sky_mix; // Environment ambient sky contribution, used in SKY_FLAGS_MODE_SKY.
 
 			float ambient_color[3]; // Environment ambient color premultiplied by its energy.
-			uint32_t pad;
+			float bounce_energy; // Multiplier for light that probe rays receive from voxels.
 		};
 
 		SdfgiIntegrateShaderRD integrate;

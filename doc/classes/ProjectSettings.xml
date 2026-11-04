@@ -3112,6 +3112,26 @@
 			The number of rays to throw per frame when computing signed distance field global illumination. Higher values lead to a less noisy result, at the cost of performance. See also [member rendering/global_illumination/sdfgi/frames_to_converge] and [member rendering/global_illumination/sdfgi/frames_to_update_lights].
 			[b]Note:[/b] This property is only read when the project starts. To control SDFGI quality at runtime, call [method RenderingServer.environment_set_sdfgi_ray_count] instead.
 		</member>
+		<member name="rendering/global_illumination/sdfgi/ambient_lift" type="float" setter="" getter="" default="0.0">
+			Brightens ambient light from SDFGI or [VoxelGI] on partially occluded surfaces, such as pits and overhangs. The share of the environment ambient light (see [member Environment.ambient_light_source]) that GI lets through is raised to the power of [code]1.0 - ambient_lift[/code]. The lift fades in from zero visibility up to [member rendering/global_illumination/sdfgi/ambient_lift_threshold], so fully enclosed surfaces (caves) stay dark. Fully open surfaces are not changed. [code]0.0[/code] disables the lift.
+			This setting is read every frame and can be changed at runtime.
+		</member>
+		<member name="rendering/global_illumination/sdfgi/ambient_lift_min" type="float" setter="" getter="" default="0.0">
+			Lowest share of the environment ambient light kept on partially occluded surfaces, limiting how dark GI can make them. Like [member rendering/global_illumination/sdfgi/ambient_lift], it fades in up to [member rendering/global_illumination/sdfgi/ambient_lift_threshold], so caves are not brightened.
+			This setting is read every frame and can be changed at runtime.
+		</member>
+		<member name="rendering/global_illumination/sdfgi/ambient_lift_threshold" type="float" setter="" getter="" default="0.3">
+			Share of the environment ambient light that GI lets through at which [member rendering/global_illumination/sdfgi/ambient_lift] and [member rendering/global_illumination/sdfgi/ambient_lift_min] reach full strength. Below it they fade out towards fully enclosed surfaces. Higher values make the transition from open to enclosed areas wider and softer, and keep more of the darkening in deep overhangs.
+			This setting is read every frame and can be changed at runtime.
+		</member>
+		<member name="rendering/global_illumination/sdfgi/bounce_energy" type="float" setter="" getter="" default="1.0">
+			Multiplier for the light that SDFGI probe rays receive from lit geometry (indirect bounces). Values above [code]1.0[/code] brighten areas lit mostly by nearby surfaces, such as pits and overhangs next to sunlit ground, without adding light to spaces where nothing is lit.
+			This setting is read every frame and can be changed at runtime.
+		</member>
+		<member name="rendering/global_illumination/sdfgi/ssil_occlusion" type="float" setter="" getter="" default="0.35">
+			Share of the screen-space indirect lighting occlusion ([member Environment.ssil_enabled]) kept on surfaces whose ambient light comes from SDFGI or [VoxelGI]. These already occlude ambient light, so the full SSIL occlusion darkens pits and undersides twice. [code]1.0[/code] keeps the full SSIL occlusion. The light SSIL adds is not affected.
+			This setting is read every frame and can be changed at runtime.
+		</member>
 		<member name="rendering/global_illumination/sdfgi/sky_reflections" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], reflections on rough surfaces (roughness of [code]0.2[/code] and above) trace the signed distance field along the reflected direction. Where that direction is not occluded, the environment reflection selected by [member Environment.reflected_light_source] is used instead of SDFGI probe radiance. If [code]false[/code], SDFGI probe radiance replaces the environment reflection on rough surfaces. Enabling this costs additional GPU time in the SDFGI pass.
 			[b]Note:[/b] This property is only read when the project starts.

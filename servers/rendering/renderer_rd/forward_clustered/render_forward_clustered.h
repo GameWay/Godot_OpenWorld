@@ -314,12 +314,12 @@ private:
 			uint32_t ss_effects_flags;
 			float ssao_light_affect;
 			float ssao_ao_affect;
-			uint32_t pad1;
+			float ssil_gi_occlusion;
 
 			float sdf_to_bounds[16];
 
 			int32_t sdf_offset[3];
-			uint32_t pad2;
+			float gi_ambient_lift;
 
 			int32_t sdf_size[3];
 			uint32_t gi_upscale_for_msaa;
@@ -328,6 +328,11 @@ private:
 			float volumetric_fog_inv_length;
 			float volumetric_fog_detail_spread;
 			uint32_t volumetric_fog_pad;
+
+			float gi_ambient_lift_min;
+			float gi_ambient_lift_threshold;
+			uint32_t gi_ambient_pad0;
+			uint32_t gi_ambient_pad1;
 		};
 
 		struct PushConstantUbershader {

@@ -760,6 +760,14 @@ uint32_t RenderForwardClustered::_setup_environment(const RenderDataRD *p_render
 		}
 	}
 
+	// OEngine: read every frame so the value can be tuned while the game runs.
+	scene_state.ubo.ssil_gi_occlusion = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/ssil_occlusion"), 0.0f, 1.0f);
+	scene_state.ubo.gi_ambient_lift = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/ambient_lift"), 0.0f, 0.9f);
+	scene_state.ubo.gi_ambient_lift_min = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/ambient_lift_min"), 0.0f, 1.0f);
+	scene_state.ubo.gi_ambient_lift_threshold = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/ambient_lift_threshold"), 0.01f, 1.0f);
+	scene_state.ubo.gi_ambient_pad0 = 0;
+	scene_state.ubo.gi_ambient_pad1 = 0;
+
 	if (get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_UNSHADED) {
 		scene_state.ubo.ss_effects_flags = 0;
 	} else if (p_render_data->reflection_probe.is_null() && is_environment(p_render_data->environment)) {

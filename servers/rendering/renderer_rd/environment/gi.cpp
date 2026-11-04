@@ -1339,7 +1339,8 @@ void GI::SDFGI::update_probes(RID p_env, SkyRD::Sky *p_sky) {
 	push_constant.ambient_color[0] = 0.0;
 	push_constant.ambient_color[1] = 0.0;
 	push_constant.ambient_color[2] = 0.0;
-	push_constant.pad = 0;
+	// OEngine: read every update so the value can be tuned while the game runs.
+	push_constant.bounce_energy = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/bounce_energy"), 0.0f, 4.0f);
 
 	if (reads_sky && p_env.is_valid()) {
 		RendererSceneRenderRD *scene_render = RendererSceneRenderRD::get_singleton();

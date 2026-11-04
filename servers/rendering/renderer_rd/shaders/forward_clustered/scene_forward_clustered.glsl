@@ -1686,6 +1686,8 @@ void fragment_shader(in SceneData scene_data) {
 	vec3 indirect_specular_light = vec3(0.0, 0.0, 0.0);
 	vec3 diffuse_light = vec3(0.0, 0.0, 0.0);
 	vec3 ambient_light = vec3(0.0, 0.0, 0.0);
+	// OEngine: how much of ambient_light comes from GI buffers (SDFGI/VoxelGI), already occluded.
+	float gi_buffer_coverage = 0.0;
 #ifndef MODE_UNSHADED
 	// Used in regular draw pass and when drawing SDFs for SDFGI and materials for VoxelGI.
 	emission *= scene_data.emissive_exposure_normalization;
@@ -2093,8 +2095,29 @@ void fragment_shader(in SceneData scene_data) {
 		vec4 buffer_reflection = textureLod(sampler2D(reflection_buffer, SAMPLER_LINEAR_CLAMP), coord, 0.0);
 #endif // USE_MULTIVIEW
 
+		// OEngine: the environment reflection is unoccluded. Scale it by the share of the
+		// environment ambient that GI lets through, so shaded pits and undersides of rough
+		// surfaces do not reflect the sky and look wet.
+		const vec3 gi_luminance_weights = vec3(0.2126, 0.7152, 0.0722);
+		float env_ambient_luminance = dot(ambient_light, gi_luminance_weights);
+		if (env_ambient_luminance > 0.0001) {
+			float gi_visibility = dot(buffer_ambient.rgb, gi_luminance_weights) / env_ambient_luminance;
+			indirect_specular_light *= mix(1.0, min(gi_visibility, 1.0), buffer_ambient.a);
+
+			// OEngine: lift partially occluded ambient (pits, overhangs) with a curve on visibility,
+			// optionally not below a minimum. Both fade in from 0 up to the threshold, so enclosed
+			// spaces stay dark and the transition into them stays wide.
+			float lift_min = implementation_data.gi_ambient_lift_min;
+			if ((implementation_data.gi_ambient_lift > 0.0 || lift_min > 0.0) && gi_visibility > 0.0001 && gi_visibility < 1.0) {
+				float lifted = max(pow(gi_visibility, 1.0 - implementation_data.gi_ambient_lift), lift_min);
+				lifted = mix(gi_visibility, lifted, smoothstep(0.0, implementation_data.gi_ambient_lift_threshold, gi_visibility));
+				buffer_ambient.rgb *= max(lifted, gi_visibility) / gi_visibility;
+			}
+		}
+
 		ambient_light = mix(ambient_light, buffer_ambient.rgb, buffer_ambient.a);
 		indirect_specular_light = mix(indirect_specular_light, buffer_reflection.rgb, buffer_reflection.a);
+		gi_buffer_coverage = buffer_ambient.a;
 	}
 #endif // !USE_LIGHTMAP
 
@@ -2276,7 +2299,9 @@ void fragment_shader(in SceneData scene_data) {
 #else
 			vec4 ssil = textureLod(sampler2D(ssil_buffer, SAMPLER_LINEAR_CLAMP), screen_uv, 0.0);
 #endif // USE_MULTIVIEW
-			ambient_light *= 1.0 - ssil.a;
+			// OEngine: GI already occludes its ambient at its own scale; keep only part of the
+			// SSIL occlusion there so concave areas are not darkened twice.
+			ambient_light *= 1.0 - ssil.a * mix(1.0, implementation_data.ssil_gi_occlusion, gi_buffer_coverage);
 			ambient_light += ssil.rgb * albedo.rgb;
 		}
 

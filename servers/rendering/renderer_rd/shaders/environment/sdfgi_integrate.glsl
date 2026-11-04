@@ -82,7 +82,7 @@ layout(push_constant, std430) uniform Params {
 	float sky_mix;
 
 	vec3 ambient_color;
-	uint pad;
+	float bounce_energy;
 }
 params;
 
@@ -267,6 +267,7 @@ void main() {
 
 					//one liner magic
 					light.rgb = hit_light * (dot(max(vec3(0.0), (hit_normal * hit_aniso0)), vec3(1.0)) + dot(max(vec3(0.0), (-hit_normal * hit_aniso1)), vec3(1.0)));
+					light.rgb *= params.bounce_energy;
 					light.a = 1.0;
 				}
 			}

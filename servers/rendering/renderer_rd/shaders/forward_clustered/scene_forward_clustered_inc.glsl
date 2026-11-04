@@ -335,12 +335,12 @@ struct ImplementationData {
 	uint ss_effects_flags;
 	float ssao_light_affect;
 	float ssao_ao_affect;
-	uint pad1;
+	float ssil_gi_occlusion; // OEngine: share of SSIL occlusion kept on pixels covered by GI buffers.
 
 	mat4 sdf_to_bounds;
 
 	ivec3 sdf_offset;
-	uint pad2;
+	float gi_ambient_lift; // OEngine: lift of partially occluded GI ambient, see rendering/global_illumination/sdfgi/ambient_lift.
 
 	ivec3 sdf_size;
 	bool gi_upscale_for_msaa;
@@ -349,6 +349,12 @@ struct ImplementationData {
 	float volumetric_fog_inv_length;
 	float volumetric_fog_detail_spread;
 	uint volumetric_fog_pad;
+
+	// OEngine: see rendering/global_illumination/sdfgi/ambient_lift_min and ambient_lift_threshold.
+	float gi_ambient_lift_min;
+	float gi_ambient_lift_threshold;
+	uint gi_ambient_pad0;
+	uint gi_ambient_pad1;
 };
 
 layout(set = 1, binding = 1, std140) uniform ImplementationDataBlock {

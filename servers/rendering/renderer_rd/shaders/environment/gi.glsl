@@ -246,6 +246,11 @@ void sdfvoxel_gi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_
 			weight *= max(occlusion, 0.01);
 		}
 
+		// OEngine: a probe buried in geometry only sees the inside of the surface and darkens
+		// nearby pixels in voxel-aligned bands. Trust it much less than probes in open space.
+		float probe_distance = textureLod(sampler3D(sdf_cascades[cascade], linear_sampler), probe_pos * sdfgi.probe_to_uvw, 0.0).r * 255.0 - 1.1;
+		weight *= mix(0.05, 1.0, clamp(probe_distance, 0.0, 1.0));
+
 		// Compute lightprobe texture position
 
 		vec3 diffuse;
