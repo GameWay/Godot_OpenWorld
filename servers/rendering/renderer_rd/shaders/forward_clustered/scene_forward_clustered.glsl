@@ -1088,17 +1088,7 @@ vec4 fog_process(vec3 vertex) {
 		fog_color = mix(fog_color, sky_fog_color, scene_data_block.data.fog_aerial_perspective);
 	}
 
-	if (scene_data_block.data.fog_sun_scatter > 0.001) {
-		vec4 sun_scatter = vec4(0.0);
-		float sun_total = 0.0;
-		vec3 view = normalize(vertex);
-
-		for (uint i = 0; i < scene_data_block.data.directional_light_count; i++) {
-			vec3 light_color = directional_lights.data[i].color * directional_lights.data[i].energy;
-			float light_amount = pow(max(dot(view, directional_lights.data[i].direction), 0.0), 8.0);
-			fog_color += light_color * light_amount * scene_data_block.data.fog_sun_scatter;
-		}
-	}
+	// OEngine: sun scatter is added after directional shadows are known, see fog_sun_scatter_light().
 
 	float fog_amount = 0.0;
 
@@ -1126,6 +1116,12 @@ vec4 fog_process(vec3 vertex) {
 	}
 
 	return vec4(fog_color, fog_amount);
+}
+
+// Unshadowed in-scattering of one directional light into the fog, before fog_sun_scatter and fog amount.
+vec3 fog_sun_scatter_light(vec3 view, uint i) {
+	float light_amount = pow(max(dot(view, directional_lights.data[i].direction), 0.0), 8.0);
+	return directional_lights.data[i].color * directional_lights.data[i].energy * light_amount;
 }
 
 void cluster_get_item_range(uint p_offset, out uint item_min, out uint item_max, out uint item_from, out uint item_to) {
@@ -1488,6 +1484,11 @@ void fragment_shader(in SceneData scene_data) {
 #ifndef MODE_RENDER_DEPTH
 
 #ifndef FOG_DISABLED
+	// OEngine: sun scatter is resolved when fog is restored, so lit materials can shadow it.
+	// A negative fog_sun_scatter means the directional light pass did not compute it.
+	float fog_sun_scatter_weight = 0.0;
+	vec3 fog_sun_scatter = vec3(-1.0);
+
 #ifndef CUSTOM_FOG_USED
 	// fog must be processed as early as possible and then packed.
 	// to maximize VGPR usage
@@ -1495,6 +1496,9 @@ void fragment_shader(in SceneData scene_data) {
 
 	if (bool(scene_data.flags & SCENE_DATA_FLAGS_USE_FOG)) {
 		fog = fog_process(vertex);
+		if (scene_data_block.data.fog_sun_scatter > 0.001) {
+			fog_sun_scatter_weight = fog.a * scene_data_block.data.fog_sun_scatter;
+		}
 		// Premultiply by opacity and convert opacity to transmittance to match volumetric fog.
 		fog.rgb *= fog.a;
 		fog.a = 1.0 - fog.a;
@@ -1507,6 +1511,7 @@ void fragment_shader(in SceneData scene_data) {
 		vec4 volumetric_fog = volumetric_fog_process(screen_uv, -vertex.z);
 #endif
 		vec4 res = vec4(0.0);
+		fog_sun_scatter_weight *= volumetric_fog.a;
 		if (bool(scene_data.flags & SCENE_DATA_FLAGS_USE_FOG)) {
 			//must use the full blending equation here to blend fogs
 			if (sc_fog_use_legacy_blending()) {
@@ -2659,6 +2664,32 @@ void fragment_shader(in SceneData scene_data) {
 
 #endif // SHADOWS_DISABLED
 
+#ifndef FOG_DISABLED
+		// OEngine: shadow the fog sun scatter with the fragment's directional shadow, so the sun
+		// no longer glows through geometry that blocks it (caves, interiors).
+		if (fog_sun_scatter_weight > 0.0) {
+			vec3 scatter_view = normalize(vertex);
+			fog_sun_scatter = vec3(0.0);
+			for (uint i = 0; i < 8; i++) {
+				if (i >= scene_data.directional_light_count) {
+					break;
+				}
+				float scatter_shadow = 1.0;
+#ifndef SHADOWS_DISABLED
+				bool has_shadow = bool(directional_lights.data[i].mask & instances.data[instance_index].layer_mask) && !(directional_lights.data[i].bake_mode == LIGHT_BAKE_STATIC && bool(instances.data[instance_index].flags & INSTANCE_FLAGS_USE_LIGHTMAP));
+#ifdef USE_VERTEX_LIGHTING
+				has_shadow = has_shadow && i == 0;
+#endif
+				if (has_shadow) {
+					scatter_shadow = float((i < 4 ? shadow0 >> (i * 8u) : shadow1 >> ((i - 4u) * 8u)) & 0xFFu) / 255.0;
+					scatter_shadow = mix(1.0, scatter_shadow, directional_lights.data[i].shadow_opacity);
+				}
+#endif
+				fog_sun_scatter += fog_sun_scatter_light(scatter_view, i) * scatter_shadow;
+			}
+		}
+#endif // !FOG_DISABLED
+
 #ifndef USE_VERTEX_LIGHTING
 
 		for (uint i = 0; i < 8; i++) {
@@ -3151,6 +3182,17 @@ void fragment_shader(in SceneData scene_data) {
 #ifndef FOG_DISABLED
 	//restore fog
 	fog = vec4(unpackHalf2x16(fog_rg), unpackHalf2x16(fog_ba));
+	if (fog_sun_scatter_weight > 0.0) {
+		if (fog_sun_scatter.r < 0.0) {
+			// Unshaded materials skip the directional light pass; keep the unshadowed scatter.
+			vec3 scatter_view = normalize(vertex);
+			fog_sun_scatter = vec3(0.0);
+			for (uint i = 0; i < scene_data_block.data.directional_light_count; i++) {
+				fog_sun_scatter += fog_sun_scatter_light(scatter_view, i);
+			}
+		}
+		fog.rgb += fog_sun_scatter * fog_sun_scatter_weight;
+	}
 #endif //!FOG_DISABLED
 
 #ifdef MODE_SEPARATE_SPECULAR
