@@ -58,6 +58,8 @@ class EditorSpinSlider : public Range {
 
 	bool read_only = false;
 	float grabbing_spinner_dist_cache = 0.0f;
+	// Raw horizontal mouse travel of the current drag, for the range-mapped drag of a visible slider.
+	float grabbing_spinner_pixels = 0.0f;
 	float grabbing_spinner_speed = 0.0f;
 	Vector2 grabbing_spinner_mouse_pos;
 	double pre_grab_value = 0.0;
@@ -80,6 +82,7 @@ private:
 	bool flat = false;
 	bool editing_integer = false;
 
+	bool _has_visible_slider() const;
 	void _grab_start();
 	void _grab_end();
 

@@ -125,6 +125,7 @@ void EditorSpinSlider::gui_input(const Ref<InputEvent> &p_event) {
 				diff_x *= 0.1;
 			}
 			grabbing_spinner_dist_cache += diff_x * grabbing_spinner_speed;
+			grabbing_spinner_pixels += diff_x;
 
 			if (!grabbing_spinner && Math::abs(grabbing_spinner_dist_cache) > 4 * grabbing_spinner_speed * EDSCALE) {
 				Input::get_singleton()->set_mouse_mode(Input::MouseMode::MOUSE_MODE_CAPTURED);
@@ -140,10 +141,20 @@ void EditorSpinSlider::gui_input(const Ref<InputEvent> &p_event) {
 					pre_grab_value = get_max();
 				}
 
-				// Prevent dragging properties with very precise steps from being agonizingly slow.
-				const double default_float_step = EDITOR_GET("interface/inspector/default_float_step");
-				const double drag_step = MAX(get_step(), default_float_step);
-				const double new_value = pre_grab_value + drag_step * grabbing_spinner_dist_cache;
+				double new_value;
+				if (_has_visible_slider()) {
+					// With a visible slider the drag follows the bar, as in Unreal: crossing the bar's width
+					// sweeps the whole range, wherever the drag started. The step-based speed below
+					// moved the value out of step with the bar under the cursor.
+					const float scale_x = get_global_transform_with_canvas().get_scale().x;
+					const double travel = grabbing_spinner_pixels / MAX(1.0, double(grabber_range) * scale_x);
+					new_value = pre_grab_value + travel * (get_max() - get_min());
+				} else {
+					// Prevent dragging properties with very precise steps from being agonizingly slow.
+					const double default_float_step = EDITOR_GET("interface/inspector/default_float_step");
+					const double drag_step = MAX(get_step(), default_float_step);
+					new_value = pre_grab_value + drag_step * grabbing_spinner_dist_cache;
+				}
 
 				double val = (mm->is_command_or_control_pressed() && !editing_integer) ? Math::round(new_value) : new_value;
 				if (deferred_drag_mode) {
@@ -175,9 +186,18 @@ void EditorSpinSlider::gui_input(const Ref<InputEvent> &p_event) {
 	}
 }
 
+// Same condition as the slider bar drawn under the number in _draw_spin_slider().
+bool EditorSpinSlider::_has_visible_slider() const {
+	if (control_state == CONTROL_STATE_HIDE || (editing_integer && control_state == CONTROL_STATE_DEFAULT)) {
+		return false;
+	}
+	return get_max() > get_min() && grabber_range > 0;
+}
+
 void EditorSpinSlider::_grab_start() {
 	grabbing_spinner_attempt = true;
 	grabbing_spinner_dist_cache = 0;
+	grabbing_spinner_pixels = 0;
 	pre_grab_value = get_value();
 	grabbing_spinner = false;
 	grabbing_spinner_mouse_pos = get_global_mouse_position();
@@ -472,9 +492,10 @@ void EditorSpinSlider::_draw_spin_slider() {
 				if (mousewheel_over_grabber) {
 					Input::get_singleton()->warp_mouse(grabber->get_global_position() + grabber_rect.size);
 				}
-
-				grabber_range = width;
 			}
+
+			// Also while the grabber is hidden: a drag over the field maps to this width.
+			grabber_range = width;
 		}
 	}
 }
