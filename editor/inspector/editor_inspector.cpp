@@ -4111,6 +4111,22 @@ void EditorInspector::initialize_property_theme(EditorProperty::ThemeCache &p_ca
 	EditorInspector *parent_inspector = _get_control_parent_inspector(p_control);
 	if (parent_inspector && parent_inspector != p_control) {
 		p_cache = parent_inspector->property_theme_cache;
+		// The shared cache spares every property the theme lookups, but it must not hide the colours
+		// a property overrides on itself (e.g. a plugin marking a changed property by its name).
+		const auto override_color = [p_control](Color &r_color, const StringName &p_name) {
+			if (p_control->has_theme_color_override(p_name)) {
+				r_color = p_control->get_theme_color(p_name);
+			}
+		};
+		override_color(p_cache.property_color, SNAME("property_color"));
+		override_color(p_cache.readonly_property_color, SNAME("readonly_color"));
+		override_color(p_cache.warning_color, SNAME("warning_color"));
+		override_color(p_cache.readonly_warning_color, SNAME("readonly_warning_color"));
+		override_color(p_cache.property_color_x, SNAME("property_color_x"));
+		override_color(p_cache.property_color_y, SNAME("property_color_y"));
+		override_color(p_cache.property_color_z, SNAME("property_color_z"));
+		override_color(p_cache.property_color_w, SNAME("property_color_w"));
+		override_color(p_cache.sub_inspector_property_color, SNAME("sub_inspector_property_color"));
 		return;
 	}
 
