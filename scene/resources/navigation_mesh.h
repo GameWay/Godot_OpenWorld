@@ -41,6 +41,8 @@ class NavigationMesh : public Resource {
 	Vector<Vector3> vertices;
 	Vector<Vector<int>> polygons;
 	Dictionary traversal_surfaces;
+	// Bake statistics and rejected candidates; never saved.
+	Dictionary traversal_debug;
 	Ref<ArrayMesh> debug_mesh;
 
 protected:
@@ -197,12 +199,17 @@ public:
 
 	void set_traversal_surfaces(const Dictionary &p_surfaces);
 	Dictionary get_traversal_surfaces() const;
+	Dictionary get_traversal_surface(int p_polygon) const;
+	void set_traversal_debug(const Dictionary &p_debug);
+	Dictionary get_traversal_debug() const;
 
 	void clear();
 
 	void set_data(const Vector<Vector3> &p_vertices, const Vector<Vector<int>> &p_polygons);
 	void get_data(Vector<Vector3> &r_vertices, Vector<Vector<int>> &r_polygons, Dictionary *r_traversal_surfaces = nullptr) const;
 	void apply_baked_data(const NavigationMesh &p_baked_mesh);
+	// Replaces the baked result without emitting changed; for bake threads.
+	void set_baked_data(const Vector<Vector3> &p_vertices, const Vector<Vector<int>> &p_polygons, const Dictionary &p_traversal_surfaces, const Dictionary &p_traversal_debug);
 
 #ifdef DEBUG_ENABLED
 	Ref<ArrayMesh> get_debug_mesh();

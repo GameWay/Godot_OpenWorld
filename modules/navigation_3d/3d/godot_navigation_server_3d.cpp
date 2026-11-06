@@ -33,6 +33,7 @@
 #include "nav_mesh_generator_3d.h"
 
 #include "core/os/mutex.h"
+#include "scene/3d/navigation/navigation_traversal_rules_3d.h"
 #include "scene/main/node.h"
 #include "scene/resources/3d/navigation_mesh_source_geometry_data_3d.h"
 
@@ -616,6 +617,35 @@ AABB GodotNavigationServer3D::region_get_bounds(RID p_region) const {
 	ERR_FAIL_NULL_V(region, AABB());
 
 	return region->get_bounds();
+}
+
+Dictionary GodotNavigationServer3D::region_get_traversal_surface(RID p_region, int p_surface_id) const {
+	const NavRegion3D *region = region_owner.get_or_null(p_region);
+	ERR_FAIL_NULL_V(region, Dictionary());
+	const Ref<NavigationMesh> navmesh = region->get_navigation_mesh();
+	if (navmesh.is_null()) {
+		return Dictionary();
+	}
+	Dictionary surface = navmesh->get_traversal_surface(p_surface_id);
+	const Transform3D transform = region->get_transform();
+	const Array keys = surface.keys();
+	for (int i = 0; i < keys.size(); i++) {
+		const Variant value = surface[keys[i]];
+		if (value.get_type() == Variant::VECTOR3) {
+			surface[keys[i]] = transform.xform(Vector3(value));
+		} else if (value.get_type() == Variant::PACKED_VECTOR3_ARRAY) {
+			PackedVector3Array points = value;
+			for (Vector3 &point : points) {
+				point = transform.xform(point);
+			}
+			surface[keys[i]] = points;
+		}
+	}
+	if (surface.has("crest")) {
+		// Regions are upright; the crest height only moves with the origin.
+		surface["crest"] = real_t(surface["crest"]) + transform.origin.y;
+	}
+	return surface;
 }
 
 RID GodotNavigationServer3D::link_create() {
@@ -1214,6 +1244,26 @@ void GodotNavigationServer3D::bake_from_source_geometry_data_async(const Ref<Nav
 
 	ERR_FAIL_NULL(NavMeshGenerator3D::get_singleton());
 	NavMeshGenerator3D::get_singleton()->bake_from_source_geometry_data_async(p_navigation_mesh, p_source_geometry_data, p_callback);
+}
+
+void GodotNavigationServer3D::bake_traversal_from_source_geometry_data(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Ref<NavigationTraversalRules3D> &p_traversal_rules, const Callable &p_callback) {
+	ERR_FAIL_COND_MSG(p_navigation_mesh.is_null(), "Invalid navigation mesh.");
+	ERR_FAIL_COND_MSG(p_source_geometry_data.is_null(), "Invalid NavigationMeshSourceGeometryData3D.");
+	ERR_FAIL_COND_MSG(p_traversal_rules.is_null(), "Invalid NavigationTraversalRules3D.");
+
+	ERR_FAIL_NULL(NavMeshGenerator3D::get_singleton());
+	const NavigationTraversalBaker3D::Settings settings = NavigationTraversalBaker3D::make_settings(p_traversal_rules, p_navigation_mesh->get_cell_height());
+	NavMeshGenerator3D::get_singleton()->bake_from_source_geometry_data(p_navigation_mesh, p_source_geometry_data, p_callback, &settings);
+}
+
+void GodotNavigationServer3D::bake_traversal_from_source_geometry_data_async(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Ref<NavigationTraversalRules3D> &p_traversal_rules, const Callable &p_callback) {
+	ERR_FAIL_COND_MSG(p_navigation_mesh.is_null(), "Invalid navigation mesh.");
+	ERR_FAIL_COND_MSG(p_source_geometry_data.is_null(), "Invalid NavigationMeshSourceGeometryData3D.");
+	ERR_FAIL_COND_MSG(p_traversal_rules.is_null(), "Invalid NavigationTraversalRules3D.");
+
+	ERR_FAIL_NULL(NavMeshGenerator3D::get_singleton());
+	const NavigationTraversalBaker3D::Settings settings = NavigationTraversalBaker3D::make_settings(p_traversal_rules, p_navigation_mesh->get_cell_height());
+	NavMeshGenerator3D::get_singleton()->bake_from_source_geometry_data_async(p_navigation_mesh, p_source_geometry_data, p_callback, &settings);
 }
 
 bool GodotNavigationServer3D::is_baking_navigation_mesh(Ref<NavigationMesh> p_navigation_mesh) const {

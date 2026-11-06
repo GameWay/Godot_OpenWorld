@@ -87,7 +87,7 @@
 			A bitfield determining all navigation layers the region belongs to. These navigation layers can be checked upon when requesting a path with [method NavigationServer3D.map_get_path].
 		</member>
 		<member name="transition_rules" type="NavigationTransitionRule3D" setter="set_transition_rules" getter="get_transition_rules">
-			Optional rules that extend the standard navigation mesh bake. When the rules implement a surface baker, the editor's Bake action builds the complete mesh on the main thread and only replaces the previous mesh on success.
+			Optional hook that adds source geometry to the bake, see [method NavigationTransitionRule3D._collect_source_geometry].
 		</member>
 		<member name="navigation_mesh" type="NavigationMesh" setter="set_navigation_mesh" getter="get_navigation_mesh">
 			The [NavigationMesh] resource to use.
@@ -97,7 +97,7 @@
 		</member>
 		<member name="traversal_rules" type="NavigationTraversalRules3D" setter="set_traversal_rules" getter="get_traversal_rules">
 			Search settings and creature profiles for traversal surfaces (climbing, vaulting, dropping). Profile id or layer bit conflicts are shown as configuration warnings and printed when baking.
-			[b]Note:[/b] For now the traversal pass itself runs in [method NavigationTransitionRule3D._bake_surfaces] of [member transition_rules], which reads its thresholds from this resource.
+			When set, [method bake_navigation_mesh] bakes the walking mesh and then the traversal surfaces into the same [NavigationMesh] (see [method NavigationServer3D.bake_traversal_from_source_geometry_data]); both passes run on a worker thread when [code]on_thread[/code] is [code]true[/code]. Without it, the bake produces only the walking mesh and drops existing traversal surfaces.
 		</member>
 		<member name="use_edge_connections" type="bool" setter="set_use_edge_connections" getter="get_use_edge_connections" default="true">
 			If enabled the navigation region will use edge connections to connect with other navigation regions within proximity of the navigation map edge connection margin.

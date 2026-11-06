@@ -33,7 +33,7 @@
 		<method name="get_validation_warnings" qualifiers="const">
 			<return type="PackedStringArray" />
 			<description>
-				Returns a warning for every empty profile, profile without id, duplicate id and duplicate layer bit.
+				Returns a warning for every empty profile, profile without id, duplicate id, duplicate layer bit and allowed height above [member search_height].
 			</description>
 		</method>
 		<method name="has_profile" qualifiers="const">
@@ -60,6 +60,9 @@
 		<member name="hand_spacing" type="float" setter="set_hand_spacing" getter="get_hand_spacing" default="0.42">
 			Distance between the two hand grips across the traversal direction.
 		</member>
+		<member name="keep_rejected_candidates" type="bool" setter="set_keep_rejected_candidates" getter="is_keeping_rejected_candidates" default="false">
+			If [code]true[/code], baking also records every candidate rejected by at least one profile, with the [enum NavigationTraversalProfile3D.RejectReason] of each profile, in [method NavigationMesh.get_traversal_debug]. The record is not saved with the navigation mesh.
+		</member>
 		<member name="profiles" type="NavigationTraversalProfile3D[]" setter="set_profiles" getter="get_profiles" default="[]">
 			Creature profiles. Each one contributes its [member NavigationTraversalProfile3D.layer_bit] to the surfaces it accepts.
 		</member>
@@ -70,7 +73,7 @@
 			Maximum horizontal distance from a boundary edge to the opposite edge of a traversal.
 		</member>
 		<member name="search_height" type="float" setter="set_search_height" getter="get_search_height" default="3.2">
-			Maximum height difference between a boundary edge and the opposite edge of a traversal. Also limits how high obstacle crests are probed.
+			Maximum height difference between a boundary edge and the opposite edge of a traversal. Also limits how high obstacle crests are probed. Keep it at least as large as the largest allowed height of every profile; [method get_validation_warnings] reports profiles that exceed it.
 		</member>
 		<member name="support_search" type="float" setter="set_support_search" getter="get_support_search" default="0.4">
 			Vertical distance searched for floor under the body footprint and the hand grips.

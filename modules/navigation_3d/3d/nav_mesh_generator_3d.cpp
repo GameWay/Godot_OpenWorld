@@ -158,7 +158,7 @@ void NavMeshGenerator3D::parse_source_geometry_data(Ref<NavigationMesh> p_naviga
 	}
 }
 
-void NavMeshGenerator3D::bake_from_source_geometry_data(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback) {
+void NavMeshGenerator3D::bake_from_source_geometry_data(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback, const NavigationTraversalBaker3D::Settings *p_traversal) {
 	ERR_FAIL_COND(p_navigation_mesh.is_null());
 	ERR_FAIL_COND(p_source_geometry_data.is_null());
 
@@ -182,6 +182,9 @@ void NavMeshGenerator3D::bake_from_source_geometry_data(Ref<NavigationMesh> p_na
 	generator_task.navigation_mesh = p_navigation_mesh;
 	generator_task.source_geometry_data = p_source_geometry_data;
 	generator_task.status = NavMeshGeneratorTask3D::TaskStatus::BAKING_STARTED;
+	if (p_traversal) {
+		generator_task.traversal = memnew(NavigationTraversalBaker3D::Settings(*p_traversal));
+	}
 
 	generator_bake_from_source_geometry_data(&generator_task);
 
@@ -196,7 +199,7 @@ void NavMeshGenerator3D::bake_from_source_geometry_data(Ref<NavigationMesh> p_na
 	p_navigation_mesh->emit_changed();
 }
 
-void NavMeshGenerator3D::bake_from_source_geometry_data_async(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback) {
+void NavMeshGenerator3D::bake_from_source_geometry_data_async(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback, const NavigationTraversalBaker3D::Settings *p_traversal) {
 	ERR_FAIL_COND(p_navigation_mesh.is_null());
 	ERR_FAIL_COND(p_source_geometry_data.is_null());
 
@@ -210,7 +213,7 @@ void NavMeshGenerator3D::bake_from_source_geometry_data_async(Ref<NavigationMesh
 	}
 
 	if (!use_threads) {
-		bake_from_source_geometry_data(p_navigation_mesh, p_source_geometry_data, p_callback);
+		bake_from_source_geometry_data(p_navigation_mesh, p_source_geometry_data, p_callback, p_traversal);
 		return;
 	}
 
@@ -226,6 +229,9 @@ void NavMeshGenerator3D::bake_from_source_geometry_data_async(Ref<NavigationMesh
 	generator_task->navigation_mesh = p_navigation_mesh;
 	generator_task->source_geometry_data = p_source_geometry_data;
 	generator_task->callback = p_callback;
+	if (p_traversal) {
+		generator_task->traversal = memnew(NavigationTraversalBaker3D::Settings(*p_traversal));
+	}
 	generator_task->status = NavMeshGeneratorTask3D::TaskStatus::BAKING_STARTED;
 	generator_task->thread_task_id = WorkerThreadPool::get_singleton()->add_native_task(&NavMeshGenerator3D::generator_thread_bake, generator_task, NavMeshGenerator3D::baking_use_high_priority_threads, SNAME("NavMeshGeneratorBake3D"));
 	MutexLock generator_task_lock(generator_task_mutex);
@@ -575,7 +581,14 @@ void NavMeshGenerator3D::generator_bake_from_source_geometry_data(NavMeshGenerat
 		}
 	}
 
-	p_navigation_mesh->set_data(nav_vertices, nav_polygons);
+	if (p_generator_task->traversal) {
+		// Second pass on the same thread: traversal surfaces from the Recast result and the source triangles.
+		NavigationTraversalBaker3D::Output output;
+		NavigationTraversalBaker3D::bake(*p_generator_task->traversal, source_geometry_vertices, source_geometry_indices, nav_vertices, nav_polygons, output);
+		p_navigation_mesh->set_baked_data(output.vertices, output.polygons, output.surfaces, output.debug);
+	} else {
+		p_navigation_mesh->set_data(nav_vertices, nav_polygons);
+	}
 
 	p_generator_task->bake_state = NavMeshBakeState::BAKE_STATE_BAKE_CLEANUP; // step #11
 

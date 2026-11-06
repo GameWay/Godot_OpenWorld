@@ -316,6 +316,26 @@
 				Bakes the provided [param navigation_mesh] with the data from the provided [param source_geometry_data] as an async task running on a background thread. After the process is finished the optional [param callback] will be called.
 			</description>
 		</method>
+		<method name="bake_traversal_from_source_geometry_data">
+			<return type="void" />
+			<param index="0" name="navigation_mesh" type="NavigationMesh" />
+			<param index="1" name="source_geometry_data" type="NavigationMeshSourceGeometryData3D" />
+			<param index="2" name="traversal_rules" type="NavigationTraversalRules3D" />
+			<param index="3" name="callback" type="Callable" default="Callable()" />
+			<description>
+				Bakes [param navigation_mesh] like [method bake_from_source_geometry_data], then searches traversal surfaces with [param traversal_rules] against the triangles of [param source_geometry_data] and adds them to the same mesh ([member NavigationMesh.traversal_surfaces]). After the process is finished the optional [param callback] will be called.
+			</description>
+		</method>
+		<method name="bake_traversal_from_source_geometry_data_async">
+			<return type="void" />
+			<param index="0" name="navigation_mesh" type="NavigationMesh" />
+			<param index="1" name="source_geometry_data" type="NavigationMeshSourceGeometryData3D" />
+			<param index="2" name="traversal_rules" type="NavigationTraversalRules3D" />
+			<param index="3" name="callback" type="Callable" default="Callable()" />
+			<description>
+				Same as [method bake_traversal_from_source_geometry_data], running both passes as an async task on a background thread. The rules are copied when the call is made.
+			</description>
+		</method>
 		<method name="free_rid">
 			<return type="void" />
 			<param index="0" name="rid" type="RID" />
@@ -938,6 +958,14 @@
 			<param index="0" name="region" type="RID" />
 			<description>
 				Returns the axis-aligned bounding box for the [param region]'s transformed navigation mesh.
+			</description>
+		</method>
+		<method name="region_get_traversal_surface" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="region" type="RID" />
+			<param index="1" name="surface_id" type="int" />
+			<description>
+				Returns the [member NavigationMesh.traversal_surfaces] entry of polygon [param surface_id] of the [param region]'s navigation mesh with all points ([code]approach[/code], [code]exit[/code], [code]anchors[/code], [code]body_path[/code], [code]span[/code]) and [code]crest[/code] in world space. Returns an empty dictionary if the polygon is not a traversal surface. Use it with the surface ids from [member NavigationPathQueryResult3D.path_surface_ids].
 			</description>
 		</method>
 		<method name="region_get_closest_point" qualifiers="const">

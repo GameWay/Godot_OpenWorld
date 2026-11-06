@@ -46,6 +46,8 @@ struct NavMeshGeometryParser3D {
 	Callable callback;
 };
 
+class NavigationTraversalRules3D;
+
 class NavigationServer3D : public Object {
 	GDCLASS(NavigationServer3D, Object);
 
@@ -157,6 +159,8 @@ public:
 	virtual Vector3 region_get_random_point(RID p_region, uint32_t p_navigation_layers, bool p_uniformly) const = 0;
 
 	virtual AABB region_get_bounds(RID p_region) const = 0;
+	// Traversal entry of polygon p_surface_id with all points in world space; empty if none.
+	virtual Dictionary region_get_traversal_surface(RID p_region, int p_surface_id) const = 0;
 
 	/* LINK API */
 
@@ -288,6 +292,9 @@ public:
 	virtual void parse_source_geometry_data(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, Node *p_root_node, const Callable &p_callback = Callable()) = 0;
 	virtual void bake_from_source_geometry_data(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Callable &p_callback = Callable()) = 0;
 	virtual void bake_from_source_geometry_data_async(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Callable &p_callback = Callable()) = 0;
+	// Recast bake followed by the traversal pass of p_traversal_rules, both written into p_navigation_mesh.
+	virtual void bake_traversal_from_source_geometry_data(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Ref<NavigationTraversalRules3D> &p_traversal_rules, const Callable &p_callback = Callable()) = 0;
+	virtual void bake_traversal_from_source_geometry_data_async(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Ref<NavigationTraversalRules3D> &p_traversal_rules, const Callable &p_callback = Callable()) = 0;
 	virtual bool is_baking_navigation_mesh(Ref<NavigationMesh> p_navigation_mesh) const = 0;
 	virtual String get_baking_navigation_mesh_state_msg(Ref<NavigationMesh> p_navigation_mesh) const = 0;
 #endif // _3D_DISABLED

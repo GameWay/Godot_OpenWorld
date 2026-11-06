@@ -186,7 +186,10 @@
 		<constant name="REJECT_LANDING_DELTA" value="11" enum="RejectReason">
 			The floors on both sides differ by more than [member max_landing_delta].
 		</constant>
-		<constant name="REJECT_MAX" value="12" enum="RejectReason">
+		<constant name="REJECT_WALKABLE" value="12" enum="RejectReason">
+			The boundary edge runs along a walkable slope (for example the side of a ramp) and its source and target are already connected by a short walk.
+		</constant>
+		<constant name="REJECT_MAX" value="13" enum="RejectReason">
 			Number of reject reasons.
 		</constant>
 	</constants>

@@ -59,6 +59,18 @@ TRAVERSAL_RULES_REAL_PROPERTY(grip_probe_depth)
 
 #undef TRAVERSAL_RULES_REAL_PROPERTY
 
+void NavigationTraversalRules3D::set_keep_rejected_candidates(bool p_keep) {
+	if (keep_rejected_candidates == p_keep) {
+		return;
+	}
+	keep_rejected_candidates = p_keep;
+	emit_changed();
+}
+
+bool NavigationTraversalRules3D::is_keeping_rejected_candidates() const {
+	return keep_rejected_candidates;
+}
+
 void NavigationTraversalRules3D::_profile_changed() {
 	emit_changed();
 }
@@ -145,6 +157,14 @@ PackedStringArray NavigationTraversalRules3D::get_validation_warnings() const {
 		} else {
 			bits.insert(bit, id);
 		}
+		for (int kind = 0; kind < NavigationTraversalProfile3D::KIND_MAX; kind++) {
+			const NavigationTraversalProfile3D::TraversalKind traversal_kind = NavigationTraversalProfile3D::TraversalKind(kind);
+			const real_t height = profile->get_height_range(traversal_kind).y;
+			if (profile->is_kind_allowed(traversal_kind) && height > search_height) {
+				warnings.push_back(vformat(RTR("Traversal profile \"%s\" allows heights up to %.2f m, above search_height %.2f m; higher traversals are not found."), id, height, search_height));
+				break;
+			}
+		}
 	}
 	return warnings;
 }
@@ -185,6 +205,8 @@ void NavigationTraversalRules3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_layers_for", "id"), &NavigationTraversalRules3D::get_layers_for);
 	ClassDB::bind_method(D_METHOD("get_all_layers"), &NavigationTraversalRules3D::get_all_layers);
 	ClassDB::bind_method(D_METHOD("get_validation_warnings"), &NavigationTraversalRules3D::get_validation_warnings);
+	ClassDB::bind_method(D_METHOD("set_keep_rejected_candidates", "keep"), &NavigationTraversalRules3D::set_keep_rejected_candidates);
+	ClassDB::bind_method(D_METHOD("is_keeping_rejected_candidates"), &NavigationTraversalRules3D::is_keeping_rejected_candidates);
 
 	static constexpr const char *HINT_DISTANCE = "0,10,0.01,or_greater,suffix:m";
 	static constexpr const char *HINT_SPACING = "0.05,5,0.01,or_greater,suffix:m";
@@ -201,6 +223,9 @@ void NavigationTraversalRules3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "body_height", PROPERTY_HINT_RANGE, HINT_DISTANCE), "set_body_height", "get_body_height");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "hand_spacing", PROPERTY_HINT_RANGE, HINT_DISTANCE), "set_hand_spacing", "get_hand_spacing");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "grip_probe_depth", PROPERTY_HINT_RANGE, HINT_DISTANCE), "set_grip_probe_depth", "get_grip_probe_depth");
+
+	ADD_GROUP("Debug", "");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "keep_rejected_candidates"), "set_keep_rejected_candidates", "is_keeping_rejected_candidates");
 
 	ADD_GROUP("", "");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "profiles", PROPERTY_HINT_ARRAY_TYPE, MAKE_RESOURCE_TYPE_HINT("NavigationTraversalProfile3D")), "set_profiles", "get_profiles");

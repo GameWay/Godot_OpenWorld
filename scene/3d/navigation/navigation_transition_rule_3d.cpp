@@ -32,21 +32,10 @@
 
 #include "core/object/class_db.h"
 
-bool NavigationTransitionRule3D::has_surface_baker() const {
-	return GDVIRTUAL_IS_OVERRIDDEN(_bake_surfaces);
-}
-
 void NavigationTransitionRule3D::collect_source_geometry(NavigationRegion3D *p_region, const Ref<NavigationMeshSourceGeometryData3D> &p_geometry) {
 	GDVIRTUAL_CALL(_collect_source_geometry, p_region, p_geometry);
 }
 
-bool NavigationTransitionRule3D::bake_surfaces(NavigationRegion3D *p_region, const Ref<NavigationMeshSourceGeometryData3D> &p_geometry, const Ref<NavigationMesh> &p_mesh) {
-	bool success = false;
-	GDVIRTUAL_CALL(_bake_surfaces, p_region, p_geometry, p_mesh, success);
-	return success;
-}
-
 void NavigationTransitionRule3D::_bind_methods() {
 	GDVIRTUAL_BIND(_collect_source_geometry, "region", "geometry");
-	GDVIRTUAL_BIND(_bake_surfaces, "region", "geometry", "mesh");
 }

@@ -58,6 +58,19 @@
 				Returns the number of polygons in the navigation mesh.
 			</description>
 		</method>
+		<method name="get_traversal_debug" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns statistics of the last traversal bake: [code]segments[/code] (sampled boundary segments), [code]candidates[/code] (segments with an opposite edge), [code]accepted_segments[/code] (accepted segment and kind pairs before merging), [code]surfaces[/code] (traversal polygons after merging) and [code]usec[/code] (duration of the traversal pass). With [member NavigationTraversalRules3D.keep_rejected_candidates], [code]rejected[/code] holds one dictionary per rejected candidate with [code]approach[/code], [code]exit[/code], [code]shape[/code] and [code]reasons[/code] (profile id to [enum NavigationTraversalProfile3D.RejectReason]). This data is not saved.
+			</description>
+		</method>
+		<method name="get_traversal_surface" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="polygon" type="int" />
+			<description>
+				Returns the traversal entry of [param polygon] from [member traversal_surfaces], or an empty dictionary.
+			</description>
+		</method>
 		<method name="get_vertices" qualifiers="const">
 			<return type="PackedVector3Array" />
 			<description>
@@ -70,6 +83,13 @@
 			<param index="1" name="value" type="bool" />
 			<description>
 				Based on [param value], enables or disables the specified layer in the [member geometry_collision_mask], given a [param layer_number] between 1 and 32.
+			</description>
+		</method>
+		<method name="set_traversal_debug">
+			<return type="void" />
+			<param index="0" name="debug" type="Dictionary" />
+			<description>
+				Replaces the data returned by [method get_traversal_debug].
 			</description>
 		</method>
 		<method name="set_vertices">
@@ -162,7 +182,7 @@
 			Partitioning algorithm for creating the navigation mesh polys.
 		</member>
 		<member name="traversal_surfaces" type="Dictionary" setter="set_traversal_surfaces" getter="get_traversal_surfaces" default="{}">
-			Optional directed traversal data keyed by polygon index. Each entry describes a quadrilateral with an entry edge at vertices 0 and 1 and an exit edge at vertices 2 and 3. The dictionary entry contains [code]source[/code] and [code]target[/code] walking polygon indices, a traversal [code]layers[/code] mask, and an optional [code]enter_cost[/code]. Queries opt in using [member NavigationPathQueryParameters3D.traversal_layers].
+			Optional directed traversal data keyed by polygon index. Each entry describes a quadrilateral with an entry edge at vertices 0 and 1 and an exit edge at vertices 2 and 3. The dictionary entry contains [code]source[/code] and [code]target[/code] walking polygon indices, a traversal [code]layers[/code] mask, and an optional [code]enter_cost[/code]. Baked entries also contain [code]kind[/code] ([enum NavigationTraversalProfile3D.TraversalKind]), [code]approach[/code] and [code]exit[/code] (support points where the body starts and ends), [code]anchors[/code] (hand grips or obstacle contacts), [code]crest[/code] (height of the highest point the body passes), [code]body_path[/code] (control points of the body, checked for clearance) and [code]span[/code] (the segment along which [code]approach[/code] may slide on a wide surface; the other points move with it). All points are in the navigation mesh space. Queries opt in using [member NavigationPathQueryParameters3D.traversal_layers].
 		</member>
 		<member name="vertices_per_polygon" type="float" setter="set_vertices_per_polygon" getter="get_vertices_per_polygon" default="6.0">
 			The maximum number of vertices allowed for polygons generated during the contour to polygon conversion process.

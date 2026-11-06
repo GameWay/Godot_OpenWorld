@@ -186,6 +186,7 @@ public:
 	virtual Vector3 region_get_closest_point_normal(RID p_region, const Vector3 &p_point) const override;
 	virtual Vector3 region_get_random_point(RID p_region, uint32_t p_navigation_layers, bool p_uniformly) const override;
 	virtual AABB region_get_bounds(RID p_region) const override;
+	virtual Dictionary region_get_traversal_surface(RID p_region, int p_surface_id) const override;
 
 	virtual RID link_create() override;
 	virtual uint32_t link_get_iteration_id(RID p_link) const override;
@@ -271,6 +272,8 @@ public:
 	virtual void parse_source_geometry_data(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, Node *p_root_node, const Callable &p_callback = Callable()) override;
 	virtual void bake_from_source_geometry_data(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Callable &p_callback = Callable()) override;
 	virtual void bake_from_source_geometry_data_async(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Callable &p_callback = Callable()) override;
+	virtual void bake_traversal_from_source_geometry_data(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Ref<NavigationTraversalRules3D> &p_traversal_rules, const Callable &p_callback = Callable()) override;
+	virtual void bake_traversal_from_source_geometry_data_async(const Ref<NavigationMesh> &p_navigation_mesh, const Ref<NavigationMeshSourceGeometryData3D> &p_source_geometry_data, const Ref<NavigationTraversalRules3D> &p_traversal_rules, const Callable &p_callback = Callable()) override;
 	virtual bool is_baking_navigation_mesh(Ref<NavigationMesh> p_navigation_mesh) const override;
 	virtual String get_baking_navigation_mesh_state_msg(Ref<NavigationMesh> p_navigation_mesh) const override;
 

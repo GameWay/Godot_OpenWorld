@@ -42,10 +42,7 @@ protected:
 	static void _bind_methods();
 
 	GDVIRTUAL2(_collect_source_geometry, NavigationRegion3D *, Ref<NavigationMeshSourceGeometryData3D>)
-	GDVIRTUAL3R(bool, _bake_surfaces, NavigationRegion3D *, Ref<NavigationMeshSourceGeometryData3D>, Ref<NavigationMesh>)
 
 public:
-	bool has_surface_baker() const;
 	void collect_source_geometry(NavigationRegion3D *p_region, const Ref<NavigationMeshSourceGeometryData3D> &p_geometry);
-	bool bake_surfaces(NavigationRegion3D *p_region, const Ref<NavigationMeshSourceGeometryData3D> &p_geometry, const Ref<NavigationMesh> &p_mesh);
 };

@@ -38,6 +38,7 @@
 #include "scene/main/node.h" // IWYU pragma: keep. Needed to bind `Node *` arg.
 #include "scene/resources/3d/navigation_mesh_source_geometry_data_3d.h" // IWYU pragma: keep. Bind `NavigationMeshSourceGeometryData3D`.
 #include "scene/resources/navigation_mesh.h" // IWYU pragma: keep. Bind `NavigationMesh`.
+#include "scene/3d/navigation/navigation_traversal_rules_3d.h" // IWYU pragma: keep. Bind `NavigationTraversalRules3D`.
 #include "servers/navigation_3d/navigation_path_query_parameters_3d.h" // IWYU pragma: keep. Bind `NavigationPathQueryParameters3D`.
 #include "servers/navigation_3d/navigation_path_query_result_3d.h" // IWYU pragma: keep. Bind `NavigationPathQueryResult3D`.
 
@@ -120,6 +121,7 @@ void NavigationServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("region_get_closest_point_normal", "region", "to_point"), &NavigationServer3D::region_get_closest_point_normal);
 	ClassDB::bind_method(D_METHOD("region_get_random_point", "region", "navigation_layers", "uniformly"), &NavigationServer3D::region_get_random_point);
 	ClassDB::bind_method(D_METHOD("region_get_bounds", "region"), &NavigationServer3D::region_get_bounds);
+	ClassDB::bind_method(D_METHOD("region_get_traversal_surface", "region", "surface_id"), &NavigationServer3D::region_get_traversal_surface);
 
 	ClassDB::bind_method(D_METHOD("link_create"), &NavigationServer3D::link_create);
 	ClassDB::bind_method(D_METHOD("link_get_iteration_id", "link"), &NavigationServer3D::link_get_iteration_id);
@@ -207,6 +209,8 @@ void NavigationServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("parse_source_geometry_data", "navigation_mesh", "source_geometry_data", "root_node", "callback"), &NavigationServer3D::parse_source_geometry_data, DEFVAL(Callable()));
 	ClassDB::bind_method(D_METHOD("bake_from_source_geometry_data", "navigation_mesh", "source_geometry_data", "callback"), &NavigationServer3D::bake_from_source_geometry_data, DEFVAL(Callable()));
 	ClassDB::bind_method(D_METHOD("bake_from_source_geometry_data_async", "navigation_mesh", "source_geometry_data", "callback"), &NavigationServer3D::bake_from_source_geometry_data_async, DEFVAL(Callable()));
+	ClassDB::bind_method(D_METHOD("bake_traversal_from_source_geometry_data", "navigation_mesh", "source_geometry_data", "traversal_rules", "callback"), &NavigationServer3D::bake_traversal_from_source_geometry_data, DEFVAL(Callable()));
+	ClassDB::bind_method(D_METHOD("bake_traversal_from_source_geometry_data_async", "navigation_mesh", "source_geometry_data", "traversal_rules", "callback"), &NavigationServer3D::bake_traversal_from_source_geometry_data_async, DEFVAL(Callable()));
 	ClassDB::bind_method(D_METHOD("is_baking_navigation_mesh", "navigation_mesh"), &NavigationServer3D::is_baking_navigation_mesh);
 #endif // _3D_DISABLED
 

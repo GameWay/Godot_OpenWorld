@@ -34,6 +34,8 @@
 #include "core/object/worker_thread_pool.h"
 #include "servers/navigation_3d/navigation_server_3d.h"
 
+#include "nav_traversal_baker_3d.h"
+
 class Node;
 class NavigationMesh;
 class NavigationMeshSourceGeometryData3D;
@@ -84,10 +86,18 @@ private:
 		Ref<NavigationMesh> navigation_mesh;
 		Ref<NavigationMeshSourceGeometryData3D> source_geometry_data;
 		Callable callback;
+		// Second pass; null for a plain Recast bake.
+		NavigationTraversalBaker3D::Settings *traversal = nullptr;
 		WorkerThreadPool::TaskID thread_task_id = WorkerThreadPool::INVALID_TASK_ID;
 		NavMeshGeneratorTask3D::TaskStatus status = NavMeshGeneratorTask3D::TaskStatus::BAKING_STARTED;
 
 		NavMeshBakeState bake_state = NavMeshBakeState::BAKE_STATE_NONE;
+
+		~NavMeshGeneratorTask3D() {
+			if (traversal) {
+				memdelete(traversal);
+			}
+		}
 	};
 
 	static HashMap<WorkerThreadPool::TaskID, NavMeshGeneratorTask3D *> generator_tasks;
@@ -112,8 +122,8 @@ public:
 	static void set_generator_parsers(const LocalVector<NavMeshGeometryParser3D *> &p_parsers);
 
 	static void parse_source_geometry_data(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, Node *p_root_node, const Callable &p_callback = Callable());
-	static void bake_from_source_geometry_data(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback = Callable());
-	static void bake_from_source_geometry_data_async(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback = Callable());
+	static void bake_from_source_geometry_data(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback = Callable(), const NavigationTraversalBaker3D::Settings *p_traversal = nullptr);
+	static void bake_from_source_geometry_data_async(Ref<NavigationMesh> p_navigation_mesh, Ref<NavigationMeshSourceGeometryData3D> p_source_geometry_data, const Callable &p_callback = Callable(), const NavigationTraversalBaker3D::Settings *p_traversal = nullptr);
 	static bool is_baking(Ref<NavigationMesh> p_navigation_mesh);
 	static String get_baking_state_msg(Ref<NavigationMesh> p_navigation_mesh);
 

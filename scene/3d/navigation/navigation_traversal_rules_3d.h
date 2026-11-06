@@ -46,6 +46,7 @@ class NavigationTraversalRules3D : public Resource {
 	real_t body_height = 1.8;
 	real_t hand_spacing = 0.42;
 	real_t grip_probe_depth = 0.15;
+	bool keep_rejected_candidates = false;
 	Vector<Ref<NavigationTraversalProfile3D>> profiles;
 
 	void _profile_changed();
@@ -72,6 +73,9 @@ public:
 	real_t get_hand_spacing() const;
 	void set_grip_probe_depth(real_t p_value);
 	real_t get_grip_probe_depth() const;
+
+	void set_keep_rejected_candidates(bool p_keep);
+	bool is_keeping_rejected_candidates() const;
 
 	void set_profiles(const TypedArray<NavigationTraversalProfile3D> &p_profiles);
 	TypedArray<NavigationTraversalProfile3D> get_profiles() const;

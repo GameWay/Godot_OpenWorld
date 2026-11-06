@@ -1,29 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NavigationTransitionRule3D" inherits="Resource" api_type="core" experimental="" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
-		Rules that extend a [NavigationRegion3D] bake with traversal surfaces.
+		Hook that adds extra source geometry to a [NavigationRegion3D] bake.
 	</brief_description>
 	<description>
-		Assign to [member NavigationRegion3D.transition_rules]. After the standard walking mesh is baked, [method _bake_surfaces] may append directed traversal surface polygons and describe them in [member NavigationMesh.traversal_surfaces].
+		Assign to [member NavigationRegion3D.transition_rules]. Before baking, [method _collect_source_geometry] may add geometry that the scene parsers do not find, for example collision bodies created internally by a node. Traversal surfaces are baked by the engine from [member NavigationRegion3D.traversal_rules].
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="_bake_surfaces" qualifiers="virtual">
-			<return type="bool" />
-			<param index="0" name="region" type="NavigationRegion3D" />
-			<param index="1" name="geometry" type="NavigationMeshSourceGeometryData3D" />
-			<param index="2" name="mesh" type="NavigationMesh" />
-			<description>
-				Extends the region's freshly baked walking mesh with traversal surfaces. Return [code]true[/code] to publish the result. In the editor, implement this method in a tool script.
-			</description>
-		</method>
 		<method name="_collect_source_geometry" qualifiers="virtual">
 			<return type="void" />
 			<param index="0" name="region" type="NavigationRegion3D" />
 			<param index="1" name="geometry" type="NavigationMeshSourceGeometryData3D" />
 			<description>
-				Optionally adds geometry to the region's parsed bake input before generating the walking mesh.
+				Optionally adds geometry to the region's parsed bake input before generating the walking mesh and the traversal surfaces. Called on the main thread. In the editor, implement this method in a tool script.
 			</description>
 		</method>
 	</methods>

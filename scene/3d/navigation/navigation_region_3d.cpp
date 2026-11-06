@@ -267,18 +267,18 @@ void NavigationRegion3D::bake_navigation_mesh(bool p_on_thread) {
 		}
 	}
 
-	const Ref<NavigationTransitionRule3D> rules = transition_rules;
-	if (rules.is_valid() && rules->has_surface_baker()) {
-		rules->collect_source_geometry(this, source_geometry_data);
-		Ref<NavigationMesh> baked_mesh = navigation_mesh->duplicate();
-		baked_mesh->clear();
-		NavigationServer3D::get_singleton()->bake_from_source_geometry_data(baked_mesh, source_geometry_data);
-		if (rules->bake_surfaces(this, source_geometry_data, baked_mesh)) {
-			navigation_mesh->apply_baked_data(**baked_mesh);
+	// Extra source geometry the scene parsers do not see (for example voxel collision bodies).
+	if (transition_rules.is_valid()) {
+		transition_rules->collect_source_geometry(this, source_geometry_data);
+	}
+
+	if (traversal_rules.is_valid()) {
+		// Recast and the traversal pass run together, on a worker thread if requested.
+		if (p_on_thread) {
+			NavigationServer3D::get_singleton()->bake_traversal_from_source_geometry_data_async(navigation_mesh, source_geometry_data, traversal_rules, callable_mp(this, &NavigationRegion3D::_bake_finished));
 		} else {
-			ERR_PRINT("Navigation surface baking failed. Keeping the previous navigation mesh.");
+			NavigationServer3D::get_singleton()->bake_traversal_from_source_geometry_data(navigation_mesh, source_geometry_data, traversal_rules, callable_mp(this, &NavigationRegion3D::_bake_finished));
 		}
-		callable_mp(this, &NavigationRegion3D::_bake_finished).call_deferred();
 		return;
 	}
 
@@ -295,6 +295,12 @@ void NavigationRegion3D::_bake_finished() {
 		return;
 	}
 
+#ifdef TOOLS_ENABLED
+	// The baked data lives in the resource; an external .res must be saved with the scene.
+	if (navigation_mesh.is_valid()) {
+		navigation_mesh->set_edited(true);
+	}
+#endif // TOOLS_ENABLED
 	emit_signal(SNAME("bake_finished"));
 }
 
