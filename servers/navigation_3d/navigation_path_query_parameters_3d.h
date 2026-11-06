@@ -70,6 +70,8 @@ private:
 	bool simplify_path = false;
 	real_t simplify_epsilon = 0.0;
 
+	uint32_t traversal_layers = 0;
+	Dictionary excluded_traversal_surfaces;
 	LocalVector<RID> _excluded_links;
 	LocalVector<RID> _excluded_regions;
 	LocalVector<RID> _included_regions;
@@ -106,6 +108,11 @@ public:
 
 	void set_simplify_epsilon(real_t p_epsilon);
 	real_t get_simplify_epsilon() const;
+
+	void set_traversal_layers(uint32_t p_layers) { traversal_layers = p_layers; }
+	uint32_t get_traversal_layers() const { return traversal_layers; }
+	void set_excluded_traversal_surfaces(const Dictionary &p_excluded) { excluded_traversal_surfaces = p_excluded.duplicate(true); }
+	Dictionary get_excluded_traversal_surfaces() const { return excluded_traversal_surfaces.duplicate(true); }
 
 	void set_excluded_links(const TypedArray<RID> &p_links);
 	TypedArray<RID> get_excluded_links() const;

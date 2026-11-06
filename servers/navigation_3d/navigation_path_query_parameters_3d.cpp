@@ -216,6 +216,11 @@ void NavigationPathQueryParameters3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_included_regions", "regions"), &NavigationPathQueryParameters3D::set_included_regions);
 	ClassDB::bind_method(D_METHOD("get_included_regions"), &NavigationPathQueryParameters3D::get_included_regions);
 
+	ClassDB::bind_method(D_METHOD("set_traversal_layers", "layers"), &NavigationPathQueryParameters3D::set_traversal_layers);
+	ClassDB::bind_method(D_METHOD("get_traversal_layers"), &NavigationPathQueryParameters3D::get_traversal_layers);
+	ClassDB::bind_method(D_METHOD("set_excluded_traversal_surfaces", "excluded"), &NavigationPathQueryParameters3D::set_excluded_traversal_surfaces);
+	ClassDB::bind_method(D_METHOD("get_excluded_traversal_surfaces"), &NavigationPathQueryParameters3D::get_excluded_traversal_surfaces);
+
 	ClassDB::bind_method(D_METHOD("set_excluded_links", "links"), &NavigationPathQueryParameters3D::set_excluded_links);
 	ClassDB::bind_method(D_METHOD("get_excluded_links"), &NavigationPathQueryParameters3D::get_excluded_links);
 
@@ -243,6 +248,8 @@ void NavigationPathQueryParameters3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "metadata_flags", PROPERTY_HINT_FLAGS, "Include Types,Include RIDs,Include Owners"), "set_metadata_flags", "get_metadata_flags");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "simplify_path"), "set_simplify_path", "get_simplify_path");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "simplify_epsilon"), "set_simplify_epsilon", "get_simplify_epsilon");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "traversal_layers"), "set_traversal_layers", "get_traversal_layers");
+	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "excluded_traversal_surfaces"), "set_excluded_traversal_surfaces", "get_excluded_traversal_surfaces");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "excluded_links", PROPERTY_HINT_ARRAY_TYPE, "RID"), "set_excluded_links", "get_excluded_links");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "excluded_regions", PROPERTY_HINT_ARRAY_TYPE, "RID"), "set_excluded_regions", "get_excluded_regions");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "included_regions", PROPERTY_HINT_ARRAY_TYPE, "RID"), "set_included_regions", "get_included_regions");

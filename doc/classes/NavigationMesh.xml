@@ -161,6 +161,9 @@
 		<member name="sample_partition_type" type="int" setter="set_sample_partition_type" getter="get_sample_partition_type" enum="NavigationMesh.SamplePartitionType" default="0">
 			Partitioning algorithm for creating the navigation mesh polys.
 		</member>
+		<member name="traversal_surfaces" type="Dictionary" setter="set_traversal_surfaces" getter="get_traversal_surfaces" default="{}">
+			Optional directed traversal data keyed by polygon index. Each entry describes a quadrilateral with an entry edge at vertices 0 and 1 and an exit edge at vertices 2 and 3. The dictionary entry contains [code]source[/code] and [code]target[/code] walking polygon indices, a traversal [code]layers[/code] mask, and an optional [code]enter_cost[/code]. Queries opt in using [member NavigationPathQueryParameters3D.traversal_layers].
+		</member>
 		<member name="vertices_per_polygon" type="float" setter="set_vertices_per_polygon" getter="get_vertices_per_polygon" default="6.0">
 			The maximum number of vertices allowed for polygons generated during the contour to polygon conversion process.
 		</member>

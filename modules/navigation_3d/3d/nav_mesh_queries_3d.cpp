@@ -118,6 +118,18 @@ Vector3 NavMeshQueries3D::polygons_get_random_point(const LocalVector<Polygon> &
 	} else {
 		uint32_t rrp_polygon_index = Math::random(int(0), region_polygons.size() - 1);
 
+		if (region_polygons[rrp_polygon_index].traversal_surface) {
+			LocalVector<uint32_t> walkable;
+			for (uint32_t i = 0; i < region_polygons.size(); i++) {
+				if (!region_polygons[i].traversal_surface && region_polygons[i].vertices.size() >= 3) {
+					walkable.push_back(i);
+				}
+			}
+			if (walkable.is_empty()) {
+				return Vector3();
+			}
+			rrp_polygon_index = walkable[Math::random(int(0), walkable.size() - 1)];
+		}
 		const Polygon &rr_polygon = region_polygons[rrp_polygon_index];
 
 		uint32_t rrp_face_index = Math::random(int(2), rr_polygon.vertices.size() - 1);
@@ -131,7 +143,9 @@ Vector3 NavMeshQueries3D::polygons_get_random_point(const LocalVector<Polygon> &
 
 void NavMeshQueries3D::_query_task_push_back_point_with_metadata(NavMeshPathQueryTask3D &p_query_task, const Vector3 &p_point, const Polygon *p_point_polygon) {
 	if (p_query_task.metadata_flags.has_flag(PathMetadataFlags::PATH_INCLUDE_TYPES)) {
-		p_query_task.path_meta_point_types.push_back(p_point_polygon->owner->get_type());
+		const bool surface = p_point_polygon->traversal_surface;
+		p_query_task.path_meta_point_types.push_back(surface ? PathSegmentType::PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE : p_point_polygon->owner->get_type());
+		p_query_task.path_meta_surface_ids.push_back(surface ? int32_t(p_point_polygon->id) : -1);
 	}
 
 	if (p_query_task.metadata_flags.has_flag(PathMetadataFlags::PATH_INCLUDE_RIDS)) {
@@ -157,6 +171,16 @@ void NavMeshQueries3D::map_query_path(NavMap3D *map, const Ref<NavigationPathQue
 	query_task.target_position = p_query_parameters->get_target_position();
 	query_task.navigation_layers = p_query_parameters->get_navigation_layers();
 	query_task.callback = p_callback;
+
+	query_task.traversal_layers = p_query_parameters->get_traversal_layers();
+	const Dictionary excluded_surfaces = p_query_parameters->get_excluded_traversal_surfaces();
+	for (const Variant *key = excluded_surfaces.next(nullptr); key != nullptr; key = excluded_surfaces.next(key)) {
+		const Vector<int32_t> ids = excluded_surfaces[*key];
+		HashSet<int32_t> &excluded = query_task.excluded_traversal_surfaces[RID(*key)];
+		for (int32_t id : ids) {
+			excluded.insert(id);
+		}
+	}
 
 	const TypedArray<RID> excluded_links = p_query_parameters->get_excluded_links();
 	for (int i = 0; i < excluded_links.size(); i++) {
@@ -228,6 +252,7 @@ void NavMeshQueries3D::map_query_path(NavMap3D *map, const Ref<NavigationPathQue
 			query_task.path_meta_point_types,
 			query_task.path_meta_point_rids,
 			query_task.path_meta_point_owners);
+	p_query_result->set_path_surface_ids(query_task.path_meta_surface_ids);
 	p_query_result->set_path_length(query_task.path_length);
 
 	if (query_task.callback.is_valid()) {
@@ -252,6 +277,9 @@ void NavMeshQueries3D::_query_task_find_start_end_positions(NavMeshPathQueryTask
 
 		// Find the initial poly and the end poly on this map.
 		for (const Polygon &p : region->get_navmesh_polygons()) {
+			if (p.traversal_surface) {
+				continue;
+			}
 			// Only consider the polygon if it in a region with compatible layers.
 			if ((p_query_task.navigation_layers & p.owner->get_navigation_layers()) == 0) {
 				continue;
@@ -289,6 +317,14 @@ void NavMeshQueries3D::_query_task_search_polygon_connections(NavMeshPathQueryTa
 		return;
 	}
 
+	const Polygon &neighbor = *p_connection.polygon;
+	if (neighbor.traversal_surface) {
+		const HashSet<int32_t> *excluded = p_query_task.excluded_traversal_surfaces.getptr(connection_owner->get_self());
+		if (!(neighbor.traversal_layers & p_query_task.traversal_layers) || (excluded && excluded->has(neighbor.id))) {
+			return;
+		}
+	}
+
 	Heap<NavigationPoly *, NavPolyTravelCostGreaterThan, NavPolyHeapIndexer>
 			&traversable_polys = p_query_task.path_query_slot->traversable_polys;
 	LocalVector<NavigationPoly> &navigation_polys = p_query_task.path_query_slot->path_corridor;
@@ -297,6 +333,9 @@ void NavMeshQueries3D::_query_task_search_polygon_connections(NavMeshPathQueryTa
 
 	Vector3 new_entry = Geometry3D::get_closest_point_to_segment(p_least_cost_poly.entry, p_connection.pathway_start, p_connection.pathway_end);
 	real_t new_traveled_distance = p_least_cost_poly.entry.distance_to(new_entry) * poly_travel_cost + p_poly_enter_cost + p_least_cost_poly.traveled_distance;
+	if (neighbor.traversal_surface) {
+		new_traveled_distance += neighbor.traversal_enter_cost;
+	}
 	if (connection_owner->get_type() == PathSegmentType::PATH_SEGMENT_TYPE_LINK) {
 		new_traveled_distance += connection_owner->get_enter_cost();
 	}
@@ -468,7 +507,7 @@ void NavMeshQueries3D::_query_task_build_path_corridor(NavMeshPathQueryTask3D &p
 			least_cost_id = p_query_task.path_query_slot->poly_to_id[traversable_polys.pop()->poly];
 
 			// Store the farthest reachable end polygon in case our goal is not reachable.
-			if (is_reachable) {
+			if (is_reachable && !navigation_polys[least_cost_id].poly->traversal_surface) {
 				real_t distance = navigation_polys[least_cost_id].entry.distance_squared_to(p_target_position);
 				if (distance_to_reachable_end > distance) {
 					distance_to_reachable_end = distance;
@@ -687,6 +726,7 @@ void NavMeshQueries3D::_query_task_process_path_result_limits(NavMeshPathQueryTa
 
 		if (p_query_task.metadata_flags.has_flag(PathMetadataFlags::PATH_INCLUDE_TYPES)) {
 			p_query_task.path_meta_point_types.resize(path_max_size);
+			p_query_task.path_meta_surface_ids.resize(path_max_size);
 		}
 
 		if (p_query_task.metadata_flags.has_flag(PathMetadataFlags::PATH_INCLUDE_RIDS)) {
@@ -722,6 +762,11 @@ void NavMeshQueries3D::_query_task_simplified_path_points(NavMeshPathQueryTask3D
 			types_ptr[i] = types_ptr[simplified_path_indices[i]];
 		}
 		p_query_task.path_meta_point_types.resize(index_count);
+		int32_t *surfaces = p_query_task.path_meta_surface_ids.ptr();
+		for (uint32_t i = 0; i < index_count; i++) {
+			surfaces[i] = surfaces[simplified_path_indices[i]];
+		}
+		p_query_task.path_meta_surface_ids.resize(index_count);
 	}
 
 	if (p_query_task.metadata_flags.has_flag(PathMetadataFlags::PATH_INCLUDE_RIDS)) {
@@ -894,6 +939,9 @@ Vector3 NavMeshQueries3D::map_iteration_get_closest_point_to_segment(const NavMa
 	const LocalVector<Ref<NavRegionIteration3D>> &regions = p_map_iteration.region_iterations;
 	for (const Ref<NavRegionIteration3D> &region : regions) {
 		for (const Polygon &polygon : region->get_navmesh_polygons()) {
+			if (polygon.traversal_surface) {
+				continue;
+			}
 			// For each face check the distance to the segment.
 			for (uint32_t point_id = 2; point_id < polygon.vertices.size(); point_id += 1) {
 				const Face3 face(polygon.vertices[0], polygon.vertices[point_id - 1], polygon.vertices[point_id]);
@@ -974,6 +1022,9 @@ ClosestPointQueryResult NavMeshQueries3D::map_iteration_get_closest_point_info(c
 	const LocalVector<Ref<NavRegionIteration3D>> &regions = p_map_iteration.region_iterations;
 	for (const Ref<NavRegionIteration3D> &region : regions) {
 		for (const Polygon &polygon : region->get_navmesh_polygons()) {
+			if (polygon.traversal_surface) {
+				continue;
+			}
 			Vector3 plane_normal = (polygon.vertices[1] - polygon.vertices[0]).cross(polygon.vertices[2] - polygon.vertices[0]);
 			Vector3 closest_on_polygon;
 			real_t closest = FLT_MAX;
@@ -1109,6 +1160,9 @@ Vector3 NavMeshQueries3D::polygons_get_closest_point_to_segment(const LocalVecto
 	real_t closest_point_distance = FLT_MAX;
 
 	for (const Polygon &polygon : p_polygons) {
+		if (polygon.traversal_surface) {
+			continue;
+		}
 		// For each face check the distance to the segment.
 		for (uint32_t point_id = 2; point_id < polygon.vertices.size(); point_id += 1) {
 			const Face3 face(polygon.vertices[0], polygon.vertices[point_id - 1], polygon.vertices[point_id]);
@@ -1181,6 +1235,9 @@ ClosestPointQueryResult NavMeshQueries3D::polygons_get_closest_point_info(const 
 	real_t closest_point_distance_squared = FLT_MAX;
 
 	for (const Polygon &polygon : p_polygons) {
+		if (polygon.traversal_surface) {
+			continue;
+		}
 		Vector3 plane_normal = (polygon.vertices[1] - polygon.vertices[0]).cross(polygon.vertices[2] - polygon.vertices[0]);
 		Vector3 closest_on_polygon;
 		real_t closest = FLT_MAX;

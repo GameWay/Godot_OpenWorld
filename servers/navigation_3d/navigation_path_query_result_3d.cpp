@@ -67,6 +67,7 @@ const Vector<int64_t> &NavigationPathQueryResult3D::get_path_owner_ids() const {
 void NavigationPathQueryResult3D::reset() {
 	path.clear();
 	path_types.clear();
+	path_surface_ids.clear();
 	path_rids.clear();
 	path_owner_ids.clear();
 }
@@ -74,6 +75,7 @@ void NavigationPathQueryResult3D::reset() {
 void NavigationPathQueryResult3D::set_data(const LocalVector<Vector3> &p_path, const LocalVector<int32_t> &p_path_types, const LocalVector<RID> &p_path_rids, const LocalVector<int64_t> &p_path_owner_ids) {
 	path.clear();
 	path_types.clear();
+	path_surface_ids.clear();
 	path_rids.clear();
 	path_owner_ids.clear();
 
@@ -112,6 +114,13 @@ void NavigationPathQueryResult3D::set_data(const LocalVector<Vector3> &p_path, c
 	}
 }
 
+void NavigationPathQueryResult3D::set_path_surface_ids(const LocalVector<int32_t> &p_ids) {
+	path_surface_ids.resize(p_ids.size());
+	for (uint32_t i = 0; i < p_ids.size(); i++) {
+		path_surface_ids.write[i] = p_ids[i];
+	}
+}
+
 void NavigationPathQueryResult3D::set_path_length(float p_length) {
 	path_length = p_length;
 }
@@ -145,5 +154,8 @@ void NavigationPathQueryResult3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "path_length"), "set_path_length", "get_path_length");
 
 	BIND_ENUM_CONSTANT(PATH_SEGMENT_TYPE_REGION);
+	ClassDB::bind_method(D_METHOD("get_path_surface_ids"), &NavigationPathQueryResult3D::get_path_surface_ids);
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_INT32_ARRAY, "path_surface_ids", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "", "get_path_surface_ids");
 	BIND_ENUM_CONSTANT(PATH_SEGMENT_TYPE_LINK);
+	BIND_ENUM_CONSTANT(PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE);
 }

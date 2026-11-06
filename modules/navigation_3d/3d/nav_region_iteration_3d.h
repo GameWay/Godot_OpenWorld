@@ -49,10 +49,12 @@ struct NavRegionIterationBuild3D {
 	struct NavMeshData {
 		Vector<Vector3> vertices;
 		Vector<Vector<int>> polygons;
+		Dictionary traversal_surfaces;
 
 		void clear() {
 			vertices.clear();
 			polygons.clear();
+			traversal_surfaces.clear();
 		}
 	} navmesh_data;
 

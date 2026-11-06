@@ -33,6 +33,8 @@
 #include "scene/3d/node_3d.h"
 #include "scene/resources/navigation_mesh.h"
 
+class NavigationTransitionRule3D;
+
 class NavigationRegion3D : public Node3D {
 	GDCLASS(NavigationRegion3D, Node3D);
 
@@ -45,6 +47,7 @@ class NavigationRegion3D : public Node3D {
 	real_t enter_cost = 0.0;
 	real_t travel_cost = 1.0;
 	Ref<NavigationMesh> navigation_mesh;
+	Ref<NavigationTransitionRule3D> transition_rules;
 
 	void _navigation_mesh_changed();
 
@@ -100,6 +103,8 @@ public:
 
 	void set_navigation_mesh(const Ref<NavigationMesh> &p_navigation_mesh);
 	Ref<NavigationMesh> get_navigation_mesh() const;
+	void set_transition_rules(const Ref<NavigationTransitionRule3D> &p_rules);
+	Ref<NavigationTransitionRule3D> get_transition_rules() const;
 
 	/// Bakes the navigation mesh; once done, automatically
 	/// sets the new navigation mesh and emits a signal

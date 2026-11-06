@@ -42,6 +42,7 @@ void NavigationMesh::create_from_mesh(const Ref<Mesh> &p_mesh) {
 
 	vertices = Vector<Vector3>();
 	polygons.clear();
+	traversal_surfaces.clear();
 
 	for (int i = 0; i < p_mesh->get_surface_count(); i++) {
 		if (p_mesh->surface_get_primitive_type(i) != Mesh::PRIMITIVE_TRIANGLES) {
@@ -364,27 +365,68 @@ Vector<int> NavigationMesh::get_polygon(int p_idx) {
 	return polygons[p_idx];
 }
 
+void NavigationMesh::set_traversal_surfaces(const Dictionary &p_surfaces) {
+	{
+		RWLockWrite write_lock(rwlock);
+		traversal_surfaces = p_surfaces.duplicate(true);
+		debug_mesh.unref();
+	}
+	emit_changed();
+}
+
+Dictionary NavigationMesh::get_traversal_surfaces() const {
+	RWLockRead read_lock(rwlock);
+	return traversal_surfaces.duplicate(true);
+}
+
 void NavigationMesh::clear_polygons() {
 	RWLockWrite write_lock(rwlock);
 	polygons.clear();
+	traversal_surfaces.clear();
 }
 
 void NavigationMesh::clear() {
 	RWLockWrite write_lock(rwlock);
 	polygons.clear();
+	traversal_surfaces.clear();
 	vertices.clear();
+	debug_mesh.unref();
 }
 
 void NavigationMesh::set_data(const Vector<Vector3> &p_vertices, const Vector<Vector<int>> &p_polygons) {
 	RWLockWrite write_lock(rwlock);
 	vertices = p_vertices;
 	polygons = p_polygons;
+	traversal_surfaces.clear();
+	debug_mesh.unref();
 }
 
-void NavigationMesh::get_data(Vector<Vector3> &r_vertices, Vector<Vector<int>> &r_polygons) {
+void NavigationMesh::get_data(Vector<Vector3> &r_vertices, Vector<Vector<int>> &r_polygons, Dictionary *r_traversal_surfaces) const {
 	RWLockRead read_lock(rwlock);
 	r_vertices = vertices;
 	r_polygons = polygons;
+	if (r_traversal_surfaces != nullptr) {
+		*r_traversal_surfaces = traversal_surfaces.duplicate(true);
+	}
+}
+
+void NavigationMesh::apply_baked_data(const NavigationMesh &p_baked_mesh) {
+	Vector<Vector3> baked_vertices;
+	Vector<Vector<int>> baked_polygons;
+	Dictionary baked_surfaces;
+	p_baked_mesh.get_data(baked_vertices, baked_polygons, &baked_surfaces);
+	{
+		RWLockWrite write_lock(rwlock);
+		vertices = baked_vertices;
+		polygons = baked_polygons;
+		traversal_surfaces = baked_surfaces;
+		debug_mesh.unref();
+	}
+	merge_meta_from(&p_baked_mesh);
+#ifdef TOOLS_ENABLED
+	set_edited(true);
+#endif
+	emit_changed();
 }
 
 #ifdef DEBUG_ENABLED
@@ -562,6 +604,8 @@ void NavigationMesh::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("add_polygon", "polygon"), &NavigationMesh::add_polygon);
 	ClassDB::bind_method(D_METHOD("get_polygon_count"), &NavigationMesh::get_polygon_count);
 	ClassDB::bind_method(D_METHOD("get_polygon", "idx"), &NavigationMesh::get_polygon);
+	ClassDB::bind_method(D_METHOD("set_traversal_surfaces", "surfaces"), &NavigationMesh::set_traversal_surfaces);
+	ClassDB::bind_method(D_METHOD("get_traversal_surfaces"), &NavigationMesh::get_traversal_surfaces);
 	ClassDB::bind_method(D_METHOD("clear_polygons"), &NavigationMesh::clear_polygons);
 
 	ClassDB::bind_method(D_METHOD("create_from_mesh", "mesh"), &NavigationMesh::create_from_mesh);
@@ -572,6 +616,7 @@ void NavigationMesh::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("clear"), &NavigationMesh::clear);
 
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR3_ARRAY, "vertices", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "set_vertices", "get_vertices");
+	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "traversal_surfaces", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), "set_traversal_surfaces", "get_traversal_surfaces");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "polygons", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_polygons", "_get_polygons");
 
 	ADD_GROUP("Sampling", "sample_");

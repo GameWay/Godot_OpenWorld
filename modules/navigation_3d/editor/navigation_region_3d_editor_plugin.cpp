@@ -214,7 +214,8 @@ void NavigationRegion3DEditor::_clear_pressed() {
 		for (NavigationRegion3D *region : selected_regions) {
 			if (region->get_navigation_mesh().is_valid()) {
 				region->get_navigation_mesh()->clear();
-				region->update_gizmos();
+				region->get_navigation_mesh()->set_edited(true);
+				region->get_navigation_mesh()->emit_changed();
 			}
 		}
 	}

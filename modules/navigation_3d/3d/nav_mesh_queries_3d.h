@@ -76,6 +76,8 @@ public:
 
 		bool exclude_regions = false;
 		bool include_regions = false;
+		uint32_t traversal_layers = 0;
+		HashMap<RID, HashSet<int32_t>> excluded_traversal_surfaces;
 		HashSet<RID> excluded_links;
 		LocalVector<RID> excluded_regions;
 		LocalVector<RID> included_regions;
@@ -100,6 +102,7 @@ public:
 		// Path points.
 		LocalVector<Vector3> path_points;
 		LocalVector<int32_t> path_meta_point_types;
+		LocalVector<int32_t> path_meta_surface_ids;
 		LocalVector<RID> path_meta_point_rids;
 		LocalVector<int64_t> path_meta_point_owners;
 		float path_length = 0.0;
@@ -112,6 +115,7 @@ public:
 		void path_clear() {
 			path_points.clear();
 			path_meta_point_types.clear();
+			path_meta_surface_ids.clear();
 			path_meta_point_rids.clear();
 			path_meta_point_owners.clear();
 		}
@@ -119,6 +123,7 @@ public:
 		void path_reverse() {
 			path_points.reverse();
 			path_meta_point_types.reverse();
+			path_meta_surface_ids.reverse();
 			path_meta_point_rids.reverse();
 			path_meta_point_owners.reverse();
 		}

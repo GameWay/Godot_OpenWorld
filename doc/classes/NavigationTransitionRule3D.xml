@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NavigationTransitionRule3D" inherits="Resource" api_type="core" experimental="" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Rules that extend a [NavigationRegion3D] bake with traversal surfaces.
+	</brief_description>
+	<description>
+		Assign to [member NavigationRegion3D.transition_rules]. After the standard walking mesh is baked, [method _bake_surfaces] may append directed traversal surface polygons and describe them in [member NavigationMesh.traversal_surfaces].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_bake_surfaces" qualifiers="virtual">
+			<return type="bool" />
+			<param index="0" name="region" type="NavigationRegion3D" />
+			<param index="1" name="geometry" type="NavigationMeshSourceGeometryData3D" />
+			<param index="2" name="mesh" type="NavigationMesh" />
+			<description>
+				Extends the region's freshly baked walking mesh with traversal surfaces. Return [code]true[/code] to publish the result. In the editor, implement this method in a tool script.
+			</description>
+		</method>
+		<method name="_collect_source_geometry" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="region" type="NavigationRegion3D" />
+			<param index="1" name="geometry" type="NavigationMeshSourceGeometryData3D" />
+			<description>
+				Optionally adds geometry to the region's parsed bake input before generating the walking mesh.
+			</description>
+		</method>
+	</methods>
+</class>

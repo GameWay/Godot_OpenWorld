@@ -30,6 +30,8 @@
 
 #include "navigation_region_3d.h"
 
+#include "navigation_transition_rule_3d.h"
+
 #include "core/config/engine.h"
 #include "core/math/random_pcg.h"
 #include "core/object/callable_mp.h"
@@ -219,6 +221,14 @@ RID NavigationRegion3D::get_navigation_map() const {
 	return RID();
 }
 
+void NavigationRegion3D::set_transition_rules(const Ref<NavigationTransitionRule3D> &p_rules) {
+	transition_rules = p_rules;
+}
+
+Ref<NavigationTransitionRule3D> NavigationRegion3D::get_transition_rules() const {
+	return transition_rules;
+}
+
 void NavigationRegion3D::bake_navigation_mesh(bool p_on_thread) {
 	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "The SceneTree can only be parsed on the main thread. Call this function from the main thread or use call_deferred().");
 	ERR_FAIL_COND_MSG(navigation_mesh.is_null(), "Baking the navigation mesh requires a valid `NavigationMesh` resource.");
@@ -227,6 +237,21 @@ void NavigationRegion3D::bake_navigation_mesh(bool p_on_thread) {
 	source_geometry_data.instantiate();
 
 	NavigationServer3D::get_singleton()->parse_source_geometry_data(navigation_mesh, source_geometry_data, this);
+
+	const Ref<NavigationTransitionRule3D> rules = transition_rules;
+	if (rules.is_valid() && rules->has_surface_baker()) {
+		rules->collect_source_geometry(this, source_geometry_data);
+		Ref<NavigationMesh> baked_mesh = navigation_mesh->duplicate();
+		baked_mesh->clear();
+		NavigationServer3D::get_singleton()->bake_from_source_geometry_data(baked_mesh, source_geometry_data);
+		if (rules->bake_surfaces(this, source_geometry_data, baked_mesh)) {
+			navigation_mesh->apply_baked_data(**baked_mesh);
+		} else {
+			ERR_PRINT("Navigation surface baking failed. Keeping the previous navigation mesh.");
+		}
+		callable_mp(this, &NavigationRegion3D::_bake_finished).call_deferred();
+		return;
+	}
 
 	if (p_on_thread) {
 		NavigationServer3D::get_singleton()->bake_from_source_geometry_data_async(navigation_mesh, source_geometry_data, callable_mp(this, &NavigationRegion3D::_bake_finished));
@@ -290,11 +315,14 @@ void NavigationRegion3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_travel_cost"), &NavigationRegion3D::get_travel_cost);
 
 	ClassDB::bind_method(D_METHOD("bake_navigation_mesh", "on_thread"), &NavigationRegion3D::bake_navigation_mesh, DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("set_transition_rules", "rules"), &NavigationRegion3D::set_transition_rules);
+	ClassDB::bind_method(D_METHOD("get_transition_rules"), &NavigationRegion3D::get_transition_rules);
 	ClassDB::bind_method(D_METHOD("is_baking"), &NavigationRegion3D::is_baking);
 
 	ClassDB::bind_method(D_METHOD("get_bounds"), &NavigationRegion3D::get_bounds);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "navigation_mesh", PROPERTY_HINT_RESOURCE_TYPE, NavigationMesh::get_class_static()), "set_navigation_mesh", "get_navigation_mesh");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "transition_rules", PROPERTY_HINT_RESOURCE_TYPE, NavigationTransitionRule3D::get_class_static()), "set_transition_rules", "get_transition_rules");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enabled"), "set_enabled", "is_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_edge_connections"), "set_use_edge_connections", "get_use_edge_connections");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_layers", PROPERTY_HINT_LAYERS_3D_NAVIGATION), "set_navigation_layers", "get_navigation_layers");

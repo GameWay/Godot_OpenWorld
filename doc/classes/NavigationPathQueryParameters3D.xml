@@ -13,6 +13,9 @@
 		<member name="excluded_links" type="RID[]" setter="set_excluded_links" getter="get_excluded_links" default="[]">
 			Navigation link [RID]s that this path query may not traverse. The links remain enabled on the map for other queries.
 		</member>
+		<member name="excluded_traversal_surfaces" type="Dictionary" setter="set_excluded_traversal_surfaces" getter="get_excluded_traversal_surfaces" default="{}">
+			Maps region [RID]s to [PackedInt32Array] lists of traversal surface polygon indices to exclude from this query.
+		</member>
 		<member name="excluded_regions" type="RID[]" setter="set_excluded_regions" getter="get_excluded_regions" default="[]">
 			The list of region [RID]s that will be excluded from the path query. Use [method NavigationRegion3D.get_rid] to get the [RID] associated with a [NavigationRegion3D] node.
 			[b]Note:[/b] The returned array is copied and any changes to it will not update the original property value. To update the value you need to modify the returned array, and then set it to the property again.
@@ -61,6 +64,9 @@
 		</member>
 		<member name="target_position" type="Vector3" setter="set_target_position" getter="get_target_position" default="Vector3(0, 0, 0)">
 			The pathfinding target position in global coordinates.
+		</member>
+		<member name="traversal_layers" type="int" setter="set_traversal_layers" getter="get_traversal_layers" default="0">
+			Enables traversal surface polygons whose traversal layer mask shares a bit with this value. A value of [code]0[/code] leaves traversal surfaces disabled. Set [member path_postprocessing] to [constant PATH_POSTPROCESSING_NONE] to retain every surface entry.
 		</member>
 	</members>
 	<constants>

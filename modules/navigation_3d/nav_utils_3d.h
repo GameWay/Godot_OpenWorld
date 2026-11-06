@@ -103,6 +103,10 @@ struct Polygon {
 
 	LocalVector<Vector3> vertices;
 
+	bool traversal_surface = false;
+	uint32_t traversal_layers = 0;
+	real_t traversal_enter_cost = 0.0;
+
 	real_t surface_area = 0.0;
 };
 

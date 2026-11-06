@@ -86,6 +86,9 @@
 		<member name="navigation_layers" type="int" setter="set_navigation_layers" getter="get_navigation_layers" default="1">
 			A bitfield determining all navigation layers the region belongs to. These navigation layers can be checked upon when requesting a path with [method NavigationServer3D.map_get_path].
 		</member>
+		<member name="transition_rules" type="NavigationTransitionRule3D" setter="set_transition_rules" getter="get_transition_rules">
+			Optional rules that extend the standard navigation mesh bake. When the rules implement a surface baker, the editor's Bake action builds the complete mesh on the main thread and only replaces the previous mesh on success.
+		</member>
 		<member name="navigation_mesh" type="NavigationMesh" setter="set_navigation_mesh" getter="get_navigation_mesh">
 			The [NavigationMesh] resource to use.
 		</member>

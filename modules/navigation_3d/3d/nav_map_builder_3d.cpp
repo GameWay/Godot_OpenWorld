@@ -311,6 +311,9 @@ void NavMapBuilder3D::_build_step_navlink_connections(NavMapIterationBuild3D &r_
 			}
 
 			for (Polygon &polyon : region->navmesh_polygons) {
+				if (polyon.traversal_surface) {
+					continue;
+				}
 				for (uint32_t point_id = 2; point_id < polyon.vertices.size(); point_id += 1) {
 					const Face3 face(polyon.vertices[0], polyon.vertices[point_id - 1], polyon.vertices[point_id]);
 

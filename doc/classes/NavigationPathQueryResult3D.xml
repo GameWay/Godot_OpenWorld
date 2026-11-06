@@ -30,6 +30,9 @@
 		<member name="path_rids" type="RID[]" setter="set_path_rids" getter="get_path_rids" default="[]">
 			The [RID]s of the regions and links that each point of the path goes through.
 		</member>
+		<member name="path_surface_ids" type="PackedInt32Array" setter="" getter="get_path_surface_ids" default="PackedInt32Array()">
+			The region-local polygon index at each traversal surface entry, or [code]-1[/code] for other points. Available when the query requests path types. Use [member path_rids] to identify the owning region.
+		</member>
 		<member name="path_types" type="PackedInt32Array" setter="set_path_types" getter="get_path_types" default="PackedInt32Array()">
 			The type of navigation primitive (region or link) that each point of the path goes through.
 		</member>
@@ -40,6 +43,9 @@
 		</constant>
 		<constant name="PATH_SEGMENT_TYPE_LINK" value="1" enum="PathSegmentType">
 			This segment of the path goes through a link.
+		</constant>
+		<constant name="PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE" value="2" enum="PathSegmentType">
+			This point enters a directed traversal polygon in a region's navigation mesh.
 		</constant>
 	</constants>
 </class>

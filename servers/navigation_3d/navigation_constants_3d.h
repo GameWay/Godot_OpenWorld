@@ -44,7 +44,8 @@ enum PathPostProcessing {
 
 enum PathSegmentType {
 	PATH_SEGMENT_TYPE_REGION = 0,
-	PATH_SEGMENT_TYPE_LINK
+	PATH_SEGMENT_TYPE_LINK,
+	PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE,
 };
 
 enum PathMetadataFlags {

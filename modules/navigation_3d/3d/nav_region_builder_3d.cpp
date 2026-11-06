@@ -51,6 +51,24 @@ void NavRegionBuilder3D::build_iteration(NavRegionIterationBuild3D &r_build) {
 
 	_build_step_merge_edge_connection_pairs(r_build);
 
+	LocalVector<Polygon> &polygons = r_build.region_iteration->navmesh_polygons;
+	LocalVector<LocalVector<Connection>> &connections = r_build.region_iteration->internal_connections;
+	const Dictionary &surfaces = r_build.navmesh_data.traversal_surfaces;
+	for (const Variant *key = surfaces.next(nullptr); key != nullptr; key = surfaces.next(key)) {
+		const int index = *key;
+		ERR_CONTINUE(index < 0 || index >= int(polygons.size()));
+		const Dictionary surface = surfaces[*key];
+		const int source = surface.get("source", -1);
+		const int target = surface.get("target", -1);
+		ERR_CONTINUE(source < 0 || source >= int(polygons.size()));
+		ERR_CONTINUE(target < 0 || target >= int(polygons.size()));
+		Polygon &polygon = polygons[index];
+		ERR_CONTINUE(polygon.vertices.size() != 4 || polygons[source].traversal_surface || polygons[target].traversal_surface ||
+				polygons[source].vertices.size() < 3 || polygons[target].vertices.size() < 3);
+		connections[source].push_back({ &polygon, -1, polygon.vertices[0], polygon.vertices[1] });
+		connections[index].push_back({ &polygons[target], -1, polygon.vertices[2], polygon.vertices[3] });
+	}
+
 	_build_update_iteration(r_build);
 }
 
@@ -85,6 +103,14 @@ void NavRegionBuilder3D::_build_step_process_navmesh_data(NavRegionIterationBuil
 		polygon.id = i;
 		polygon.owner = region_iteration.ptr();
 		polygon.surface_area = 0.0;
+		const Dictionary &surfaces = r_build.navmesh_data.traversal_surfaces;
+		polygon.traversal_surface = surfaces.has(int(i));
+		if (polygon.traversal_surface) {
+			const Dictionary surface = surfaces[int(i)];
+			polygon.traversal_layers = uint32_t(int64_t(surface.get("layers", 0)));
+			const real_t enter_cost = surface.get("enter_cost", 0.0);
+			polygon.traversal_enter_cost = Math::is_finite(enter_cost) ? MAX(real_t(0), enter_cost) : real_t(0);
+		}
 
 		Vector<int> polygon_indices = polygons_ptr[i];
 
@@ -111,8 +137,10 @@ void NavRegionBuilder3D::_build_step_process_navmesh_data(NavRegionIterationBuil
 				_new_polygon_surface_area += face.get_area();
 			}
 
-			polygon.surface_area = _new_polygon_surface_area;
-			_new_region_surface_area += _new_polygon_surface_area;
+			if (!polygon.traversal_surface) {
+				polygon.surface_area = _new_polygon_surface_area;
+				_new_region_surface_area += _new_polygon_surface_area;
+			}
 		}
 
 		for (int j(0); j < polygon_size; j++) {
@@ -183,6 +211,9 @@ void NavRegionBuilder3D::_build_step_find_edge_connection_pairs(NavRegionIterati
 	int edge_merge_error_count = 0;
 
 	for (Polygon &poly : region_iteration->navmesh_polygons) {
+		if (poly.traversal_surface) {
+			continue;
+		}
 		for (uint32_t p = 0; p < poly.vertices.size(); p++) {
 			const int next_point = (p + 1) % poly.vertices.size();
 			const EdgeKey ek = get_edge_key(poly.vertices[p], poly.vertices[next_point], map_cell_size);

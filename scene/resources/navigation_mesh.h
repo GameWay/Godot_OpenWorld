@@ -40,6 +40,7 @@ class NavigationMesh : public Resource {
 
 	Vector<Vector3> vertices;
 	Vector<Vector<int>> polygons;
+	Dictionary traversal_surfaces;
 	Ref<ArrayMesh> debug_mesh;
 
 protected:
@@ -194,10 +195,14 @@ public:
 	void set_polygons(const Vector<Vector<int>> &p_polygons);
 	Vector<Vector<int>> get_polygons() const;
 
+	void set_traversal_surfaces(const Dictionary &p_surfaces);
+	Dictionary get_traversal_surfaces() const;
+
 	void clear();
 
 	void set_data(const Vector<Vector3> &p_vertices, const Vector<Vector<int>> &p_polygons);
-	void get_data(Vector<Vector3> &r_vertices, Vector<Vector<int>> &r_polygons);
+	void get_data(Vector<Vector3> &r_vertices, Vector<Vector<int>> &r_polygons, Dictionary *r_traversal_surfaces = nullptr) const;
+	void apply_baked_data(const NavigationMesh &p_baked_mesh);
 
 #ifdef DEBUG_ENABLED
 	Ref<ArrayMesh> get_debug_mesh();
