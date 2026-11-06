@@ -95,6 +95,10 @@
 		<member name="travel_cost" type="float" setter="set_travel_cost" getter="get_travel_cost" default="1.0">
 			When pathfinding moves inside this region's navigation mesh the traveled distances are multiplied with [member travel_cost] for determining the shortest path.
 		</member>
+		<member name="traversal_rules" type="NavigationTraversalRules3D" setter="set_traversal_rules" getter="get_traversal_rules">
+			Search settings and creature profiles for traversal surfaces (climbing, vaulting, dropping). Profile id or layer bit conflicts are shown as configuration warnings and printed when baking.
+			[b]Note:[/b] For now the traversal pass itself runs in [method NavigationTransitionRule3D._bake_surfaces] of [member transition_rules], which reads its thresholds from this resource.
+		</member>
 		<member name="use_edge_connections" type="bool" setter="set_use_edge_connections" getter="get_use_edge_connections" default="true">
 			If enabled the navigation region will use edge connections to connect with other navigation regions within proximity of the navigation map edge connection margin.
 		</member>

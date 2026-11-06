@@ -295,6 +295,8 @@
 #include "scene/3d/navigation/navigation_obstacle_3d.h"
 #include "scene/3d/navigation/navigation_region_3d.h"
 #include "scene/3d/navigation/navigation_transition_rule_3d.h"
+#include "scene/3d/navigation/navigation_traversal_profile_3d.h"
+#include "scene/3d/navigation/navigation_traversal_rules_3d.h"
 #include "scene/resources/3d/navigation_mesh_source_geometry_data_3d.h"
 #endif // NAVIGATION_3D_DISABLED
 #ifndef XR_DISABLED
@@ -788,6 +790,8 @@ void register_scene_types() {
 #ifndef NAVIGATION_3D_DISABLED
 	GDREGISTER_CLASS(NavigationMeshSourceGeometryData3D);
 	GDREGISTER_CLASS(NavigationTransitionRule3D);
+	GDREGISTER_CLASS(NavigationTraversalProfile3D);
+	GDREGISTER_CLASS(NavigationTraversalRules3D);
 	GDREGISTER_CLASS(NavigationRegion3D);
 	GDREGISTER_CLASS(NavigationAgent3D);
 	GDREGISTER_CLASS(NavigationObstacle3D);

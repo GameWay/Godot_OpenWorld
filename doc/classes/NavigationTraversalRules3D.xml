@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NavigationTraversalRules3D" inherits="Resource" api_type="core" experimental="" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Search settings, body size and creature profiles for baking traversal surfaces.
+	</brief_description>
+	<description>
+		Assign to [member NavigationRegion3D.traversal_rules]. After the walking mesh is baked, traversal candidates are searched between boundary edges of the mesh using the search and body settings of this resource. Every candidate is checked against each [NavigationTraversalProfile3D] in [member profiles]; the accepted ones become traversal surfaces whose [code]layers[/code] mask holds the [member NavigationTraversalProfile3D.layer_bit] of every profile that accepted them.
+		Profile ids and layer bits must be unique. Duplicates are reported by [method get_validation_warnings], as configuration warnings of the region and when baking.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_all_layers" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the combined layer mask of all profiles.
+			</description>
+		</method>
+		<method name="get_layers_for" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="id" type="StringName" />
+			<description>
+				Returns the layer mask of the profile with [param id], or [code]0[/code] if there is no such profile. Use it for [member NavigationPathQueryParameters3D.traversal_layers].
+			</description>
+		</method>
+		<method name="get_profile" qualifiers="const">
+			<return type="NavigationTraversalProfile3D" />
+			<param index="0" name="id" type="StringName" />
+			<description>
+				Returns the first profile with [param id], or [code]null[/code].
+			</description>
+		</method>
+		<method name="get_validation_warnings" qualifiers="const">
+			<return type="PackedStringArray" />
+			<description>
+				Returns a warning for every empty profile, profile without id, duplicate id and duplicate layer bit.
+			</description>
+		</method>
+		<method name="has_profile" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="id" type="StringName" />
+			<description>
+				Returns [code]true[/code] if a profile with [param id] exists.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="body_height" type="float" setter="set_body_height" getter="get_body_height" default="1.8">
+			Height of the standing body capsule used for clearance checks.
+		</member>
+		<member name="body_radius" type="float" setter="set_body_radius" getter="get_body_radius" default="0.32">
+			Radius of the body capsule used for clearance and footprint checks.
+		</member>
+		<member name="edge_inset" type="float" setter="set_edge_inset" getter="get_edge_inset" default="0.1">
+			Distance from a mesh boundary edge to the approach and exit points, toward the inside of the walking mesh.
+		</member>
+		<member name="grip_probe_depth" type="float" setter="set_grip_probe_depth" getter="get_grip_probe_depth" default="0.15">
+			Depth below an edge at which hand grips and obstacle faces are probed.
+		</member>
+		<member name="hand_spacing" type="float" setter="set_hand_spacing" getter="get_hand_spacing" default="0.42">
+			Distance between the two hand grips across the traversal direction.
+		</member>
+		<member name="profiles" type="NavigationTraversalProfile3D[]" setter="set_profiles" getter="get_profiles" default="[]">
+			Creature profiles. Each one contributes its [member NavigationTraversalProfile3D.layer_bit] to the surfaces it accepts.
+		</member>
+		<member name="sample_spacing" type="float" setter="set_sample_spacing" getter="get_sample_spacing" default="0.4">
+			Length of the boundary edge segments that are tested separately.
+		</member>
+		<member name="search_distance" type="float" setter="set_search_distance" getter="get_search_distance" default="2.6">
+			Maximum horizontal distance from a boundary edge to the opposite edge of a traversal.
+		</member>
+		<member name="search_height" type="float" setter="set_search_height" getter="get_search_height" default="3.2">
+			Maximum height difference between a boundary edge and the opposite edge of a traversal. Also limits how high obstacle crests are probed.
+		</member>
+		<member name="support_search" type="float" setter="set_support_search" getter="get_support_search" default="0.4">
+			Vertical distance searched for floor under the body footprint and the hand grips.
+		</member>
+	</members>
+</class>

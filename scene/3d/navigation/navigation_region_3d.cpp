@@ -31,6 +31,7 @@
 #include "navigation_region_3d.h"
 
 #include "navigation_transition_rule_3d.h"
+#include "navigation_traversal_rules_3d.h"
 
 #include "core/config/engine.h"
 #include "core/math/random_pcg.h"
@@ -229,6 +230,28 @@ Ref<NavigationTransitionRule3D> NavigationRegion3D::get_transition_rules() const
 	return transition_rules;
 }
 
+void NavigationRegion3D::set_traversal_rules(const Ref<NavigationTraversalRules3D> &p_rules) {
+	if (traversal_rules == p_rules) {
+		return;
+	}
+	if (traversal_rules.is_valid()) {
+		traversal_rules->disconnect_changed(callable_mp(this, &NavigationRegion3D::_traversal_rules_changed));
+	}
+	traversal_rules = p_rules;
+	if (traversal_rules.is_valid()) {
+		traversal_rules->connect_changed(callable_mp(this, &NavigationRegion3D::_traversal_rules_changed));
+	}
+	_traversal_rules_changed();
+}
+
+Ref<NavigationTraversalRules3D> NavigationRegion3D::get_traversal_rules() const {
+	return traversal_rules;
+}
+
+void NavigationRegion3D::_traversal_rules_changed() {
+	update_configuration_warnings();
+}
+
 void NavigationRegion3D::bake_navigation_mesh(bool p_on_thread) {
 	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "The SceneTree can only be parsed on the main thread. Call this function from the main thread or use call_deferred().");
 	ERR_FAIL_COND_MSG(navigation_mesh.is_null(), "Baking the navigation mesh requires a valid `NavigationMesh` resource.");
@@ -237,6 +260,12 @@ void NavigationRegion3D::bake_navigation_mesh(bool p_on_thread) {
 	source_geometry_data.instantiate();
 
 	NavigationServer3D::get_singleton()->parse_source_geometry_data(navigation_mesh, source_geometry_data, this);
+
+	if (traversal_rules.is_valid()) {
+		for (const String &warning : traversal_rules->get_validation_warnings()) {
+			WARN_PRINT(vformat("%s: %s", get_name(), warning));
+		}
+	}
 
 	const Ref<NavigationTransitionRule3D> rules = transition_rules;
 	if (rules.is_valid() && rules->has_surface_baker()) {
@@ -280,6 +309,9 @@ PackedStringArray NavigationRegion3D::get_configuration_warnings() const {
 		if (navigation_mesh.is_null()) {
 			warnings.push_back(RTR("A NavigationMesh resource must be set or created for this node to work."));
 		}
+		if (traversal_rules.is_valid()) {
+			warnings.append_array(traversal_rules->get_validation_warnings());
+		}
 	}
 
 	return warnings;
@@ -317,12 +349,15 @@ void NavigationRegion3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("bake_navigation_mesh", "on_thread"), &NavigationRegion3D::bake_navigation_mesh, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("set_transition_rules", "rules"), &NavigationRegion3D::set_transition_rules);
 	ClassDB::bind_method(D_METHOD("get_transition_rules"), &NavigationRegion3D::get_transition_rules);
+	ClassDB::bind_method(D_METHOD("set_traversal_rules", "rules"), &NavigationRegion3D::set_traversal_rules);
+	ClassDB::bind_method(D_METHOD("get_traversal_rules"), &NavigationRegion3D::get_traversal_rules);
 	ClassDB::bind_method(D_METHOD("is_baking"), &NavigationRegion3D::is_baking);
 
 	ClassDB::bind_method(D_METHOD("get_bounds"), &NavigationRegion3D::get_bounds);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "navigation_mesh", PROPERTY_HINT_RESOURCE_TYPE, NavigationMesh::get_class_static()), "set_navigation_mesh", "get_navigation_mesh");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "transition_rules", PROPERTY_HINT_RESOURCE_TYPE, NavigationTransitionRule3D::get_class_static()), "set_transition_rules", "get_transition_rules");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "traversal_rules", PROPERTY_HINT_RESOURCE_TYPE, NavigationTraversalRules3D::get_class_static()), "set_traversal_rules", "get_traversal_rules");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enabled"), "set_enabled", "is_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_edge_connections"), "set_use_edge_connections", "get_use_edge_connections");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_layers", PROPERTY_HINT_LAYERS_3D_NAVIGATION), "set_navigation_layers", "get_navigation_layers");
@@ -464,6 +499,9 @@ NavigationRegion3D::NavigationRegion3D() {
 NavigationRegion3D::~NavigationRegion3D() {
 	if (navigation_mesh.is_valid()) {
 		navigation_mesh->disconnect_changed(callable_mp(this, &NavigationRegion3D::_navigation_mesh_changed));
+	}
+	if (traversal_rules.is_valid()) {
+		traversal_rules->disconnect_changed(callable_mp(this, &NavigationRegion3D::_traversal_rules_changed));
 	}
 	ERR_FAIL_NULL(NavigationServer3D::get_singleton());
 	NavigationServer3D::get_singleton()->free_rid(region);

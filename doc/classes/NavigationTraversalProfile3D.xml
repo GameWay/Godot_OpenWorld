@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NavigationTraversalProfile3D" inherits="Resource" api_type="core" experimental="" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Describes which traversal surfaces a kind of creature can use and how expensive they are.
+	</brief_description>
+	<description>
+		A profile is one entry of [member NavigationTraversalRules3D.profiles]. Every accepted traversal surface stores the [member layer_bit] of each profile that can use it in its [code]layers[/code] mask (see [member NavigationMesh.traversal_surfaces]). A path query selects profiles with [member NavigationPathQueryParameters3D.traversal_layers].
+		Height ranges are stored as [Vector2]: [member Vector2.x] is the minimum and [member Vector2.y] the maximum height in meters. Angles are in degrees.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_enter_cost" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="duration" type="float" />
+			<param index="1" name="length" type="float" />
+			<description>
+				Returns the extra path cost of a traversal that takes [param duration] seconds and spans [param length] meters of path: [code]max(0, duration * time_scale + extra_penalty - length)[/code].
+			</description>
+		</method>
+		<method name="get_height_range" qualifiers="const">
+			<return type="Vector2" />
+			<param index="0" name="kind" type="int" enum="NavigationTraversalProfile3D.TraversalKind" />
+			<description>
+				Returns the allowed height range of [param kind].
+			</description>
+		</method>
+		<method name="get_layer_mask" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns [code]1 &lt;&lt; layer_bit[/code].
+			</description>
+		</method>
+		<method name="is_height_in_range" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="kind" type="int" enum="NavigationTraversalProfile3D.TraversalKind" />
+			<param index="1" name="height" type="float" />
+			<description>
+				Returns [code]true[/code] if [param height] lies within the height range of [param kind], inclusive.
+			</description>
+		</method>
+		<method name="is_kind_allowed" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="kind" type="int" enum="NavigationTraversalProfile3D.TraversalKind" />
+			<description>
+				Returns [code]true[/code] if [param kind] is enabled in [member allowed_kinds].
+			</description>
+		</method>
+		<method name="set_height_range">
+			<return type="void" />
+			<param index="0" name="kind" type="int" enum="NavigationTraversalProfile3D.TraversalKind" />
+			<param index="1" name="range" type="Vector2" />
+			<description>
+				Sets the allowed height range of [param kind].
+			</description>
+		</method>
+		<method name="set_kind_allowed">
+			<return type="void" />
+			<param index="0" name="kind" type="int" enum="NavigationTraversalProfile3D.TraversalKind" />
+			<param index="1" name="allowed" type="bool" />
+			<description>
+				Enables or disables [param kind] in [member allowed_kinds].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="allowed_kinds" type="int" setter="set_allowed_kinds" getter="get_allowed_kinds" enum="NavigationTraversalProfile3D.TraversalKindFlags" is_bitfield="true" default="31">
+			Traversal kinds this profile can perform. Bit [code]n[/code] corresponds to [enum TraversalKind] value [code]n[/code].
+		</member>
+		<member name="climb_height" type="Vector2" setter="set_height_range" getter="get_height_range" default="Vector2(0.45, 1.85)">
+			Height range of a ledge that can be climbed onto, from the approach floor to the top floor.
+		</member>
+		<member name="climb_over_height" type="Vector2" setter="set_height_range" getter="get_height_range" default="Vector2(1.2, 2.2)">
+			Height range of a thin wall that can be climbed over when there is no room to stand on top.
+		</member>
+		<member name="drop_height" type="Vector2" setter="set_height_range" getter="get_height_range" default="Vector2(0.45, 2.1)">
+			Height range of a drop that can be stepped off without hanging from the edge.
+		</member>
+		<member name="extra_penalty" type="float" setter="set_extra_penalty" getter="get_extra_penalty" default="1.19">
+			Constant cost added to every traversal of this profile. See [method get_enter_cost].
+		</member>
+		<member name="hang_drop_height" type="Vector2" setter="set_height_range" getter="get_height_range" default="Vector2(2.1, 3.5)">
+			Height range of a drop that requires hanging from the edge before letting go.
+		</member>
+		<member name="id" type="StringName" setter="set_id" getter="get_id" default="&amp;&quot;&quot;">
+			Unique profile identifier, for example [code]&amp;"hero"[/code]. Used by [method NavigationTraversalRules3D.get_profile].
+		</member>
+		<member name="layer_bit" type="int" setter="set_layer_bit" getter="get_layer_bit" default="0">
+			Bit index (0 to 31) of this profile in the traversal layer mask. It is set explicitly so adding or renaming profiles never changes the bits of baked surfaces. Must be unique within one [NavigationTraversalRules3D].
+		</member>
+		<member name="max_gap" type="float" setter="set_max_gap" getter="get_max_gap" default="2.35">
+			Maximum horizontal distance between the approach point and the exit point.
+		</member>
+		<member name="max_grip_angle" type="float" setter="set_max_grip_angle" getter="get_max_grip_angle" default="35.0">
+			Maximum angle in degrees between the faces under the two hand grips.
+		</member>
+		<member name="max_grip_depth" type="float" setter="set_max_grip_depth" getter="get_max_grip_depth" default="0.2">
+			Maximum offset of the two hand grips along the traversal direction.
+		</member>
+		<member name="max_landing_delta" type="float" setter="set_max_landing_delta" getter="get_max_landing_delta" default="0.45">
+			Maximum floor height difference between both sides of a vaulted or climbed-over obstacle.
+		</member>
+		<member name="max_slope" type="float" setter="set_max_slope" getter="get_max_slope" default="43.0">
+			Maximum floor slope in degrees at the approach and exit points.
+		</member>
+		<member name="max_thickness" type="float" setter="set_max_thickness" getter="get_max_thickness" default="0.5">
+			Maximum thickness of a vaulted or climbed-over obstacle along the traversal direction.
+		</member>
+		<member name="time_scale" type="float" setter="set_time_scale" getter="get_time_scale" default="3.4">
+			Path cost per second of traversal. Usually the profile's reference walking speed. See [method get_enter_cost].
+		</member>
+		<member name="vault_height" type="Vector2" setter="set_height_range" getter="get_height_range" default="Vector2(0.35, 1.2)">
+			Height range of a low obstacle that can be vaulted, measured from the approach floor to its crest.
+		</member>
+	</members>
+	<constants>
+		<constant name="KIND_CLIMB" value="0" enum="TraversalKind">
+			Climb up onto a ledge with both hands.
+		</constant>
+		<constant name="KIND_CLIMB_OVER" value="1" enum="TraversalKind">
+			Climb over a thin wall: pull up, swing over and climb down the other side.
+		</constant>
+		<constant name="KIND_VAULT" value="2" enum="TraversalKind">
+			Vault over a low obstacle without stopping.
+		</constant>
+		<constant name="KIND_DROP" value="3" enum="TraversalKind">
+			Step off an edge and land.
+		</constant>
+		<constant name="KIND_HANG_DROP" value="4" enum="TraversalKind">
+			Hang from an edge with both hands and let go.
+		</constant>
+		<constant name="KIND_MAX" value="5" enum="TraversalKind">
+			Number of traversal kinds.
+		</constant>
+		<constant name="KIND_FLAG_CLIMB" value="1" enum="TraversalKindFlags" is_bitfield="true">
+			[constant KIND_CLIMB] is allowed.
+		</constant>
+		<constant name="KIND_FLAG_CLIMB_OVER" value="2" enum="TraversalKindFlags" is_bitfield="true">
+			[constant KIND_CLIMB_OVER] is allowed.
+		</constant>
+		<constant name="KIND_FLAG_VAULT" value="4" enum="TraversalKindFlags" is_bitfield="true">
+			[constant KIND_VAULT] is allowed.
+		</constant>
+		<constant name="KIND_FLAG_DROP" value="8" enum="TraversalKindFlags" is_bitfield="true">
+			[constant KIND_DROP] is allowed.
+		</constant>
+		<constant name="KIND_FLAG_HANG_DROP" value="16" enum="TraversalKindFlags" is_bitfield="true">
+			[constant KIND_HANG_DROP] is allowed.
+		</constant>
+		<constant name="KIND_FLAG_ALL" value="31" enum="TraversalKindFlags" is_bitfield="true">
+			All traversal kinds are allowed.
+		</constant>
+		<constant name="REJECT_NONE" value="0" enum="RejectReason">
+			The candidate is accepted.
+		</constant>
+		<constant name="REJECT_KIND" value="1" enum="RejectReason">
+			The traversal kind is not in [member allowed_kinds].
+		</constant>
+		<constant name="REJECT_NO_SUPPORT" value="2" enum="RejectReason">
+			There is no floor to stand on at the approach or exit point.
+		</constant>
+		<constant name="REJECT_HEIGHT" value="3" enum="RejectReason">
+			The height is outside the range of the traversal kind.
+		</constant>
+		<constant name="REJECT_GAP" value="4" enum="RejectReason">
+			The horizontal distance exceeds [member max_gap].
+		</constant>
+		<constant name="REJECT_SLOPE" value="5" enum="RejectReason">
+			The floor slope exceeds [member max_slope].
+		</constant>
+		<constant name="REJECT_NO_GRIP" value="6" enum="RejectReason">
+			Two hand grips were not found on the edge.
+		</constant>
+		<constant name="REJECT_GRIP_ANGLE" value="7" enum="RejectReason">
+			The grip faces differ by more than [member max_grip_angle].
+		</constant>
+		<constant name="REJECT_GRIP_DEPTH" value="8" enum="RejectReason">
+			The grips are offset by more than [member max_grip_depth].
+		</constant>
+		<constant name="REJECT_BLOCKED" value="9" enum="RejectReason">
+			The body does not fit along the traversal path.
+		</constant>
+		<constant name="REJECT_THICKNESS" value="10" enum="RejectReason">
+			The obstacle is thicker than [member max_thickness].
+		</constant>
+		<constant name="REJECT_LANDING_DELTA" value="11" enum="RejectReason">
+			The floors on both sides differ by more than [member max_landing_delta].
+		</constant>
+		<constant name="REJECT_MAX" value="12" enum="RejectReason">
+			Number of reject reasons.
+		</constant>
+	</constants>
+</class>
