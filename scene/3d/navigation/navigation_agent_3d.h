@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include "core/templates/local_vector.h"
 #include "scene/main/node.h"
 #include "servers/navigation_3d/navigation_constants_3d.h"
 #include "servers/navigation_3d/navigation_path_query_parameters_3d.h"
@@ -105,6 +106,19 @@ class NavigationAgent3D : public Node {
 	bool navigation_finished = true;
 	bool last_waypoint_reached = false;
 
+	// Traversal surfaces: the agent stops on the entry point and waits for the game to execute the traversal.
+	struct TraversalExclusion {
+		RID region;
+		int32_t surface_id = -1;
+		double expires_at = 0.0;
+	};
+	uint32_t traversal_layers = 0;
+	LocalVector<TraversalExclusion> traversal_exclusions;
+	double traversal_time = 0.0;
+	bool traversal_waiting = false;
+	bool traversal_repath_pending = false;
+	Dictionary traversal_details;
+
 	// Debug properties for exposed bindings
 	bool debug_enabled = false;
 	float debug_path_custom_point_size = 4.0;
@@ -145,6 +159,17 @@ public:
 
 	void set_navigation_layer_value(int p_layer_number, bool p_value);
 	bool get_navigation_layer_value(int p_layer_number) const;
+
+	void set_traversal_layers(uint32_t p_traversal_layers);
+	uint32_t get_traversal_layers() const { return traversal_layers; }
+
+	void exclude_traversal_surface(RID p_region, int p_surface_id, double p_seconds);
+	void clear_traversal_exclusions();
+
+	bool is_waiting_traversal() const { return traversal_waiting; }
+	Dictionary get_current_traversal() const;
+	void complete_traversal();
+	void abort_traversal(double p_exclude_seconds);
 
 	void set_pathfinding_algorithm(const NavigationPathQueryParameters3D::PathfindingAlgorithm p_pathfinding_algorithm);
 	NavigationPathQueryParameters3D::PathfindingAlgorithm get_pathfinding_algorithm() const {
@@ -281,15 +306,21 @@ private:
 	Vector3 _get_final_position() const;
 
 	void _update_navigation();
-	void _advance_waypoints(const Vector3 &p_origin);
+	void _advance_waypoints(const Vector3 &p_origin, bool p_allow_traversal = true);
 	void _request_repath();
+
+	bool _is_traversal_waypoint() const;
+	void _start_traversal(const Dictionary &p_waypoint_details);
+	void _expire_traversal_exclusions();
+	Dictionary _get_excluded_traversal_surfaces() const;
+	Dictionary _get_waypoint_details() const;
 
 	bool _is_last_waypoint() const;
 	void _move_to_next_waypoint();
 	bool _is_within_waypoint_distance(const Vector3 &p_origin) const;
 	bool _is_within_target_distance(const Vector3 &p_origin) const;
 
-	void _trigger_waypoint_reached();
+	void _trigger_waypoint_reached(const Dictionary &p_details);
 	void _transition_to_navigation_finished();
 	void _transition_to_target_reached();
 

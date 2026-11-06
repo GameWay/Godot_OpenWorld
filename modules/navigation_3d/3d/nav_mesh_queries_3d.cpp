@@ -744,7 +744,40 @@ void NavMeshQueries3D::_query_task_simplified_path_points(NavMeshPathQueryTask3D
 		return;
 	}
 
-	const LocalVector<uint32_t> &simplified_path_indices = NavMeshQueries3D::get_simplified_path_indices(p_query_task.path_points, p_query_task.simplify_epsilon);
+	LocalVector<uint32_t> simplified_path_indices;
+	const bool has_types = p_query_task.metadata_flags.has_flag(PathMetadataFlags::PATH_INCLUDE_TYPES) && p_query_task.path_meta_point_types.size() == p_query_task.path_points.size();
+	bool has_traversal = false;
+	if (has_types) {
+		for (int32_t type : p_query_task.path_meta_point_types) {
+			if (type == PathSegmentType::PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE) {
+				has_traversal = true;
+				break;
+			}
+		}
+	}
+	if (has_traversal) {
+		// Traversal entry points and the exit points after them are never simplified away.
+		const real_t epsilon = MAX(real_t(0), p_query_task.simplify_epsilon);
+		const real_t squared_epsilon = epsilon * epsilon;
+		const uint32_t last = p_query_task.path_points.size() - 1;
+		simplified_path_indices.reserve(p_query_task.path_points.size());
+		simplified_path_indices.push_back(0);
+		uint32_t anchor = 0;
+		for (uint32_t i = 1; i < last; i++) {
+			const bool keep = p_query_task.path_meta_point_types[i] == PathSegmentType::PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE ||
+					p_query_task.path_meta_point_types[i - 1] == PathSegmentType::PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE;
+			if (!keep) {
+				continue;
+			}
+			simplify_path_segment(anchor, i, p_query_task.path_points, squared_epsilon, simplified_path_indices);
+			simplified_path_indices.push_back(i);
+			anchor = i;
+		}
+		simplify_path_segment(anchor, last, p_query_task.path_points, squared_epsilon, simplified_path_indices);
+		simplified_path_indices.push_back(last);
+	} else {
+		simplified_path_indices = NavMeshQueries3D::get_simplified_path_indices(p_query_task.path_points, p_query_task.simplify_epsilon);
+	}
 
 	uint32_t index_count = simplified_path_indices.size();
 
@@ -819,6 +852,37 @@ void NavMeshQueries3D::_query_task_post_process_corridorfunnel(NavMeshPathQueryT
 	_query_task_push_back_point_with_metadata(p_query_task, end_point, end_poly);
 
 	while (p) {
+		// Traversal surfaces keep their entry and exit points: an agent must stop on the entry edge
+		// and resume on the exit edge, so the funnel restarts at both edges instead of cutting across.
+		if (p->back_navigation_poly_id != -1 && (p->poly->traversal_surface || navigation_polys[p->back_navigation_poly_id].poly->traversal_surface)) {
+			const Vector3 edge_start = p->back_navigation_edge_pathway_start;
+			const Vector3 edge_end = p->back_navigation_edge_pathway_end;
+			Vector3 crossing;
+			if (p->poly->traversal_surface) {
+				// Entry edge: straight across the surface from its exit point.
+				crossing = Geometry3D::get_closest_point_to_segment(apex_point, edge_start, edge_end);
+			} else {
+				// Exit edge: where the straight line from the apex towards the start meets the edge.
+				Vector3 on_line;
+				Geometry3D::get_closest_points_between_segments(apex_point, begin_point, edge_start, edge_end, on_line, crossing);
+			}
+
+			_query_task_clip_path(p_query_task, apex_poly, crossing, p);
+			if (!crossing.is_equal_approx(p_query_task.path_points[p_query_task.path_points.size() - 1])) {
+				_query_task_push_back_point_with_metadata(p_query_task, crossing, p->poly);
+			}
+
+			apex_point = crossing;
+			apex_poly = p;
+			left_poly = p;
+			right_poly = p;
+			left_portal = apex_point;
+			right_portal = apex_point;
+
+			p = &navigation_polys[p->back_navigation_poly_id];
+			continue;
+		}
+
 		// Set left and right points of the pathway between polygons.
 		Vector3 left = p->back_navigation_edge_pathway_start;
 		Vector3 right = p->back_navigation_edge_pathway_end;

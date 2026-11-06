@@ -90,6 +90,17 @@ void NavigationAgent3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_navigation_layer_value", "layer_number", "value"), &NavigationAgent3D::set_navigation_layer_value);
 	ClassDB::bind_method(D_METHOD("get_navigation_layer_value", "layer_number"), &NavigationAgent3D::get_navigation_layer_value);
 
+	ClassDB::bind_method(D_METHOD("set_traversal_layers", "traversal_layers"), &NavigationAgent3D::set_traversal_layers);
+	ClassDB::bind_method(D_METHOD("get_traversal_layers"), &NavigationAgent3D::get_traversal_layers);
+
+	ClassDB::bind_method(D_METHOD("exclude_traversal_surface", "region", "surface_id", "seconds"), &NavigationAgent3D::exclude_traversal_surface);
+	ClassDB::bind_method(D_METHOD("clear_traversal_exclusions"), &NavigationAgent3D::clear_traversal_exclusions);
+
+	ClassDB::bind_method(D_METHOD("is_waiting_traversal"), &NavigationAgent3D::is_waiting_traversal);
+	ClassDB::bind_method(D_METHOD("get_current_traversal"), &NavigationAgent3D::get_current_traversal);
+	ClassDB::bind_method(D_METHOD("complete_traversal"), &NavigationAgent3D::complete_traversal);
+	ClassDB::bind_method(D_METHOD("abort_traversal", "exclude_seconds"), &NavigationAgent3D::abort_traversal);
+
 	ClassDB::bind_method(D_METHOD("set_pathfinding_algorithm", "pathfinding_algorithm"), &NavigationAgent3D::set_pathfinding_algorithm);
 	ClassDB::bind_method(D_METHOD("get_pathfinding_algorithm"), &NavigationAgent3D::get_pathfinding_algorithm);
 
@@ -163,6 +174,7 @@ void NavigationAgent3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "path_height_offset", PROPERTY_HINT_RANGE, "-100.0,100,0.01,or_greater,suffix:m"), "set_path_height_offset", "get_path_height_offset");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "path_max_distance", PROPERTY_HINT_RANGE, "0.01,100,0.1,or_greater,suffix:m"), "set_path_max_distance", "get_path_max_distance");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_layers", PROPERTY_HINT_LAYERS_3D_NAVIGATION), "set_navigation_layers", "get_navigation_layers");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "traversal_layers", PROPERTY_HINT_FLAGS, "Bit 0,Bit 1,Bit 2,Bit 3,Bit 4,Bit 5,Bit 6,Bit 7,Bit 8,Bit 9,Bit 10,Bit 11,Bit 12,Bit 13,Bit 14,Bit 15,Bit 16,Bit 17,Bit 18,Bit 19,Bit 20,Bit 21,Bit 22,Bit 23,Bit 24,Bit 25,Bit 26,Bit 27,Bit 28,Bit 29,Bit 30,Bit 31"), "set_traversal_layers", "get_traversal_layers");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "pathfinding_algorithm", PROPERTY_HINT_ENUM, "AStar"), "set_pathfinding_algorithm", "get_pathfinding_algorithm");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "path_postprocessing", PROPERTY_HINT_ENUM, "Corridorfunnel,Edgecentered,None"), "set_path_postprocessing", "get_path_postprocessing");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "path_metadata_flags", PROPERTY_HINT_FLAGS, "Include Types,Include RIDs,Include Owners"), "set_path_metadata_flags", "get_path_metadata_flags");
@@ -193,6 +205,7 @@ void NavigationAgent3D::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("target_reached"));
 	ADD_SIGNAL(MethodInfo("waypoint_reached", PropertyInfo(Variant::DICTIONARY, "details")));
 	ADD_SIGNAL(MethodInfo("link_reached", PropertyInfo(Variant::DICTIONARY, "details")));
+	ADD_SIGNAL(MethodInfo("traversal_reached", PropertyInfo(Variant::DICTIONARY, "details")));
 	ADD_SIGNAL(MethodInfo("navigation_finished"));
 	ADD_SIGNAL(MethodInfo("velocity_computed", PropertyInfo(Variant::VECTOR3, "safe_velocity")));
 
@@ -317,6 +330,8 @@ void NavigationAgent3D::_notification(int p_what) {
 		} break;
 
 		case NOTIFICATION_INTERNAL_PHYSICS_PROCESS: {
+			traversal_time += get_physics_process_delta_time();
+			_expire_traversal_exclusions();
 			if (agent_parent && avoidance_enabled) {
 				NavigationServer3D::get_singleton()->agent_set_position(agent, agent_parent->get_global_position());
 			}
@@ -483,6 +498,195 @@ bool NavigationAgent3D::get_navigation_layer_value(int p_layer_number) const {
 	ERR_FAIL_COND_V_MSG(p_layer_number < 1, false, "Navigation layer number must be between 1 and 32 inclusive.");
 	ERR_FAIL_COND_V_MSG(p_layer_number > 32, false, "Navigation layer number must be between 1 and 32 inclusive.");
 	return get_navigation_layers() & (1 << (p_layer_number - 1));
+}
+
+void NavigationAgent3D::set_traversal_layers(uint32_t p_traversal_layers) {
+	if (traversal_layers == p_traversal_layers) {
+		return;
+	}
+
+	traversal_layers = p_traversal_layers;
+
+	if (target_position_submitted) {
+		_request_repath();
+	}
+}
+
+void NavigationAgent3D::exclude_traversal_surface(RID p_region, int p_surface_id, double p_seconds) {
+	ERR_FAIL_COND_MSG(!p_region.is_valid(), "Traversal surface region must be a valid RID.");
+	ERR_FAIL_COND_MSG(p_surface_id < 0, "Traversal surface id must not be negative.");
+
+	bool changed = false;
+	for (uint32_t i = 0; i < traversal_exclusions.size(); i++) {
+		if (traversal_exclusions[i].region == p_region && traversal_exclusions[i].surface_id == p_surface_id) {
+			traversal_exclusions.remove_at_unordered(i);
+			changed = true;
+			break;
+		}
+	}
+	if (p_seconds > 0.0) {
+		traversal_exclusions.push_back({ p_region, int32_t(p_surface_id), traversal_time + p_seconds });
+		changed = true;
+	}
+
+	if (changed && target_position_submitted) {
+		_request_repath();
+	}
+}
+
+void NavigationAgent3D::clear_traversal_exclusions() {
+	if (traversal_exclusions.is_empty()) {
+		return;
+	}
+	traversal_exclusions.clear();
+
+	if (target_position_submitted) {
+		_request_repath();
+	}
+}
+
+Dictionary NavigationAgent3D::get_current_traversal() const {
+	return traversal_waiting ? traversal_details.duplicate() : Dictionary();
+}
+
+void NavigationAgent3D::complete_traversal() {
+	ERR_FAIL_COND_MSG(!traversal_waiting, "The agent is not waiting for a traversal.");
+
+	traversal_waiting = false;
+	traversal_details.clear();
+
+	if (traversal_repath_pending) {
+		traversal_repath_pending = false;
+		_request_repath();
+		return;
+	}
+
+	// Continue from the exit point that follows the traversal entry.
+	if (_is_last_waypoint()) {
+		last_waypoint_reached = true;
+	} else {
+		_move_to_next_waypoint();
+	}
+}
+
+void NavigationAgent3D::abort_traversal(double p_exclude_seconds) {
+	ERR_FAIL_COND_MSG(!traversal_waiting, "The agent is not waiting for a traversal.");
+
+	const RID region = traversal_details.get(SNAME("region"), RID());
+	const int surface_id = traversal_details.get(SNAME("surface_id"), -1);
+
+	traversal_waiting = false;
+	traversal_repath_pending = false;
+	traversal_details.clear();
+
+	if (p_exclude_seconds > 0.0 && region.is_valid() && surface_id >= 0) {
+		exclude_traversal_surface(region, surface_id, p_exclude_seconds);
+	}
+	_request_repath();
+}
+
+void NavigationAgent3D::_expire_traversal_exclusions() {
+	bool changed = false;
+	for (uint32_t i = 0; i < traversal_exclusions.size();) {
+		if (traversal_exclusions[i].expires_at <= traversal_time) {
+			traversal_exclusions.remove_at_unordered(i);
+			changed = true;
+		} else {
+			i++;
+		}
+	}
+
+	if (changed && target_position_submitted) {
+		_request_repath();
+	}
+}
+
+Dictionary NavigationAgent3D::_get_excluded_traversal_surfaces() const {
+	Dictionary excluded;
+	for (const TraversalExclusion &exclusion : traversal_exclusions) {
+		if (exclusion.expires_at <= traversal_time) {
+			continue;
+		}
+		PackedInt32Array ids = excluded.get(exclusion.region, PackedInt32Array());
+		ids.push_back(exclusion.surface_id);
+		excluded[exclusion.region] = ids;
+	}
+	return excluded;
+}
+
+bool NavigationAgent3D::_is_traversal_waypoint() const {
+	if (traversal_layers == 0) {
+		return false;
+	}
+	const Vector<int32_t> &types = navigation_result->get_path_types();
+	const Vector<int32_t> &surface_ids = navigation_result->get_path_surface_ids();
+	if (navigation_path_index >= types.size() || navigation_path_index >= surface_ids.size()) {
+		return false;
+	}
+	return types[navigation_path_index] == NavigationPathQueryResult3D::PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE && surface_ids[navigation_path_index] >= 0;
+}
+
+void NavigationAgent3D::_start_traversal(const Dictionary &p_waypoint_details) {
+	const Vector<Vector3> &navigation_path = navigation_result->get_path();
+	const TypedArray<RID> &navigation_path_rids = navigation_result->get_path_rids();
+	const Vector3 entry = navigation_path[navigation_path_index];
+	const RID region = navigation_path_index < navigation_path_rids.size() ? RID(navigation_path_rids[navigation_path_index]) : RID();
+	const int surface_id = navigation_result->get_path_surface_ids()[navigation_path_index];
+
+	Dictionary details = p_waypoint_details.duplicate();
+	if (region.is_valid()) {
+		const Dictionary surface = NavigationServer3D::get_singleton()->region_get_traversal_surface(region, surface_id);
+		for (const Variant *key = surface.next(nullptr); key != nullptr; key = surface.next(key)) {
+			details[*key] = surface[*key];
+		}
+	}
+	details[SNAME("type")] = NavigationPathQueryResult3D::PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE;
+	details[SNAME("region")] = region;
+	details[SNAME("surface_id")] = surface_id;
+	if (!details.has(SNAME("kind"))) {
+		details[SNAME("kind")] = -1;
+	}
+
+	if (details.get(SNAME("approach"), Variant()).get_type() != Variant::VECTOR3) {
+		details[SNAME("approach")] = entry;
+	}
+	if (details.get(SNAME("exit"), Variant()).get_type() != Variant::VECTOR3) {
+		details[SNAME("exit")] = navigation_path_index + 1 < navigation_path.size() ? navigation_path[navigation_path_index + 1] : entry;
+	}
+
+	// A wide surface stores its points for the middle of its span: slide them to where the path enters.
+	const Variant span_value = details.get(SNAME("span"), Variant());
+	if (span_value.get_type() == Variant::PACKED_VECTOR3_ARRAY) {
+		const PackedVector3Array span = span_value;
+		if (span.size() == 2) {
+			const Vector3 approach = details[SNAME("approach")];
+			Vector3 offset = Geometry3D::get_closest_point_to_segment(entry, span[0], span[1]) - approach;
+			offset.y = 0.0;
+			if (!offset.is_zero_approx()) {
+				details[SNAME("approach")] = approach + offset;
+				const Vector3 exit = details[SNAME("exit")];
+				details[SNAME("exit")] = exit + offset;
+				const StringName point_keys[] = { SNAME("anchors"), SNAME("body_path") };
+				for (const StringName &key : point_keys) {
+					const Variant points_value = details.get(key, Variant());
+					if (points_value.get_type() != Variant::PACKED_VECTOR3_ARRAY) {
+						continue;
+					}
+					PackedVector3Array points = points_value;
+					for (Vector3 &point : points) {
+						point += offset;
+					}
+					details[key] = points;
+				}
+			}
+		}
+	}
+
+	traversal_waiting = true;
+	traversal_repath_pending = false;
+	traversal_details = details;
+
+	emit_signal(SNAME("traversal_reached"), details.duplicate());
 }
 
 void NavigationAgent3D::set_pathfinding_algorithm(const NavigationPathQueryParameters3D::PathfindingAlgorithm p_pathfinding_algorithm) {
@@ -724,6 +928,15 @@ Vector3 NavigationAgent3D::get_target_position() const {
 Vector3 NavigationAgent3D::get_next_path_position() {
 	_update_navigation();
 
+	if (traversal_waiting) {
+		// Never lead into the traversal surface: hold the agent on the approach point.
+		const Variant approach = traversal_details.get(SNAME("approach"), Variant());
+		if (approach.get_type() == Variant::VECTOR3) {
+			const Vector3 approach_position = approach;
+			return approach_position - Vector3(0, path_height_offset, 0);
+		}
+	}
+
 	const Vector<Vector3> &navigation_path = navigation_result->get_path();
 	if (navigation_path.is_empty()) {
 		ERR_FAIL_NULL_V_MSG(agent_parent, Vector3(), "The agent has no parent.");
@@ -811,6 +1024,10 @@ void NavigationAgent3D::_update_navigation() {
 	if (!target_position_submitted) {
 		return;
 	}
+	if (traversal_waiting) {
+		// The body is executing the traversal; the path resumes on complete_traversal() or abort_traversal().
+		return;
+	}
 
 	Vector3 origin = agent_parent->get_global_position();
 
@@ -841,7 +1058,17 @@ void NavigationAgent3D::_update_navigation() {
 		navigation_query->set_start_position(origin);
 		navigation_query->set_target_position(target_position);
 		navigation_query->set_navigation_layers(navigation_layers);
-		navigation_query->set_metadata_flags(path_metadata_flags);
+		navigation_query->set_traversal_layers(traversal_layers);
+		navigation_query->set_excluded_traversal_surfaces(_get_excluded_traversal_surfaces());
+		if (traversal_layers != 0) {
+			// Traversal entries are recognized by point type, surface id and region RID.
+			BitField<NavigationPathQueryParameters3D::PathMetadataFlags> query_flags = path_metadata_flags;
+			query_flags.set_flag(NavigationPathQueryParameters3D::PATH_METADATA_INCLUDE_TYPES);
+			query_flags.set_flag(NavigationPathQueryParameters3D::PATH_METADATA_INCLUDE_RIDS);
+			navigation_query->set_metadata_flags(query_flags);
+		} else {
+			navigation_query->set_metadata_flags(path_metadata_flags);
+		}
 
 		if (map_override.is_valid()) {
 			navigation_query->set_map(map_override);
@@ -871,27 +1098,39 @@ void NavigationAgent3D::_update_navigation() {
 	// Check if we reached the target.
 	if (_is_within_target_distance(origin)) {
 		// Emit waypoint_reached in case we also moved within distance of a waypoint.
-		_advance_waypoints(origin);
+		_advance_waypoints(origin, false);
 		_transition_to_target_reached();
 		_transition_to_navigation_finished();
 	} else {
 		// Advance waypoints if possible.
 		_advance_waypoints(origin);
 		// Keep navigation running even after reaching the last waypoint if the target is reachable.
-		if (last_waypoint_reached && !_is_target_reachable()) {
+		if (!traversal_waiting && last_waypoint_reached && !_is_target_reachable()) {
 			_transition_to_navigation_finished();
 		}
 	}
 }
 
-void NavigationAgent3D::_advance_waypoints(const Vector3 &p_origin) {
+void NavigationAgent3D::_advance_waypoints(const Vector3 &p_origin, bool p_allow_traversal) {
 	if (last_waypoint_reached) {
 		return;
 	}
 
 	// Advance to the farthest possible waypoint.
 	while (_is_within_waypoint_distance(p_origin)) {
-		_trigger_waypoint_reached();
+		const bool traversal = p_allow_traversal && _is_traversal_waypoint();
+		const Dictionary details = _get_waypoint_details();
+		_trigger_waypoint_reached(details);
+
+		if (traversal_waiting || navigation_result->get_path().is_empty() || navigation_path_index >= navigation_result->get_path().size()) {
+			// A signal handler changed the path or the state.
+			break;
+		}
+		if (traversal) {
+			// Stop on the traversal entry until the game completes or aborts it.
+			_start_traversal(details);
+			break;
+		}
 
 		if (_is_last_waypoint()) {
 			last_waypoint_reached = true;
@@ -903,6 +1142,12 @@ void NavigationAgent3D::_advance_waypoints(const Vector3 &p_origin) {
 }
 
 void NavigationAgent3D::_request_repath() {
+	if (traversal_waiting) {
+		// Keep the path until the traversal ends; the new path starts from where the body arrives.
+		traversal_repath_pending = true;
+		target_reached = false;
+		return;
+	}
 	navigation_result->reset();
 	target_reached = false;
 	navigation_finished = false;
@@ -927,7 +1172,7 @@ bool NavigationAgent3D::_is_within_target_distance(const Vector3 &p_origin) cons
 	return p_origin.distance_to(target_position) < target_desired_distance;
 }
 
-void NavigationAgent3D::_trigger_waypoint_reached() {
+Dictionary NavigationAgent3D::_get_waypoint_details() const {
 	const Vector<Vector3> &navigation_path = navigation_result->get_path();
 	const Vector<int32_t> &navigation_path_types = navigation_result->get_path_types();
 	const TypedArray<RID> &navigation_path_rids = navigation_result->get_path_rids();
@@ -976,6 +1221,13 @@ void NavigationAgent3D::_trigger_waypoint_reached() {
 			}
 		}
 	}
+
+	return details;
+}
+
+void NavigationAgent3D::_trigger_waypoint_reached(const Dictionary &p_details) {
+	const Dictionary &details = p_details;
+	const int waypoint_type = details.get(SNAME("type"), -1);
 
 	// Emit a signal for the waypoint.
 	emit_signal(SNAME("waypoint_reached"), details);

@@ -13,10 +13,38 @@
 		<link title="Using NavigationAgents">$DOCS_URL/tutorials/navigation/navigation_using_navigationagents.html</link>
 	</tutorials>
 	<methods>
+		<method name="abort_traversal">
+			<return type="void" />
+			<param index="0" name="exclude_seconds" type="float" />
+			<description>
+				Cancels the traversal the agent is waiting for (see [method is_waiting_traversal]) and requests a new path from the current position of the agent's parent. If [param exclude_seconds] is greater than [code]0.0[/code], the traversal surface is first excluded for that many seconds, as if by [method exclude_traversal_surface], so the new path avoids it or reports the target as unreachable. Use it when the body failed the traversal or was interrupted.
+			</description>
+		</method>
+		<method name="clear_traversal_exclusions">
+			<return type="void" />
+			<description>
+				Removes all traversal surface exclusions added by [method exclude_traversal_surface] or [method abort_traversal] and requests a new path if the agent has a target.
+			</description>
+		</method>
+		<method name="complete_traversal">
+			<return type="void" />
+			<description>
+				Ends the traversal the agent is waiting for (see [method is_waiting_traversal]). Call it once the agent's parent stands on the [code]exit[/code] position of [signal traversal_reached]. The agent continues the current path from the exit point. If the target, the layers or the exclusions changed while waiting, it requests a new path from the parent's position instead.
+			</description>
+		</method>
 		<method name="distance_to_target" qualifiers="const">
 			<return type="float" />
 			<description>
 				Returns the distance to the target position, using the agent's global position. The user must set [member target_position] in order for this to be accurate.
+			</description>
+		</method>
+		<method name="exclude_traversal_surface">
+			<return type="void" />
+			<param index="0" name="region" type="RID" />
+			<param index="1" name="surface_id" type="int" />
+			<param index="2" name="seconds" type="float" />
+			<description>
+				Excludes the traversal surface polygon [param surface_id] of the navigation region [param region] from this agent's paths for [param seconds]. The time is counted in the agent's physics frames, so it stops while the agent is paused and follows [member Engine.time_scale]. Excluding the same surface again restarts its time; a [param seconds] value of [code]0.0[/code] or less removes the exclusion. Requests a new path if the agent has a target; while the agent waits for a traversal, the new path is requested when the traversal ends. An expired exclusion also requests a new path.
 			</description>
 		</method>
 		<method name="get_avoidance_layer_value" qualifiers="const">
@@ -51,6 +79,12 @@
 				Returns the path query result for the path the agent is currently following.
 			</description>
 		</method>
+		<method name="get_current_traversal" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns the details of the traversal the agent is waiting for, with the same keys as [signal traversal_reached]. Returns an empty [Dictionary] if [method is_waiting_traversal] is [code]false[/code].
+			</description>
+		</method>
 		<method name="get_final_position">
 			<return type="Vector3" />
 			<description>
@@ -74,6 +108,7 @@
 			<return type="Vector3" />
 			<description>
 				Returns the next position in global coordinates that can be moved to, making sure that there are no static objects in the way. If the agent does not have a navigation path, it will return the position of the agent's parent. The use of this function once every physics frame is required to update the internal path logic of the NavigationAgent.
+				The returned position never leads into a traversal surface polygon. While the agent is waiting for a traversal (see [method is_waiting_traversal]), it returns the [code]approach[/code] position of that traversal.
 			</description>
 		</method>
 		<method name="get_path_length" qualifiers="const">
@@ -91,7 +126,7 @@
 		<method name="is_navigation_finished">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] if the agent's navigation has finished. If the target is reachable, navigation ends when the target is reached. If the target is unreachable, navigation ends when the last waypoint of the path is reached.
+				Returns [code]true[/code] if the agent's navigation has finished. If the target is reachable, navigation ends when the target is reached. If the target is unreachable, navigation ends when the last waypoint of the path is reached. Always returns [code]false[/code] while the agent is waiting for a traversal (see [method is_waiting_traversal]).
 				[b]Note:[/b] While [code]true[/code] prefer to stop calling update functions like [method get_next_path_position]. This avoids jittering the standing agent due to calling repeated path updates.
 			</description>
 		</method>
@@ -105,6 +140,12 @@
 			<return type="bool" />
 			<description>
 				Returns [code]true[/code] if the agent reached the target, i.e. the agent moved within [member target_desired_distance] of the [member target_position]. It may not always be possible to reach the target but it should always be possible to reach the final position. See [method get_final_position].
+			</description>
+		</method>
+		<method name="is_waiting_traversal" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if the agent reached the entry of a traversal surface, emitted [signal traversal_reached] and now waits for [method complete_traversal] or [method abort_traversal]. While waiting, the path is not updated, a new [member target_position] takes effect only when the traversal ends, and [method is_navigation_finished] returns [code]false[/code].
 			</description>
 		</method>
 		<method name="set_avoidance_layer_value">
@@ -245,6 +286,9 @@
 		<member name="time_horizon_obstacles" type="float" setter="set_time_horizon_obstacles" getter="get_time_horizon_obstacles" default="0.0">
 			The minimal amount of time for which this agent's velocities, that are computed with the collision avoidance algorithm, are safe with respect to static avoidance obstacles. The larger the number, the sooner the agent will respond to static avoidance obstacles, but less freedom in choosing its velocities. A too high value will slow down agent movement considerably. Must be positive.
 		</member>
+		<member name="traversal_layers" type="int" setter="set_traversal_layers" getter="get_traversal_layers" default="0">
+			Bitmask of traversal profile layers (see [member NavigationTraversalProfile3D.layer_bit]) this agent can use. The agent's paths go through traversal surface polygons whose layers share a bit with this value, and the agent stops at their entry with [signal traversal_reached]. A value of [code]0[/code] disables traversal surfaces. When it is not [code]0[/code], path queries always include point types and [RID]s, regardless of [member path_metadata_flags].
+		</member>
 		<member name="use_3d_avoidance" type="bool" setter="set_use_3d_avoidance" getter="get_use_3d_avoidance" default="false">
 			If [code]true[/code], the agent calculates avoidance velocities in 3D omnidirectionally, e.g. for games that take place in air, underwater or space. Agents using 3D avoidance only avoid other agents using 3D avoidance, and react to radius-based avoidance obstacles. They ignore any vertex-based obstacles.
 			If [code]false[/code], the agent calculates avoidance velocities in 2D along the x and z-axes, ignoring the y-axis. Agents using 2D avoidance only avoid other agents using 2D avoidance, and react to radius-based avoidance obstacles or vertex-based avoidance obstacles. Other agents using 2D avoidance that are below or above their current position including [member height] are ignored.
@@ -286,6 +330,20 @@
 				Signals that the agent reached the target, i.e. the agent moved within [member target_desired_distance] of the [member target_position]. This signal is emitted only once per loaded path.
 				This signal will be emitted just before [signal navigation_finished] when the target is reachable.
 				It may not always be possible to reach the target but it should always be possible to reach the final position. See [method get_final_position].
+			</description>
+		</signal>
+		<signal name="traversal_reached">
+			<param index="0" name="details" type="Dictionary" />
+			<description>
+				Signals that the agent reached the entry of a traversal surface polygon on its path. Emitted when the agent moves within [member path_desired_distance] of a path position of type [constant NavigationPathQueryResult3D.PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE], just after [signal waypoint_reached]. From then on, the agent waits (see [method is_waiting_traversal]) until the game moves its parent to [code]exit[/code] and calls [method complete_traversal], or calls [method abort_traversal].
+				The details dictionary contains the keys of [signal waypoint_reached] and these keys:
+				- [code]type[/code]: Always [constant NavigationPathQueryResult3D.PATH_SEGMENT_TYPE_TRAVERSAL_SURFACE].
+				- [code]region[/code]: The [RID] of the navigation region that owns the surface.
+				- [code]surface_id[/code]: The traversal surface polygon index, as in [method NavigationServer3D.region_get_traversal_surface].
+				- [code]kind[/code]: The [enum NavigationTraversalProfile3D.TraversalKind] of the traversal, or [code]-1[/code] if the surface has no kind.
+				- [code]approach[/code]: The global position where the traversal starts.
+				- [code]exit[/code]: The global position where the traversal ends.
+				It also contains every key returned by [method NavigationServer3D.region_get_traversal_surface], such as [code]anchors[/code], [code]crest[/code], [code]body_path[/code], [code]span[/code], [code]source[/code], [code]target[/code], [code]layers[/code] and [code]enter_cost[/code]. On a wide surface, [code]approach[/code], [code]exit[/code], [code]anchors[/code] and [code]body_path[/code] are moved along [code]span[/code] to where the path enters the surface.
 			</description>
 		</signal>
 		<signal name="velocity_computed">
