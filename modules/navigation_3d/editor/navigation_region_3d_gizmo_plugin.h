@@ -48,7 +48,17 @@ class NavigationRegion3DGizmoPlugin : public EditorNode3DGizmoPlugin {
 		}
 	};
 
+	// OEngine: profile whose rejected traversal candidates are drawn on a selected region; editor
+	// state only, never saved with the scene. Empty hides the layer.
+	StringName rejected_profile;
+
 public:
+	static Color get_reject_reason_color(int p_reason);
+	static String get_reject_reason_name(int p_reason);
+
+	void set_rejected_profile(const StringName &p_profile);
+	StringName get_rejected_profile() const;
+
 	bool has_gizmo(Node3D *p_spatial) override;
 	String get_gizmo_name() const override;
 	int get_priority() const override;

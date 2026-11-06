@@ -37,10 +37,12 @@
 #include "editor/inspector/multi_node_edit.h"
 #include "editor/scene/3d/node_3d_editor_plugin.h"
 #include "scene/3d/navigation/navigation_region_3d.h"
+#include "scene/3d/navigation/navigation_traversal_rules_3d.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
 #include "scene/gui/dialogs.h"
 #include "scene/gui/label.h"
+#include "scene/gui/option_button.h"
 #include "scene/main/scene_tree.h"
 #include "servers/navigation_3d/navigation_server_3d.h"
 
@@ -221,12 +223,76 @@ void NavigationRegion3DEditor::_clear_pressed() {
 	}
 }
 
+void NavigationRegion3DEditor::_update_rejected_profiles() {
+	rejected_profile_option->clear();
+	rejected_profile_option->add_item(TTR("Rejected: Off"));
+
+	LocalVector<StringName> profiles;
+	for (NavigationRegion3D *region : selected_regions) {
+		Ref<NavigationTraversalRules3D> rules = region ? region->get_traversal_rules() : Ref<NavigationTraversalRules3D>();
+		if (rules.is_null()) {
+			continue;
+		}
+		const TypedArray<NavigationTraversalProfile3D> rule_profiles = rules->get_profiles();
+		for (int i = 0; i < rule_profiles.size(); i++) {
+			Ref<NavigationTraversalProfile3D> profile = rule_profiles[i];
+			if (profile.is_valid() && profile->get_id() != StringName() && !profiles.has(profile->get_id())) {
+				profiles.push_back(profile->get_id());
+			}
+		}
+	}
+
+	int selected = 0;
+	for (uint32_t i = 0; i < profiles.size(); i++) {
+		rejected_profile_option->add_item(vformat(TTR("Rejected: %s"), profiles[i]));
+		rejected_profile_option->set_item_metadata(i + 1, profiles[i]);
+		if (profiles[i] == rejected_profile) {
+			selected = i + 1;
+		}
+	}
+	// Show the first profile until the user picks one or turns the layer off.
+	if (selected == 0 && !rejected_profile_hidden && !profiles.is_empty()) {
+		selected = 1;
+		rejected_profile = profiles[0];
+	}
+	if (rejected_profile_hidden) {
+		selected = 0;
+	}
+	rejected_profile_option->select(selected);
+	rejected_profile_option->set_visible(!profiles.is_empty());
+
+	if (gizmo_plugin.is_valid()) {
+		gizmo_plugin->set_rejected_profile(selected == 0 ? StringName() : rejected_profile);
+	}
+	_redraw_selected_regions();
+}
+
+void NavigationRegion3DEditor::_rejected_profile_selected(int p_index) {
+	rejected_profile_hidden = p_index <= 0;
+	if (!rejected_profile_hidden) {
+		rejected_profile = rejected_profile_option->get_item_metadata(p_index);
+	}
+	if (gizmo_plugin.is_valid()) {
+		gizmo_plugin->set_rejected_profile(rejected_profile_hidden ? StringName() : rejected_profile);
+	}
+	_redraw_selected_regions();
+}
+
+void NavigationRegion3DEditor::_redraw_selected_regions() {
+	for (NavigationRegion3D *region : selected_regions) {
+		if (region) {
+			region->update_gizmos();
+		}
+	}
+}
+
 void NavigationRegion3DEditor::edit(LocalVector<NavigationRegion3D *> p_regions) {
 	if (p_regions.is_empty()) {
 		return;
 	}
 
 	selected_regions = p_regions;
+	_update_rejected_profiles();
 }
 
 NavigationRegion3DEditor::NavigationRegion3DEditor() {
@@ -246,6 +312,19 @@ NavigationRegion3DEditor::NavigationRegion3DEditor() {
 	button_reset->set_text(TTR("Clear NavigationMesh"));
 	button_reset->set_tooltip_text(TTR("Clears the internal NavigationMesh vertices and polygons."));
 	button_reset->connect(SceneStringName(pressed), callable_mp(this, &NavigationRegion3DEditor::_clear_pressed));
+
+	rejected_profile_option = memnew(OptionButton);
+	rejected_profile_option->set_flat(true);
+	{
+		String legend = TTR("Rejected traversal candidates of the selected region, colored by reason, for one profile.\nThey exist only after a bake with NavigationTraversalRules3D.keep_rejected_candidates and are not saved.\n");
+		for (int i = NavigationTraversalProfile3D::REJECT_NONE + 1; i < NavigationTraversalProfile3D::REJECT_MAX; i++) {
+			legend += "\n" + NavigationRegion3DGizmoPlugin::get_reject_reason_color(i).to_html(false) + "  " + NavigationRegion3DGizmoPlugin::get_reject_reason_name(i);
+		}
+		rejected_profile_option->set_tooltip_text(legend);
+	}
+	rejected_profile_option->hide();
+	bake_hbox->add_child(rejected_profile_option);
+	rejected_profile_option->connect(SceneStringName(item_selected), callable_mp(this, &NavigationRegion3DEditor::_rejected_profile_selected));
 
 	bake_info = memnew(Label);
 	bake_info->set_focus_mode(FOCUS_ACCESSIBILITY);
@@ -326,4 +405,5 @@ NavigationRegion3DEditorPlugin::NavigationRegion3DEditorPlugin() {
 
 	gizmo_plugin.instantiate();
 	Node3DEditor::get_singleton()->add_gizmo_plugin(gizmo_plugin);
+	navigation_region_editor->gizmo_plugin = gizmo_plugin;
 }

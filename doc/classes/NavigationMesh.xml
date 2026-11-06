@@ -58,6 +58,12 @@
 				Returns the number of polygons in the navigation mesh.
 			</description>
 		</method>
+		<method name="get_debug_mesh">
+			<return type="ArrayMesh" />
+			<description>
+				Returns the debug visualization of this navigation mesh, built once and cached until the mesh data changes. Walkable polygons use [member ProjectSettings.debug/shapes/navigation/3d/geometry_face_color] and the edge color. Polygons in [member traversal_surfaces] are drawn in separate surfaces with vertex colors from the [code]debug/shapes/navigation/3d/traversal_*_color[/code] project settings for their kind, with an outline and a source-to-target arrow. Returns [code]null[/code] in builds without debug features.
+			</description>
+		</method>
 		<method name="get_traversal_debug" qualifiers="const">
 			<return type="Dictionary" />
 			<description>

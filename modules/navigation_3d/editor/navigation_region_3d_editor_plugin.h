@@ -40,6 +40,7 @@ class ConfirmationDialog;
 class HBoxContainer;
 class Label;
 class NavigationRegion3D;
+class OptionButton;
 
 class NavigationRegion3DEditor : public Control {
 	friend class NavigationRegion3DEditorPlugin;
@@ -53,6 +54,11 @@ class NavigationRegion3DEditor : public Control {
 	Button *button_bake = nullptr;
 	Button *button_reset = nullptr;
 	Label *bake_info = nullptr;
+	// OEngine: chooses the profile whose rejected traversal candidates the gizmo draws.
+	OptionButton *rejected_profile_option = nullptr;
+	Ref<NavigationRegion3DGizmoPlugin> gizmo_plugin;
+	StringName rejected_profile;
+	bool rejected_profile_hidden = false;
 
 	LocalVector<NavigationRegion3D *> selected_regions;
 
@@ -68,6 +74,9 @@ class NavigationRegion3DEditor : public Control {
 
 	void _bake_pressed();
 	void _clear_pressed();
+	void _update_rejected_profiles();
+	void _rejected_profile_selected(int p_index);
+	void _redraw_selected_regions();
 
 	void _on_navmesh_multibake_confirmed();
 	void _on_navmesh_multibake_canceled();

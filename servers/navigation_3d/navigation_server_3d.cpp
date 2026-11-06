@@ -323,6 +323,20 @@ NavigationServer3D::NavigationServer3D() {
 	debug_navigation_link_connection_color = GLOBAL_DEF("debug/shapes/navigation/3d/link_connection_color", Color(1.0, 0.5, 1.0, 1.0));
 	debug_navigation_link_connection_disabled_color = GLOBAL_DEF("debug/shapes/navigation/3d/link_connection_disabled_color", Color(0.5, 0.5, 0.5, 1.0));
 	debug_navigation_agent_path_color = GLOBAL_DEF("debug/shapes/navigation/3d/agent_path_color", Color(1.0, 0.0, 0.0, 1.0));
+	debug_navigation_traversal_surface_color = GLOBAL_DEF("debug/shapes/navigation/3d/traversal_surface_color", debug_navigation_traversal_surface_color);
+	{
+		static const char *kind_settings[DEBUG_TRAVERSAL_KIND_COUNT] = {
+			"debug/shapes/navigation/3d/traversal_climb_color",
+			"debug/shapes/navigation/3d/traversal_climb_over_color",
+			"debug/shapes/navigation/3d/traversal_vault_color",
+			"debug/shapes/navigation/3d/traversal_drop_color",
+			"debug/shapes/navigation/3d/traversal_hang_drop_color",
+		};
+		static_assert(DEBUG_TRAVERSAL_KIND_COUNT == NavigationTraversalProfile3D::KIND_MAX);
+		for (int i = 0; i < DEBUG_TRAVERSAL_KIND_COUNT; i++) {
+			debug_navigation_traversal_kind_colors[i] = GLOBAL_DEF(kind_settings[i], debug_navigation_traversal_kind_colors[i]);
+		}
+	}
 
 	debug_navigation_enable_edge_connections = GLOBAL_DEF("debug/shapes/navigation/3d/enable_edge_connections", true);
 	debug_navigation_enable_edge_connections_xray = GLOBAL_DEF("debug/shapes/navigation/3d/enable_edge_connections_xray", true);
@@ -576,6 +590,43 @@ Ref<StandardMaterial3D> NavigationServer3D::get_debug_navigation_link_connection
 	return debug_navigation_link_connections_disabled_material;
 }
 
+Ref<StandardMaterial3D> NavigationServer3D::get_debug_navigation_traversal_face_material() {
+	if (debug_navigation_traversal_face_material.is_valid()) {
+		return debug_navigation_traversal_face_material;
+	}
+
+	// The kind color comes from the vertex color, alpha included.
+	Ref<StandardMaterial3D> material = Ref<StandardMaterial3D>(memnew(StandardMaterial3D));
+	material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
+	material->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
+	material->set_cull_mode(StandardMaterial3D::CULL_DISABLED);
+	material->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
+	material->set_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
+	material->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+
+	debug_navigation_traversal_face_material = material;
+	return debug_navigation_traversal_face_material;
+}
+
+Ref<StandardMaterial3D> NavigationServer3D::get_debug_navigation_traversal_line_material() {
+	if (debug_navigation_traversal_line_material.is_valid()) {
+		return debug_navigation_traversal_line_material;
+	}
+
+	Ref<StandardMaterial3D> material = Ref<StandardMaterial3D>(memnew(StandardMaterial3D));
+	material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
+	material->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
+	material->set_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
+	material->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+	if (get_debug_navigation_enable_edge_lines_xray()) {
+		material->set_flag(StandardMaterial3D::FLAG_DISABLE_DEPTH_TEST, true);
+	}
+	material->set_render_priority(StandardMaterial3D::RENDER_PRIORITY_MAX - 2);
+
+	debug_navigation_traversal_line_material = material;
+	return debug_navigation_traversal_line_material;
+}
+
 Ref<StandardMaterial3D> NavigationServer3D::get_debug_navigation_agent_path_line_material() {
 	if (debug_navigation_agent_path_line_material.is_valid()) {
 		return debug_navigation_agent_path_line_material;
@@ -754,6 +805,30 @@ void NavigationServer3D::set_debug_navigation_geometry_edge_disabled_color(const
 	if (debug_navigation_geometry_edge_disabled_material.is_valid()) {
 		debug_navigation_geometry_edge_disabled_material->set_albedo(debug_navigation_geometry_edge_disabled_color);
 	}
+}
+
+void NavigationServer3D::set_debug_navigation_traversal_surface_color(const Color &p_color) {
+	debug_navigation_traversal_surface_color = p_color;
+	navigation_debug_dirty = true;
+	callable_mp(this, &NavigationServer3D::_emit_navigation_debug_changed_signal).call_deferred();
+}
+
+Color NavigationServer3D::get_debug_navigation_traversal_surface_color() const {
+	return debug_navigation_traversal_surface_color;
+}
+
+void NavigationServer3D::set_debug_navigation_traversal_kind_color(int p_kind, const Color &p_color) {
+	ERR_FAIL_INDEX(p_kind, DEBUG_TRAVERSAL_KIND_COUNT);
+	debug_navigation_traversal_kind_colors[p_kind] = p_color;
+	navigation_debug_dirty = true;
+	callable_mp(this, &NavigationServer3D::_emit_navigation_debug_changed_signal).call_deferred();
+}
+
+Color NavigationServer3D::get_debug_navigation_traversal_kind_color(int p_kind) const {
+	if (p_kind < 0 || p_kind >= DEBUG_TRAVERSAL_KIND_COUNT) {
+		return debug_navigation_traversal_surface_color;
+	}
+	return debug_navigation_traversal_kind_colors[p_kind];
 }
 
 Color NavigationServer3D::get_debug_navigation_geometry_edge_disabled_color() const {

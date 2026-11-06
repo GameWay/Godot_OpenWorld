@@ -938,6 +938,24 @@
 		<member name="debug/shapes/navigation/3d/link_connection_disabled_color" type="Color" setter="" getter="" default="Color(0.5, 0.5, 0.5, 1)">
 			Color to use to display disabled navigation link connections, visible when "Visible Navigation" is enabled in the Debug menu.
 		</member>
+		<member name="debug/shapes/navigation/3d/traversal_climb_color" type="Color" setter="" getter="" default="Color(1, 0.55, 0.1, 0.55)">
+			Color of [constant NavigationTraversalProfile3D.KIND_CLIMB] traversal surface polygons, visible when "Visible Navigation" is enabled in the Debug menu and in the editor. Their outline uses the color without transparency, the source-to-target arrow a lighter shade.
+		</member>
+		<member name="debug/shapes/navigation/3d/traversal_climb_over_color" type="Color" setter="" getter="" default="Color(0.6, 0.3, 1, 0.55)">
+			Color of [constant NavigationTraversalProfile3D.KIND_CLIMB_OVER] traversal surface polygons, visible when "Visible Navigation" is enabled in the Debug menu and in the editor. Their outline uses the color without transparency, the source-to-target arrow a lighter shade.
+		</member>
+		<member name="debug/shapes/navigation/3d/traversal_drop_color" type="Color" setter="" getter="" default="Color(0.2, 0.45, 1, 0.55)">
+			Color of [constant NavigationTraversalProfile3D.KIND_DROP] traversal surface polygons, visible when "Visible Navigation" is enabled in the Debug menu and in the editor. Their outline uses the color without transparency, the source-to-target arrow a lighter shade.
+		</member>
+		<member name="debug/shapes/navigation/3d/traversal_hang_drop_color" type="Color" setter="" getter="" default="Color(1, 0.18, 0.3, 0.55)">
+			Color of [constant NavigationTraversalProfile3D.KIND_HANG_DROP] traversal surface polygons, visible when "Visible Navigation" is enabled in the Debug menu and in the editor. Their outline uses the color without transparency, the source-to-target arrow a lighter shade.
+		</member>
+		<member name="debug/shapes/navigation/3d/traversal_surface_color" type="Color" setter="" getter="" default="Color(1, 1, 1, 0.5)">
+			Color of traversal surface polygons without a known kind (see [member NavigationMesh.traversal_surfaces]), visible when "Visible Navigation" is enabled in the Debug menu and in the editor.
+		</member>
+		<member name="debug/shapes/navigation/3d/traversal_vault_color" type="Color" setter="" getter="" default="Color(1, 0.92, 0.15, 0.55)">
+			Color of [constant NavigationTraversalProfile3D.KIND_VAULT] traversal surface polygons, visible when "Visible Navigation" is enabled in the Debug menu and in the editor. Their outline uses the color without transparency, the source-to-target arrow a lighter shade.
+		</member>
 		<member name="debug/shapes/paths/geometry_color" type="Color" setter="" getter="" default="Color(0.1, 1, 0.7, 0.4)">
 			Color of the curve path geometry, visible when "Visible Paths" is enabled in the Debug menu.
 		</member>

@@ -478,81 +478,199 @@ Ref<ArrayMesh> NavigationMesh::get_debug_mesh() {
 		return debug_mesh;
 	}
 
-	RWLockRead read_lock(rwlock);
-
-	int polygon_count = get_polygon_count();
-
-	if (polygon_count < 1) {
-		// no face, no play
-		return debug_mesh;
-	}
-
-	// build geometry face surface
 	Vector<Vector3> face_vertex_array;
-	face_vertex_array.resize(polygon_count * 3);
+	Vector<Color> face_color_array;
+	Vector<Vector3> line_vertex_array;
 
-	for (int i = 0; i < polygon_count; i++) {
-		Vector<int> polygon = get_polygon(i);
-
-		face_vertex_array.push_back(vertices[polygon[0]]);
-		face_vertex_array.push_back(vertices[polygon[1]]);
-		face_vertex_array.push_back(vertices[polygon[2]]);
-	}
-
-	Array face_mesh_array;
-	face_mesh_array.resize(Mesh::ARRAY_MAX);
-	face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
-
-	// if enabled add vertex colors to colorize each face individually
 	bool enabled_geometry_face_random_color = NavigationServer3D::get_singleton()->get_debug_navigation_enable_geometry_face_random_color();
-	if (enabled_geometry_face_random_color) {
-		Color debug_navigation_geometry_face_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_color();
-		Color polygon_color = debug_navigation_geometry_face_color;
+	bool enabled_edge_lines = NavigationServer3D::get_singleton()->get_debug_navigation_enable_edge_lines();
+	Color debug_navigation_geometry_face_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_color();
 
-		Vector<Color> face_color_array;
-		face_color_array.resize(polygon_count * 3);
+	{
+		RWLockRead read_lock(rwlock);
 
-		for (int i = 0; i < polygon_count; i++) {
-			polygon_color = debug_navigation_geometry_face_color * (Color(Math::randf(), Math::randf(), Math::randf()));
-
-			face_color_array.push_back(polygon_color);
-			face_color_array.push_back(polygon_color);
-			face_color_array.push_back(polygon_color);
+		// OEngine: traversal polygons are drawn by add_debug_traversal_surfaces() in kind colors,
+		// the walkable faces and edges stay as before. Every polygon is fan-triangulated.
+		for (int i = 0; i < polygons.size(); i++) {
+			const Vector<int> &polygon = polygons[i];
+			if (polygon.size() < 3 || traversal_surfaces.has(i)) {
+				continue;
+			}
+			Color polygon_color = debug_navigation_geometry_face_color;
+			if (enabled_geometry_face_random_color) {
+				polygon_color = debug_navigation_geometry_face_color * (Color(Math::randf(), Math::randf(), Math::randf()));
+			}
+			for (int j = 2; j < polygon.size(); j++) {
+				face_vertex_array.push_back(vertices[polygon[0]]);
+				face_vertex_array.push_back(vertices[polygon[j - 1]]);
+				face_vertex_array.push_back(vertices[polygon[j]]);
+				if (enabled_geometry_face_random_color) {
+					face_color_array.push_back(polygon_color);
+					face_color_array.push_back(polygon_color);
+					face_color_array.push_back(polygon_color);
+				}
+			}
+			if (enabled_edge_lines) {
+				for (int j = 0; j < polygon.size(); j++) {
+					line_vertex_array.push_back(vertices[polygon[j]]);
+					line_vertex_array.push_back(vertices[polygon[(j + 1) % polygon.size()]]);
+				}
+			}
 		}
-		face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
 	}
 
-	debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, face_mesh_array);
-	Ref<StandardMaterial3D> debug_geometry_face_material = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_material();
-	debug_mesh->surface_set_material(0, debug_geometry_face_material);
-
-	// if enabled build geometry edge line surface
-	bool enabled_edge_lines = NavigationServer3D::get_singleton()->get_debug_navigation_enable_edge_lines();
-
-	if (enabled_edge_lines) {
-		Vector<Vector3> line_vertex_array;
-		line_vertex_array.resize(polygon_count * 6);
-
-		for (int i = 0; i < polygon_count; i++) {
-			Vector<int> polygon = get_polygon(i);
-
-			line_vertex_array.push_back(vertices[polygon[0]]);
-			line_vertex_array.push_back(vertices[polygon[1]]);
-			line_vertex_array.push_back(vertices[polygon[1]]);
-			line_vertex_array.push_back(vertices[polygon[2]]);
-			line_vertex_array.push_back(vertices[polygon[2]]);
-			line_vertex_array.push_back(vertices[polygon[0]]);
+	if (!face_vertex_array.is_empty()) {
+		Array face_mesh_array;
+		face_mesh_array.resize(Mesh::ARRAY_MAX);
+		face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
+		if (enabled_geometry_face_random_color) {
+			face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
 		}
+		debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, face_mesh_array);
+		debug_mesh->surface_set_material(debug_mesh->get_surface_count() - 1, NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_material());
+	}
 
+	if (!line_vertex_array.is_empty()) {
 		Array line_mesh_array;
 		line_mesh_array.resize(Mesh::ARRAY_MAX);
 		line_mesh_array[Mesh::ARRAY_VERTEX] = line_vertex_array;
 		debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, line_mesh_array);
-		Ref<StandardMaterial3D> debug_geometry_edge_material = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_material();
-		debug_mesh->surface_set_material(1, debug_geometry_edge_material);
+		debug_mesh->surface_set_material(debug_mesh->get_surface_count() - 1, NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_material());
 	}
 
+	add_debug_traversal_surfaces(debug_mesh);
+
 	return debug_mesh;
+}
+
+bool NavigationMesh::is_traversal_polygon(int p_polygon) const {
+	RWLockRead read_lock(rwlock);
+	return traversal_surfaces.has(p_polygon);
+}
+
+void NavigationMesh::get_debug_traversal_geometry(Vector<Vector3> &r_face_vertices, Vector<Color> &r_face_colors, Vector<Vector3> &r_line_vertices, Vector<Color> &r_line_colors) const {
+	const NavigationServer3D *server = NavigationServer3D::get_singleton();
+	ERR_FAIL_NULL(server);
+
+	// Lifts the lines a little off the face so they do not z-fight with it.
+	const Vector3 lift = Vector3(0.0, 0.03, 0.0);
+
+	RWLockRead read_lock(rwlock);
+	for (const KeyValue<Variant, Variant> &E : traversal_surfaces) {
+		const int index = E.key;
+		if (index < 0 || index >= polygons.size()) {
+			continue;
+		}
+		const Vector<int> &polygon = polygons[index];
+		if (polygon.size() < 3) {
+			continue;
+		}
+		bool valid = true;
+		for (int vertex : polygon) {
+			valid = valid && vertex >= 0 && vertex < vertices.size();
+		}
+		if (!valid) {
+			continue;
+		}
+
+		const Dictionary surface = E.value.get_type() == Variant::DICTIONARY ? Dictionary(E.value) : Dictionary();
+		const int kind = surface.has("kind") ? int(surface["kind"]) : -1;
+		const Color face_color = server->get_debug_navigation_traversal_kind_color(kind);
+		Color outline_color = face_color;
+		outline_color.a = 1.0;
+		Color arrow_color = face_color.lightened(0.55);
+		arrow_color.a = 1.0;
+
+		for (int j = 2; j < polygon.size(); j++) {
+			r_face_vertices.push_back(vertices[polygon[0]]);
+			r_face_vertices.push_back(vertices[polygon[j - 1]]);
+			r_face_vertices.push_back(vertices[polygon[j]]);
+			r_face_colors.push_back(face_color);
+			r_face_colors.push_back(face_color);
+			r_face_colors.push_back(face_color);
+		}
+		for (int j = 0; j < polygon.size(); j++) {
+			r_line_vertices.push_back(vertices[polygon[j]] + lift);
+			r_line_vertices.push_back(vertices[polygon[(j + 1) % polygon.size()]] + lift);
+			r_line_colors.push_back(outline_color);
+			r_line_colors.push_back(outline_color);
+		}
+
+		// The baker emits quads whose first edge lies on the source polygon and whose last edge
+		// lies on the target polygon. Other shapes fall back to the stored approach and exit.
+		Vector3 from;
+		Vector3 to;
+		Vector3 side;
+		if (polygon.size() == 4) {
+			from = (vertices[polygon[0]] + vertices[polygon[1]]) * 0.5;
+			to = (vertices[polygon[2]] + vertices[polygon[3]]) * 0.5;
+			side = vertices[polygon[1]] - vertices[polygon[0]];
+		} else if (surface.has("approach") && surface.has("exit")) {
+			from = surface["approach"];
+			to = surface["exit"];
+		} else {
+			continue;
+		}
+		const Vector3 direction = to - from;
+		const real_t length = direction.length();
+		if (length < 0.01) {
+			continue;
+		}
+		const Vector3 forward = direction / length;
+		side = side - forward * side.dot(forward);
+		if (side.length_squared() < CMP_EPSILON) {
+			side = forward.cross(Vector3(0.0, 1.0, 0.0));
+		}
+		if (side.length_squared() < CMP_EPSILON) {
+			side = Vector3(1.0, 0.0, 0.0);
+		}
+		side.normalize();
+		const real_t head = MIN(real_t(0.35), length * real_t(0.35));
+		const Vector3 tip = to + lift;
+		const Vector3 base = tip - forward * head;
+		const Vector3 arrow[6] = {
+			from + lift,
+			tip,
+			tip,
+			base + side * head * 0.6,
+			tip,
+			base - side * head * 0.6,
+		};
+		for (const Vector3 &point : arrow) {
+			r_line_vertices.push_back(point);
+			r_line_colors.push_back(arrow_color);
+		}
+	}
+}
+
+void NavigationMesh::add_debug_traversal_surfaces(const Ref<ArrayMesh> &p_mesh) const {
+	ERR_FAIL_COND(p_mesh.is_null());
+	Vector<Vector3> face_vertices;
+	Vector<Color> face_colors;
+	Vector<Vector3> line_vertices;
+	Vector<Color> line_colors;
+	get_debug_traversal_geometry(face_vertices, face_colors, line_vertices, line_colors);
+
+	if (!face_vertices.is_empty()) {
+		Array arrays;
+		arrays.resize(Mesh::ARRAY_MAX);
+		arrays[Mesh::ARRAY_VERTEX] = face_vertices;
+		arrays[Mesh::ARRAY_COLOR] = face_colors;
+		p_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays);
+		p_mesh->surface_set_material(p_mesh->get_surface_count() - 1, NavigationServer3D::get_singleton()->get_debug_navigation_traversal_face_material());
+	}
+	if (!line_vertices.is_empty()) {
+		Array arrays;
+		arrays.resize(Mesh::ARRAY_MAX);
+		arrays[Mesh::ARRAY_VERTEX] = line_vertices;
+		arrays[Mesh::ARRAY_COLOR] = line_colors;
+		p_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, arrays);
+		p_mesh->surface_set_material(p_mesh->get_surface_count() - 1, NavigationServer3D::get_singleton()->get_debug_navigation_traversal_line_material());
+	}
+}
+#else
+Ref<ArrayMesh> NavigationMesh::get_debug_mesh() {
+	return Ref<ArrayMesh>();
 }
 #endif // DEBUG_ENABLED
 
@@ -641,6 +759,7 @@ void NavigationMesh::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_traversal_surface", "polygon"), &NavigationMesh::get_traversal_surface);
 	ClassDB::bind_method(D_METHOD("set_traversal_debug", "debug"), &NavigationMesh::set_traversal_debug);
 	ClassDB::bind_method(D_METHOD("get_traversal_debug"), &NavigationMesh::get_traversal_debug);
+	ClassDB::bind_method(D_METHOD("get_debug_mesh"), &NavigationMesh::get_debug_mesh);
 	ClassDB::bind_method(D_METHOD("clear_polygons"), &NavigationMesh::clear_polygons);
 
 	ClassDB::bind_method(D_METHOD("create_from_mesh", "mesh"), &NavigationMesh::create_from_mesh);

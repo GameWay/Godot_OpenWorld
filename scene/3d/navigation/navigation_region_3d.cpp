@@ -55,27 +55,7 @@ void NavigationRegion3D::set_enabled(bool p_enabled) {
 	NavigationServer3D::get_singleton()->region_set_enabled(region, enabled);
 
 #ifdef DEBUG_ENABLED
-	if (debug_instance.is_valid()) {
-		if (!is_enabled()) {
-			if (debug_mesh.is_valid()) {
-				if (debug_mesh->get_surface_count() > 0) {
-					RS::get_singleton()->instance_set_surface_override_material(debug_instance, 0, NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_material()->get_rid());
-				}
-				if (debug_mesh->get_surface_count() > 1) {
-					RS::get_singleton()->instance_set_surface_override_material(debug_instance, 1, NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_disabled_material()->get_rid());
-				}
-			}
-		} else {
-			if (debug_mesh.is_valid()) {
-				if (debug_mesh->get_surface_count() > 0) {
-					RS::get_singleton()->instance_set_surface_override_material(debug_instance, 0, RID());
-				}
-				if (debug_mesh->get_surface_count() > 1) {
-					RS::get_singleton()->instance_set_surface_override_material(debug_instance, 1, RID());
-				}
-			}
-		}
-	}
+	_update_debug_mesh_materials();
 #endif // DEBUG_ENABLED
 
 	update_gizmos();
@@ -577,13 +557,19 @@ void NavigationRegion3D::_update_debug_mesh() {
 	bool enabled_geometry_face_random_color = NavigationServer3D::get_singleton()->get_debug_navigation_enable_geometry_face_random_color();
 	bool enabled_edge_lines = NavigationServer3D::get_singleton()->get_debug_navigation_enable_edge_lines();
 
+	// OEngine: traversal polygons are left out of the walkable faces and edges and drawn by
+	// NavigationMesh::add_debug_traversal_surfaces() in their kind colors with an arrow.
+	LocalVector<bool> walkable;
+	walkable.resize(polygon_count);
+
 	int vertex_count = 0;
 	int line_count = 0;
 
 	for (int i = 0; i < polygon_count; i++) {
 		const Vector<int> &polygon = navigation_mesh->get_polygon(i);
 		int polygon_size = polygon.size();
-		if (polygon_size < 3) {
+		walkable[i] = polygon_size >= 3 && !navigation_mesh->is_traversal_polygon(i);
+		if (!walkable[i]) {
 			continue;
 		}
 		line_count += polygon_size * 2;
@@ -616,11 +602,11 @@ void NavigationRegion3D::_update_debug_mesh() {
 	Vector3 *line_vertex_array_ptrw = line_vertex_array.ptrw();
 
 	for (int polygon_index = 0; polygon_index < polygon_count; polygon_index++) {
-		const Vector<int> &polygon_indices = navigation_mesh->get_polygon(polygon_index);
-		int polygon_indices_size = polygon_indices.size();
-		if (polygon_indices_size < 3) {
+		if (!walkable[polygon_index]) {
 			continue;
 		}
+		const Vector<int> &polygon_indices = navigation_mesh->get_polygon(polygon_index);
+		int polygon_indices_size = polygon_indices.size();
 
 		if (enabled_geometry_face_random_color) {
 			// Generate the polygon color, slightly randomly modified from the settings one.
@@ -655,26 +641,30 @@ void NavigationRegion3D::_update_debug_mesh() {
 		}
 	}
 
-	Ref<StandardMaterial3D> face_material = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_material();
+	if (vertex_count > 0) {
+		Ref<StandardMaterial3D> face_material = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_material();
 
-	Array face_mesh_array;
-	face_mesh_array.resize(Mesh::ARRAY_MAX);
-	face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
-	if (enabled_geometry_face_random_color) {
-		face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
+		Array face_mesh_array;
+		face_mesh_array.resize(Mesh::ARRAY_MAX);
+		face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
+		if (enabled_geometry_face_random_color) {
+			face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
+		}
+		debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, face_mesh_array);
+		debug_mesh->surface_set_material(debug_mesh->get_surface_count() - 1, face_material);
 	}
-	debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, face_mesh_array);
-	debug_mesh->surface_set_material(0, face_material);
 
-	if (enabled_edge_lines) {
+	if (enabled_edge_lines && line_count > 0) {
 		Ref<StandardMaterial3D> line_material = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_material();
 
 		Array line_mesh_array;
 		line_mesh_array.resize(Mesh::ARRAY_MAX);
 		line_mesh_array[Mesh::ARRAY_VERTEX] = line_vertex_array;
 		debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, line_mesh_array);
-		debug_mesh->surface_set_material(1, line_material);
+		debug_mesh->surface_set_material(debug_mesh->get_surface_count() - 1, line_material);
 	}
+
+	navigation_mesh->add_debug_traversal_surfaces(debug_mesh);
 
 	RS::get_singleton()->instance_set_base(debug_instance, debug_mesh->get_rid());
 	if (is_inside_tree()) {
@@ -682,24 +672,24 @@ void NavigationRegion3D::_update_debug_mesh() {
 		RS::get_singleton()->instance_set_transform(debug_instance, get_global_transform());
 		RS::get_singleton()->instance_set_visible(debug_instance, is_visible_in_tree());
 	}
-	if (!is_enabled()) {
-		if (debug_mesh.is_valid()) {
-			if (debug_mesh->get_surface_count() > 0) {
-				RS::get_singleton()->instance_set_surface_override_material(debug_instance, 0, NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_material()->get_rid());
-			}
-			if (debug_mesh->get_surface_count() > 1) {
-				RS::get_singleton()->instance_set_surface_override_material(debug_instance, 1, NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_disabled_material()->get_rid());
+	_update_debug_mesh_materials();
+}
+
+void NavigationRegion3D::_update_debug_mesh_materials() {
+	if (!debug_instance.is_valid() || debug_mesh.is_null()) {
+		return;
+	}
+	// A disabled region draws every surface, traversal ones included, in the disabled colors.
+	for (int i = 0; i < debug_mesh->get_surface_count(); i++) {
+		RID material;
+		if (!is_enabled()) {
+			if (debug_mesh->surface_get_primitive_type(i) == Mesh::PRIMITIVE_LINES) {
+				material = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_disabled_material()->get_rid();
+			} else {
+				material = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_material()->get_rid();
 			}
 		}
-	} else {
-		if (debug_mesh.is_valid()) {
-			if (debug_mesh->get_surface_count() > 0) {
-				RS::get_singleton()->instance_set_surface_override_material(debug_instance, 0, RID());
-			}
-			if (debug_mesh->get_surface_count() > 1) {
-				RS::get_singleton()->instance_set_surface_override_material(debug_instance, 1, RID());
-			}
-		}
+		RS::get_singleton()->instance_set_surface_override_material(debug_instance, i, material);
 	}
 }
 #endif // DEBUG_ENABLED

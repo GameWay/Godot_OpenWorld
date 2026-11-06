@@ -32,6 +32,7 @@
 
 #include "core/math/random_pcg.h"
 #include "scene/3d/navigation/navigation_region_3d.h"
+#include "scene/3d/navigation/navigation_traversal_profile_3d.h"
 #include "servers/navigation_3d/navigation_server_3d.h"
 
 NavigationRegion3DGizmoPlugin::NavigationRegion3DGizmoPlugin() {
@@ -39,6 +40,9 @@ NavigationRegion3DGizmoPlugin::NavigationRegion3DGizmoPlugin() {
 	create_material("face_material_disabled", NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_color(), false, false, true);
 	create_material("edge_material", NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_color());
 	create_material("edge_material_disabled", NavigationServer3D::get_singleton()->get_debug_navigation_geometry_edge_disabled_color());
+	// OEngine: traversal surfaces and rejected candidates take their colors from the vertices.
+	create_material("traversal_material", Color(1.0, 1.0, 1.0), false, false, true);
+	create_material("rejected_material", Color(1.0, 1.0, 1.0), false, true, true);
 
 	Color baking_aabb_material_color = Color(0.8, 0.5, 0.7);
 	baking_aabb_material_color.a = 0.1;
@@ -55,6 +59,58 @@ String NavigationRegion3DGizmoPlugin::get_gizmo_name() const {
 
 int NavigationRegion3DGizmoPlugin::get_priority() const {
 	return -1;
+}
+
+void NavigationRegion3DGizmoPlugin::set_rejected_profile(const StringName &p_profile) {
+	rejected_profile = p_profile;
+}
+
+StringName NavigationRegion3DGizmoPlugin::get_rejected_profile() const {
+	return rejected_profile;
+}
+
+Color NavigationRegion3DGizmoPlugin::get_reject_reason_color(int p_reason) {
+	static const Color colors[NavigationTraversalProfile3D::REJECT_MAX] = {
+		Color(1.0, 1.0, 1.0), // None.
+		Color(0.55, 0.55, 0.55), // Kind not allowed.
+		Color(0.6, 0.38, 0.2), // No support.
+		Color(1.0, 0.15, 0.15), // Height.
+		Color(1.0, 0.55, 0.0), // Gap.
+		Color(1.0, 0.95, 0.2), // Slope.
+		Color(1.0, 0.5, 0.75), // No grip.
+		Color(0.95, 0.2, 0.95), // Grip angle.
+		Color(0.55, 0.3, 1.0), // Grip depth.
+		Color(0.2, 0.45, 1.0), // Blocked by the body capsule.
+		Color(0.1, 0.85, 0.85), // Thickness.
+		Color(0.3, 0.95, 0.3), // Landing delta.
+		Color(0.85, 1.0, 0.75), // Walkable.
+	};
+	if (p_reason < 0 || p_reason >= NavigationTraversalProfile3D::REJECT_MAX) {
+		return colors[0];
+	}
+	return colors[p_reason];
+}
+
+String NavigationRegion3DGizmoPlugin::get_reject_reason_name(int p_reason) {
+	static const char *names[NavigationTraversalProfile3D::REJECT_MAX] = {
+		"None",
+		"Kind",
+		"No Support",
+		"Height",
+		"Gap",
+		"Slope",
+		"No Grip",
+		"Grip Angle",
+		"Grip Depth",
+		"Blocked",
+		"Thickness",
+		"Landing Delta",
+		"Walkable",
+	};
+	if (p_reason < 0 || p_reason >= NavigationTraversalProfile3D::REJECT_MAX) {
+		return String();
+	}
+	return names[p_reason];
 }
 
 void NavigationRegion3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
@@ -78,8 +134,9 @@ void NavigationRegion3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 
 	Vector<Vector3> vertices = navigationmesh->get_vertices();
 	const Vector3 *vr = vertices.ptr();
+	const int polygon_count = navigationmesh->get_polygon_count();
 	List<Face3> faces;
-	for (int i = 0; i < navigationmesh->get_polygon_count(); i++) {
+	for (int i = 0; i < polygon_count; i++) {
 		Vector<int> p = navigationmesh->get_polygon(i);
 
 		for (int j = 2; j < p.size(); j++) {
@@ -145,83 +202,75 @@ void NavigationRegion3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 		p_gizmo->add_collision_segments(lines);
 	}
 
-	Ref<ArrayMesh> debug_mesh = Ref<ArrayMesh>(memnew(ArrayMesh));
-	int polygon_count = navigationmesh->get_polygon_count();
+	// OEngine: walkable polygons keep the navigation colors; traversal polygons are drawn
+	// separately in their kind colors. Every polygon is fan-triangulated.
+	bool enabled_geometry_face_random_color = NavigationServer3D::get_singleton()->get_debug_navigation_enable_geometry_face_random_color();
+	bool enabled_edge_lines = NavigationServer3D::get_singleton()->get_debug_navigation_enable_edge_lines();
+	Color debug_navigation_geometry_face_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_color();
 
-	// build geometry face surface
 	Vector<Vector3> face_vertex_array;
-	face_vertex_array.resize(polygon_count * 3);
+	Vector<Color> face_color_array;
+	Vector<Vector3> line_vertex_array;
+	RandomPCG rand;
+	Color polygon_color = debug_navigation_geometry_face_color;
 
 	for (int i = 0; i < polygon_count; i++) {
 		Vector<int> polygon = navigationmesh->get_polygon(i);
-
-		face_vertex_array.push_back(vertices[polygon[0]]);
-		face_vertex_array.push_back(vertices[polygon[1]]);
-		face_vertex_array.push_back(vertices[polygon[2]]);
-	}
-
-	Array face_mesh_array;
-	face_mesh_array.resize(Mesh::ARRAY_MAX);
-	face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
-
-	// if enabled add vertex colors to colorize each face individually
-	RandomPCG rand;
-	bool enabled_geometry_face_random_color = NavigationServer3D::get_singleton()->get_debug_navigation_enable_geometry_face_random_color();
-	if (enabled_geometry_face_random_color) {
-		Color debug_navigation_geometry_face_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_color();
-		Color polygon_color = debug_navigation_geometry_face_color;
-
-		Vector<Color> face_color_array;
-		face_color_array.resize(polygon_count * 3);
-
-		for (int i = 0; i < polygon_count; i++) {
+		if (polygon.size() < 3 || navigationmesh->is_traversal_polygon(i)) {
+			continue;
+		}
+		if (enabled_geometry_face_random_color) {
 			// Generate the polygon color, slightly randomly modified from the settings one.
 			polygon_color.set_hsv(debug_navigation_geometry_face_color.get_h() + rand.random(-1.0, 1.0) * 0.1, debug_navigation_geometry_face_color.get_s(), debug_navigation_geometry_face_color.get_v() + rand.random(-1.0, 1.0) * 0.2);
 			polygon_color.a = debug_navigation_geometry_face_color.a;
-
-			face_color_array.push_back(polygon_color);
-			face_color_array.push_back(polygon_color);
-			face_color_array.push_back(polygon_color);
 		}
-		face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
+		for (int j = 2; j < polygon.size(); j++) {
+			face_vertex_array.push_back(vr[polygon[0]]);
+			face_vertex_array.push_back(vr[polygon[j - 1]]);
+			face_vertex_array.push_back(vr[polygon[j]]);
+			if (enabled_geometry_face_random_color) {
+				face_color_array.push_back(polygon_color);
+				face_color_array.push_back(polygon_color);
+				face_color_array.push_back(polygon_color);
+			}
+		}
+		if (enabled_edge_lines) {
+			for (int j = 0; j < polygon.size(); j++) {
+				line_vertex_array.push_back(vr[polygon[j]]);
+				line_vertex_array.push_back(vr[polygon[(j + 1) % polygon.size()]]);
+			}
+		}
 	}
 
-	debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, face_mesh_array);
+	if (!face_vertex_array.is_empty()) {
+		Ref<ArrayMesh> debug_mesh = Ref<ArrayMesh>(memnew(ArrayMesh));
+		Array face_mesh_array;
+		face_mesh_array.resize(Mesh::ARRAY_MAX);
+		face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
+		if (enabled_geometry_face_random_color) {
+			face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
+		}
+		debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, face_mesh_array);
 
-	const String face_material_name = navigationregion->is_enabled() ? "face_material" : "face_material_disabled";
-	Ref<StandardMaterial3D> face_material = get_material(face_material_name, p_gizmo);
-	if (navigationregion->is_enabled()) {
-		Color mat_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_color();
-		if (!p_gizmo->is_selected()) {
-			mat_color.a *= 0.3;
+		const String face_material_name = navigationregion->is_enabled() ? "face_material" : "face_material_disabled";
+		Ref<StandardMaterial3D> face_material = get_material(face_material_name, p_gizmo);
+		if (navigationregion->is_enabled()) {
+			Color mat_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_color();
+			if (!p_gizmo->is_selected()) {
+				mat_color.a *= 0.3;
+			}
+			face_material->set_albedo(mat_color);
+		} else {
+			Color mat_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_color();
+			if (!p_gizmo->is_selected()) {
+				mat_color.a *= 0.3;
+			}
+			face_material->set_albedo(mat_color);
 		}
-		face_material->set_albedo(mat_color);
-	} else {
-		Color mat_color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_color();
-		if (!p_gizmo->is_selected()) {
-			mat_color.a *= 0.3;
-		}
-		face_material->set_albedo(mat_color);
+		p_gizmo->add_mesh(debug_mesh, face_material);
 	}
-	p_gizmo->add_mesh(debug_mesh, face_material);
 
-	// if enabled build geometry edge line surface
-	bool enabled_edge_lines = NavigationServer3D::get_singleton()->get_debug_navigation_enable_edge_lines();
-	if (enabled_edge_lines) {
-		Vector<Vector3> line_vertex_array;
-		line_vertex_array.resize(polygon_count * 6);
-
-		for (int i = 0; i < polygon_count; i++) {
-			Vector<int> polygon = navigationmesh->get_polygon(i);
-
-			line_vertex_array.push_back(vertices[polygon[0]]);
-			line_vertex_array.push_back(vertices[polygon[1]]);
-			line_vertex_array.push_back(vertices[polygon[1]]);
-			line_vertex_array.push_back(vertices[polygon[2]]);
-			line_vertex_array.push_back(vertices[polygon[2]]);
-			line_vertex_array.push_back(vertices[polygon[0]]);
-		}
-
+	if (!line_vertex_array.is_empty()) {
 		const String line_material_name = navigationregion->is_enabled() ? "edge_material" : "edge_material_disabled";
 		Ref<StandardMaterial3D> line_material = get_material(line_material_name, p_gizmo);
 		if (navigationregion->is_enabled()) {
@@ -238,5 +287,76 @@ void NavigationRegion3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 			line_material->set_albedo(mat_color);
 		}
 		p_gizmo->add_lines(line_vertex_array, line_material);
+	}
+
+	// Traversal surfaces: kind-colored faces, outlines and source -> target arrows.
+	{
+		Vector<Vector3> traversal_faces;
+		Vector<Color> traversal_face_colors;
+		Vector<Vector3> traversal_lines;
+		Vector<Color> traversal_line_colors;
+		navigationmesh->get_debug_traversal_geometry(traversal_faces, traversal_face_colors, traversal_lines, traversal_line_colors);
+		if (!navigationregion->is_enabled()) {
+			const Color disabled = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_color();
+			traversal_face_colors.fill(disabled);
+			traversal_line_colors.fill(Color(disabled, 1.0));
+		}
+		Ref<StandardMaterial3D> traversal_material = get_material("traversal_material", p_gizmo);
+		if (!traversal_faces.is_empty()) {
+			Ref<ArrayMesh> mesh = Ref<ArrayMesh>(memnew(ArrayMesh));
+			Array arrays;
+			arrays.resize(Mesh::ARRAY_MAX);
+			arrays[Mesh::ARRAY_VERTEX] = traversal_faces;
+			arrays[Mesh::ARRAY_COLOR] = traversal_face_colors;
+			mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays);
+			p_gizmo->add_mesh(mesh, traversal_material);
+		}
+		if (!traversal_lines.is_empty()) {
+			Ref<ArrayMesh> mesh = Ref<ArrayMesh>(memnew(ArrayMesh));
+			Array arrays;
+			arrays.resize(Mesh::ARRAY_MAX);
+			arrays[Mesh::ARRAY_VERTEX] = traversal_lines;
+			arrays[Mesh::ARRAY_COLOR] = traversal_line_colors;
+			mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, arrays);
+			p_gizmo->add_mesh(mesh, traversal_material);
+		}
+	}
+
+	// Rejected candidates of the chosen profile, only for a selected region. They exist only right
+	// after a bake with NavigationTraversalRules3D.keep_rejected_candidates and are never saved.
+	if (p_gizmo->is_selected() && rejected_profile != StringName()) {
+		const Array rejected = navigationmesh->get_traversal_debug().get("rejected", Array());
+		Vector<Vector3> rejected_lines;
+		Vector<Color> rejected_colors;
+		const Vector3 lift = Vector3(0.0, 0.05, 0.0);
+		const Vector3 tick = Vector3(0.0, 0.3, 0.0);
+		for (const Variant &entry : rejected) {
+			if (entry.get_type() != Variant::DICTIONARY) {
+				continue;
+			}
+			const Dictionary record = entry;
+			const Dictionary reasons = record.get("reasons", Dictionary());
+			const int reason = reasons.get(rejected_profile, int(NavigationTraversalProfile3D::REJECT_NONE));
+			if (reason == NavigationTraversalProfile3D::REJECT_NONE) {
+				continue;
+			}
+			const Vector3 approach = Vector3(record.get("approach", Vector3())) + lift;
+			const Vector3 exit = Vector3(record.get("exit", Vector3())) + lift;
+			const Color color = get_reject_reason_color(reason);
+			const Vector3 segment[4] = { approach, exit, approach, approach + tick };
+			for (const Vector3 &point : segment) {
+				rejected_lines.push_back(point);
+				rejected_colors.push_back(color);
+			}
+		}
+		if (!rejected_lines.is_empty()) {
+			Ref<ArrayMesh> mesh = Ref<ArrayMesh>(memnew(ArrayMesh));
+			Array arrays;
+			arrays.resize(Mesh::ARRAY_MAX);
+			arrays[Mesh::ARRAY_VERTEX] = rejected_lines;
+			arrays[Mesh::ARRAY_COLOR] = rejected_colors;
+			mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, arrays);
+			p_gizmo->add_mesh(mesh, get_material("rejected_material", p_gizmo));
+		}
 	}
 }

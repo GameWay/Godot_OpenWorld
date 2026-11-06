@@ -211,8 +211,18 @@ public:
 	// Replaces the baked result without emitting changed; for bake threads.
 	void set_baked_data(const Vector<Vector3> &p_vertices, const Vector<Vector<int>> &p_polygons, const Dictionary &p_traversal_surfaces, const Dictionary &p_traversal_debug);
 
-#ifdef DEBUG_ENABLED
+	// Debug visualization of the navmesh; empty without DEBUG_ENABLED.
 	Ref<ArrayMesh> get_debug_mesh();
+
+#ifdef DEBUG_ENABLED
+
+	// OEngine: debug geometry shared by the navmesh debug mesh, NavigationRegion3D and its editor gizmo.
+	bool is_traversal_polygon(int p_polygon) const;
+	// Triangulated traversal polygons colored by kind, and lines with each polygon's outline and a
+	// lighter source -> target arrow. Colors come from the NavigationServer3D debug settings.
+	void get_debug_traversal_geometry(Vector<Vector3> &r_face_vertices, Vector<Color> &r_face_colors, Vector<Vector3> &r_line_vertices, Vector<Color> &r_line_colors) const;
+	// Adds the traversal faces and lines as two surfaces (when there are any) with the server materials.
+	void add_debug_traversal_surfaces(const Ref<ArrayMesh> &p_mesh) const;
 #endif // DEBUG_ENABLED
 };
 

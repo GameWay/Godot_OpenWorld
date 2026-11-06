@@ -359,6 +359,9 @@ private:
 	bool debug_enabled = false;
 
 #ifdef DEBUG_ENABLED
+	// Matches NavigationTraversalProfile3D::KIND_MAX (checked where both are visible).
+	static constexpr int DEBUG_TRAVERSAL_KIND_COUNT = 5;
+
 	bool debug_dirty = true;
 
 	bool debug_navigation_enabled = false;
@@ -377,6 +380,16 @@ private:
 	Color debug_navigation_link_connection_color = Color(1.0, 0.5, 1.0, 1.0);
 	Color debug_navigation_link_connection_disabled_color = Color(0.5, 0.5, 0.5, 1.0);
 	Color debug_navigation_agent_path_color = Color(1.0, 0.0, 0.0, 1.0);
+
+	// OEngine: traversal surface polygons, by NavigationTraversalProfile3D::TraversalKind.
+	Color debug_navigation_traversal_surface_color = Color(1.0, 1.0, 1.0, 0.5);
+	Color debug_navigation_traversal_kind_colors[DEBUG_TRAVERSAL_KIND_COUNT] = {
+		Color(1.0, 0.55, 0.1, 0.55), // Climb.
+		Color(0.6, 0.3, 1.0, 0.55), // Climb over.
+		Color(1.0, 0.92, 0.15, 0.55), // Vault.
+		Color(0.2, 0.45, 1.0, 0.55), // Drop.
+		Color(1.0, 0.18, 0.3, 0.55), // Hang drop.
+	};
 
 	real_t debug_navigation_agent_path_point_size = 4.0;
 
@@ -417,6 +430,9 @@ private:
 	Ref<StandardMaterial3D> debug_navigation_avoidance_static_obstacle_pushin_edge_material;
 	Ref<StandardMaterial3D> debug_navigation_avoidance_static_obstacle_pushout_edge_material;
 
+	Ref<StandardMaterial3D> debug_navigation_traversal_face_material;
+	Ref<StandardMaterial3D> debug_navigation_traversal_line_material;
+
 	Ref<StandardMaterial3D> debug_navigation_agent_path_line_material;
 	Ref<StandardMaterial3D> debug_navigation_agent_path_point_material;
 
@@ -450,6 +466,13 @@ public:
 
 	void set_debug_navigation_agent_path_color(const Color &p_color);
 	Color get_debug_navigation_agent_path_color() const;
+
+	// OEngine: p_kind is a NavigationTraversalProfile3D::TraversalKind; any other value
+	// (a surface baked without a kind) uses the generic traversal surface color.
+	void set_debug_navigation_traversal_surface_color(const Color &p_color);
+	Color get_debug_navigation_traversal_surface_color() const;
+	void set_debug_navigation_traversal_kind_color(int p_kind, const Color &p_color);
+	Color get_debug_navigation_traversal_kind_color(int p_kind) const;
 
 	void set_debug_navigation_avoidance_agents_radius_color(const Color &p_color);
 	Color get_debug_navigation_avoidance_agents_radius_color() const;
@@ -515,6 +538,10 @@ public:
 	Ref<StandardMaterial3D> get_debug_navigation_edge_connections_material();
 	Ref<StandardMaterial3D> get_debug_navigation_link_connections_material();
 	Ref<StandardMaterial3D> get_debug_navigation_link_connections_disabled_material();
+
+	// Vertex-colored materials for traversal surface faces and their outline / direction arrows.
+	Ref<StandardMaterial3D> get_debug_navigation_traversal_face_material();
+	Ref<StandardMaterial3D> get_debug_navigation_traversal_line_material();
 
 	Ref<StandardMaterial3D> get_debug_navigation_agent_path_line_material();
 	Ref<StandardMaterial3D> get_debug_navigation_agent_path_point_material();
