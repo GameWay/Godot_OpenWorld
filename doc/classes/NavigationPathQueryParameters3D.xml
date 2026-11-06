@@ -10,6 +10,9 @@
 		<link title="Using NavigationPathQueryObjects">$DOCS_URL/tutorials/navigation/navigation_using_navigationpathqueryobjects.html</link>
 	</tutorials>
 	<members>
+		<member name="excluded_links" type="RID[]" setter="set_excluded_links" getter="get_excluded_links" default="[]">
+			Navigation link [RID]s that this path query may not traverse. The links remain enabled on the map for other queries.
+		</member>
 		<member name="excluded_regions" type="RID[]" setter="set_excluded_regions" getter="get_excluded_regions" default="[]">
 			The list of region [RID]s that will be excluded from the path query. Use [method NavigationRegion3D.get_rid] to get the [RID] associated with a [NavigationRegion3D] node.
 			[b]Note:[/b] The returned array is copied and any changes to it will not update the original property value. To update the value you need to modify the returned array, and then set it to the property again.

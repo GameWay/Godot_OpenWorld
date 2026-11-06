@@ -158,6 +158,11 @@ void NavMeshQueries3D::map_query_path(NavMap3D *map, const Ref<NavigationPathQue
 	query_task.navigation_layers = p_query_parameters->get_navigation_layers();
 	query_task.callback = p_callback;
 
+	const TypedArray<RID> excluded_links = p_query_parameters->get_excluded_links();
+	for (int i = 0; i < excluded_links.size(); i++) {
+		query_task.excluded_links.insert(excluded_links[i]);
+	}
+
 	const TypedArray<RID> &_excluded_regions = p_query_parameters->get_excluded_regions();
 	const TypedArray<RID> &_included_regions = p_query_parameters->get_included_regions();
 
@@ -292,6 +297,9 @@ void NavMeshQueries3D::_query_task_search_polygon_connections(NavMeshPathQueryTa
 
 	Vector3 new_entry = Geometry3D::get_closest_point_to_segment(p_least_cost_poly.entry, p_connection.pathway_start, p_connection.pathway_end);
 	real_t new_traveled_distance = p_least_cost_poly.entry.distance_to(new_entry) * poly_travel_cost + p_poly_enter_cost + p_least_cost_poly.traveled_distance;
+	if (connection_owner->get_type() == PathSegmentType::PATH_SEGMENT_TYPE_LINK) {
+		new_traveled_distance += connection_owner->get_enter_cost();
+	}
 
 	// Check if the neighbor polygon has already been processed.
 	NavigationPoly &neighbor_poly = navigation_polys[p_query_task.path_query_slot->poly_to_id[p_connection.polygon]];
@@ -474,7 +482,8 @@ void NavMeshQueries3D::_query_task_build_path_corridor(NavMeshPathQueryTask3D &p
 				break;
 			}
 
-			if (navigation_polys[least_cost_id].poly->owner->get_self() != least_cost_poly.poly->owner->get_self()) {
+			if (least_cost_navbase->get_type() != PathSegmentType::PATH_SEGMENT_TYPE_LINK &&
+					navigation_polys[least_cost_id].poly->owner->get_self() != least_cost_navbase->get_self()) {
 				ERR_FAIL_NULL(least_cost_poly.poly->owner);
 				poly_enter_cost = least_cost_poly.poly->owner->get_enter_cost();
 			}
@@ -1292,6 +1301,10 @@ bool NavMeshQueries3D::_query_task_is_connection_owner_usable(const NavMeshPathQ
 		// Not usable. No matching bit between task filter bitmask and owner bitmask.
 		owner_usable = false;
 		return owner_usable;
+	}
+
+	if (p_owner->get_type() == NavigationEnums3D::PathSegmentType::PATH_SEGMENT_TYPE_LINK && p_query_task.excluded_links.has(p_owner->get_self())) {
+		return false;
 	}
 
 	if (p_query_task.exclude_regions || p_query_task.include_regions) {

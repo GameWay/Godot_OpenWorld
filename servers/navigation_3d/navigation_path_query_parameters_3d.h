@@ -70,6 +70,7 @@ private:
 	bool simplify_path = false;
 	real_t simplify_epsilon = 0.0;
 
+	LocalVector<RID> _excluded_links;
 	LocalVector<RID> _excluded_regions;
 	LocalVector<RID> _included_regions;
 
@@ -105,6 +106,9 @@ public:
 
 	void set_simplify_epsilon(real_t p_epsilon);
 	real_t get_simplify_epsilon() const;
+
+	void set_excluded_links(const TypedArray<RID> &p_links);
+	TypedArray<RID> get_excluded_links() const;
 
 	void set_excluded_regions(const TypedArray<RID> &p_regions);
 	TypedArray<RID> get_excluded_regions() const;

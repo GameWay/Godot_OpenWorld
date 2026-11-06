@@ -33,6 +33,7 @@
 #include "../nav_utils_3d.h"
 
 #include "core/templates/a_hash_map.h"
+#include "core/templates/hash_set.h"
 #include "servers/nav_heap.h"
 #include "servers/navigation_3d/navigation_constants_3d.h"
 #include "servers/navigation_3d/navigation_path_query_parameters_3d.h"
@@ -75,6 +76,7 @@ public:
 
 		bool exclude_regions = false;
 		bool include_regions = false;
+		HashSet<RID> excluded_links;
 		LocalVector<RID> excluded_regions;
 		LocalVector<RID> included_regions;
 
