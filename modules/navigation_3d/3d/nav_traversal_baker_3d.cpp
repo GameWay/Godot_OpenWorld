@@ -51,6 +51,7 @@ constexpr real_t SURFACE_MARGIN = 0.04;
 // Phase speeds (m/s) and holds (s) of the game executor (CreatureParkour); the enter cost
 // estimates the same timeline, so keep both in sync.
 constexpr real_t LANDING_SPEED = 2.4;
+constexpr real_t WALL_STEP_SPEED = 2.0;
 constexpr real_t CLIMB_SPEED = 1.9;
 constexpr real_t CLIMB_MOVE_SPEED = 2.3;
 constexpr real_t CREST_SPEED = 1.6;
@@ -665,14 +666,40 @@ class Baker {
 		}
 	}
 
+	// Foot of the wall on the approach level: the body touches the face with SURFACE_MARGIN to spare.
+	// Returns the approach point when the face is unknown or the approach already stands at the wall.
+	Vector3 _wall_foot(const Candidate &p_candidate, bool p_found, const Vector3 &p_face) const {
+		const Candidate &c = p_candidate;
+		if (!p_found) {
+			return c.start;
+		}
+		const real_t along = (p_face - c.start).dot(c.direction) - settings.body_radius - SURFACE_MARGIN;
+		if (along <= WAYPOINT_TOLERANCE || along >= (c.finish - c.start).dot(c.direction)) {
+			return c.start;
+		}
+		return c.start + c.direction * along;
+	}
+
 	Vector<Vector3> _body_path(const Candidate &p_candidate, Profile3D::TraversalKind p_kind) const {
 		const Candidate &c = p_candidate;
 		Vector<Vector3> path;
 		path.push_back(c.start);
 		switch (p_kind) {
-			case Profile3D::KIND_CLIMB:
+			case Profile3D::KIND_CLIMB: {
+				// Walk up to the wall and pull up along it, so a defender at the lip can reach the climber.
+				const Vector3 foot = _wall_foot(c, c.grips.face_found, c.grips.face);
+				if (foot != c.start) {
+					Vector<Vector3> hugging;
+					hugging.push_back(c.start);
+					hugging.push_back(foot);
+					hugging.push_back(at_height(foot, c.finish.y));
+					hugging.push_back(c.finish);
+					if (_path_clear(hugging)) {
+						return hugging;
+					}
+				}
 				path.push_back(at_height(c.start, c.finish.y));
-				break;
+			} break;
 			case Profile3D::KIND_DROP:
 				path.push_back(at_height(c.finish, c.start.y));
 				break;
@@ -688,8 +715,23 @@ class Baker {
 				path.push_back(out);
 				path.push_back(at_height(out, c.finish.y));
 			} break;
+			case Profile3D::KIND_CLIMB_OVER: {
+				const Vector3 foot = _wall_foot(c, true, c.front);
+				if (foot != c.start) {
+					Vector<Vector3> hugging;
+					hugging.push_back(c.start);
+					hugging.push_back(foot);
+					hugging.push_back(at_height(foot, c.crest));
+					hugging.push_back(at_height(c.finish, c.crest));
+					hugging.push_back(c.finish);
+					if (_path_clear(hugging)) {
+						return hugging;
+					}
+				}
+				path.push_back(at_height(c.start, c.crest));
+				path.push_back(at_height(c.finish, c.crest));
+			} break;
 			case Profile3D::KIND_VAULT:
-			case Profile3D::KIND_CLIMB_OVER:
 				path.push_back(at_height(c.start, c.crest));
 				path.push_back(at_height(c.finish, c.crest));
 				break;
@@ -1193,11 +1235,19 @@ real_t NavigationTraversalBaker3D::path_duration(const Vector<Vector3> &p_path, 
 	const Vector3 *p = p_path.ptr();
 	switch (p_kind) {
 		case NavigationTraversalProfile3D::KIND_CLIMB:
+			if (p_path.size() == 4) {
+				return seconds + p[0].distance_to(p[1]) / WALL_STEP_SPEED + GRAB_TIME + p[1].distance_to(p[2]) / CLIMB_SPEED +
+						p[2].distance_to(p[3]) / CLIMB_MOVE_SPEED + STAND_UP_TIME;
+			}
 			if (p_path.size() == 3) {
 				return seconds + GRAB_TIME + p[0].distance_to(p[1]) / CLIMB_SPEED + p[1].distance_to(p[2]) / CLIMB_MOVE_SPEED + STAND_UP_TIME;
 			}
 			break;
 		case NavigationTraversalProfile3D::KIND_CLIMB_OVER:
+			if (p_path.size() == 5) {
+				return seconds + p[0].distance_to(p[1]) / WALL_STEP_SPEED + GRAB_TIME + p[1].distance_to(p[2]) / CLIMB_SPEED +
+						p[2].distance_to(p[3]) / CREST_SPEED + p[3].distance_to(p[4]) / DESCEND_SPEED + STAND_UP_TIME;
+			}
 			if (p_path.size() == 4) {
 				return seconds + GRAB_TIME + p[0].distance_to(p[1]) / CLIMB_SPEED + p[1].distance_to(p[2]) / CREST_SPEED +
 						p[2].distance_to(p[3]) / DESCEND_SPEED + STAND_UP_TIME;
