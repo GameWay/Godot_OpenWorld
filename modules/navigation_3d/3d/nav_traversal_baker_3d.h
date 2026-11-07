@@ -77,6 +77,8 @@ public:
 		real_t hand_spacing = 0.42;
 		real_t grip_probe_depth = 0.15;
 		real_t cell_height = 0.25;
+		// Gravity of falling phases, physics/3d/default_gravity.
+		real_t gravity = 9.8;
 		bool keep_rejected = false;
 		LocalVector<Profile> profiles;
 	};
@@ -88,8 +90,9 @@ public:
 		Dictionary debug;
 	};
 
-	// Seconds a body needs to follow p_path; also used for the enter cost.
-	static real_t path_duration(const Vector<Vector3> &p_path, Kind p_kind);
+	// Seconds the game executor needs to follow p_path by phases (holds, crest, hang, falls);
+	// used for the enter cost.
+	static real_t path_duration(const Vector<Vector3> &p_path, Kind p_kind, real_t p_gravity);
 
 	static Settings make_settings(const Ref<NavigationTraversalRules3D> &p_rules, real_t p_cell_height);
 

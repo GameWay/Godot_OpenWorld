@@ -30,6 +30,7 @@
 
 #include "nav_traversal_baker_3d.h"
 
+#include "core/config/project_settings.h"
 #include "core/math/aabb.h"
 #include "core/math/face3.h"
 #include "core/math/geometry_2d.h"
@@ -47,12 +48,26 @@ using Reject = NavigationTraversalProfile3D::RejectReason;
 
 // Lift of the body over its support, matches the executor in game code.
 constexpr real_t SURFACE_MARGIN = 0.04;
-// Speeds used to estimate how long a body path takes (enter cost).
+// Phase speeds (m/s) and holds (s) of the game executor (CreatureParkour); the enter cost
+// estimates the same timeline, so keep both in sync.
 constexpr real_t LANDING_SPEED = 2.4;
 constexpr real_t CLIMB_SPEED = 1.9;
 constexpr real_t CLIMB_MOVE_SPEED = 2.3;
+constexpr real_t CREST_SPEED = 1.6;
+constexpr real_t DESCEND_SPEED = 1.5;
 constexpr real_t VAULT_SPEED = 2.7;
 constexpr real_t VAULT_MOVE_SPEED = 3.4;
+constexpr real_t STEP_OFF_SPEED = 2.3;
+constexpr real_t HANG_LOWER_SPEED = 1.4;
+constexpr real_t FALL_START_SPEED = 1.0;
+constexpr real_t FALL_MAX_SPEED = 8.0;
+constexpr real_t GRAB_TIME = 0.22;
+constexpr real_t HANG_TIME = 0.35;
+constexpr real_t STAND_UP_TIME = 0.12;
+constexpr real_t DROP_LAND_TIME = 0.2;
+constexpr real_t HANG_LAND_TIME = 0.28;
+constexpr real_t HANG_FEET_BELOW = 1.9;
+constexpr real_t HANG_CLEARANCE = 0.2;
 constexpr real_t WAYPOINT_TOLERANCE = 0.001;
 // Two heights closer than this count as one level (Recast step noise, uneven ground).
 constexpr real_t LEVEL_TOLERANCE = 0.15;
@@ -1031,7 +1046,7 @@ public:
 					}
 					const NavigationTraversalBaker3D::Profile &profile = settings.profiles[p];
 					layers |= profile.layer_mask;
-					const real_t duration = NavigationTraversalBaker3D::path_duration(path, Profile3D::TraversalKind(kind));
+					const real_t duration = NavigationTraversalBaker3D::path_duration(path, Profile3D::TraversalKind(kind), settings.gravity);
 					const real_t length = c.nav_start.distance_to(c.nav_end);
 					enter_cost = MIN(enter_cost, MAX(real_t(0.0), duration * profile.time_scale + profile.extra_penalty - length));
 				}
@@ -1159,18 +1174,66 @@ public:
 
 } // namespace
 
-real_t NavigationTraversalBaker3D::path_duration(const Vector<Vector3> &p_path, Kind p_kind) {
+// Free fall from FALL_START_SPEED with gravity, capped at FALL_MAX_SPEED.
+static real_t fall_duration(real_t p_height, real_t p_gravity) {
+	if (p_height <= real_t(0.0)) {
+		return 0.0;
+	}
+	const real_t gravity = MAX(real_t(0.01), p_gravity);
+	const real_t accelerate_height = (FALL_MAX_SPEED * FALL_MAX_SPEED - FALL_START_SPEED * FALL_START_SPEED) / (2.0 * gravity);
+	if (p_height <= accelerate_height) {
+		return (Math::sqrt(FALL_START_SPEED * FALL_START_SPEED + 2.0 * gravity * p_height) - FALL_START_SPEED) / gravity;
+	}
+	return (FALL_MAX_SPEED - FALL_START_SPEED) / gravity + (p_height - accelerate_height) / FALL_MAX_SPEED;
+}
+
+real_t NavigationTraversalBaker3D::path_duration(const Vector<Vector3> &p_path, Kind p_kind, real_t p_gravity) {
+	// Final settle onto the support.
 	real_t seconds = SURFACE_MARGIN / LANDING_SPEED;
-	const bool vault = p_kind == NavigationTraversalProfile3D::KIND_VAULT;
+	const Vector3 *p = p_path.ptr();
+	switch (p_kind) {
+		case NavigationTraversalProfile3D::KIND_CLIMB:
+			if (p_path.size() == 3) {
+				return seconds + GRAB_TIME + p[0].distance_to(p[1]) / CLIMB_SPEED + p[1].distance_to(p[2]) / CLIMB_MOVE_SPEED + STAND_UP_TIME;
+			}
+			break;
+		case NavigationTraversalProfile3D::KIND_CLIMB_OVER:
+			if (p_path.size() == 4) {
+				return seconds + GRAB_TIME + p[0].distance_to(p[1]) / CLIMB_SPEED + p[1].distance_to(p[2]) / CREST_SPEED +
+						p[2].distance_to(p[3]) / DESCEND_SPEED + STAND_UP_TIME;
+			}
+			break;
+		case NavigationTraversalProfile3D::KIND_VAULT:
+			if (p_path.size() == 4) {
+				return seconds + p[0].distance_to(p[1]) / VAULT_SPEED + p[1].distance_to(p[2]) / VAULT_MOVE_SPEED + p[2].distance_to(p[3]) / LANDING_SPEED;
+			}
+			break;
+		case NavigationTraversalProfile3D::KIND_DROP:
+			if (p_path.size() == 3) {
+				return seconds + p[0].distance_to(p[1]) / STEP_OFF_SPEED + fall_duration(p[1].y - p[2].y, p_gravity) + DROP_LAND_TIME;
+			}
+			break;
+		case NavigationTraversalProfile3D::KIND_HANG_DROP:
+			if (p_path.size() == 4) {
+				const real_t drop = p[1].y - p[2].y;
+				const real_t depth = CLAMP(HANG_FEET_BELOW, real_t(0.0), MAX(real_t(0.0), drop - HANG_CLEARANCE));
+				return seconds + p[0].distance_to(p[1]) / STEP_OFF_SPEED + depth / HANG_LOWER_SPEED + HANG_TIME +
+						fall_duration(drop - depth, p_gravity) + HANG_LAND_TIME + p[2].distance_to(p[3]) / CLIMB_MOVE_SPEED;
+			}
+			break;
+		default:
+			break;
+	}
+	// Other shapes: segments by direction, as the executor does.
 	for (int i = 1; i < p_path.size(); i++) {
-		const Vector3 motion = p_path[i] - p_path[i - 1];
-		real_t speed = vault ? VAULT_MOVE_SPEED : CLIMB_MOVE_SPEED;
+		const Vector3 motion = p[i] - p[i - 1];
 		if (motion.y > WAYPOINT_TOLERANCE) {
-			speed = vault ? VAULT_SPEED : CLIMB_SPEED;
+			seconds += motion.length() / CLIMB_SPEED;
 		} else if (motion.y < -WAYPOINT_TOLERANCE) {
-			speed = LANDING_SPEED;
+			seconds += fall_duration(-motion.y, p_gravity) + Vector2(motion.x, motion.z).length() / CLIMB_MOVE_SPEED;
+		} else {
+			seconds += motion.length() / CLIMB_MOVE_SPEED;
 		}
-		seconds += motion.length() / speed;
 	}
 	return seconds;
 }
@@ -1188,6 +1251,7 @@ NavigationTraversalBaker3D::Settings NavigationTraversalBaker3D::make_settings(c
 	settings.hand_spacing = p_rules->get_hand_spacing();
 	settings.grip_probe_depth = p_rules->get_grip_probe_depth();
 	settings.cell_height = p_cell_height;
+	settings.gravity = GLOBAL_GET("physics/3d/default_gravity");
 	settings.keep_rejected = p_rules->is_keeping_rejected_candidates();
 	const TypedArray<NavigationTraversalProfile3D> profiles = p_rules->get_profiles();
 	for (int i = 0; i < profiles.size(); i++) {
