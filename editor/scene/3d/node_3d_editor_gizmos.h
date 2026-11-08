@@ -132,7 +132,9 @@ public:
 	Ref<EditorNode3DGizmoPlugin> get_plugin() const { return gizmo_plugin; }
 	bool intersect_frustum(const Camera3D *p_camera, const Vector<Plane> &p_frustum);
 	void handles_intersect_ray(Camera3D *p_camera, const Vector2 &p_point, bool p_shift_pressed, int &r_id, bool &r_secondary);
-	bool intersect_ray(Camera3D *p_camera, const Point2 &p_point, Vector3 &r_pos, Vector3 &r_normal);
+	// OEngine: r_line_distance (optional) receives the screen distance in pixels when only a line of
+	// the gizmo was hit, or -1 when an icon or a collision mesh was hit directly under the cursor.
+	bool intersect_ray(Camera3D *p_camera, const Point2 &p_point, Vector3 &r_pos, Vector3 &r_normal, float *r_line_distance = nullptr);
 	bool is_subgizmo_selected(int p_id) const;
 	Vector<int> get_subgizmo_selection() const;
 

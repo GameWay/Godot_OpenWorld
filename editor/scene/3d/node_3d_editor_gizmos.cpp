@@ -647,7 +647,7 @@ void EditorNode3DGizmo::handles_intersect_ray(Camera3D *p_camera, const Vector2 
 	}
 }
 
-bool EditorNode3DGizmo::intersect_ray(Camera3D *p_camera, const Point2 &p_point, Vector3 &r_pos, Vector3 &r_normal) {
+bool EditorNode3DGizmo::intersect_ray(Camera3D *p_camera, const Point2 &p_point, Vector3 &r_pos, Vector3 &r_normal, float *r_line_distance) {
 	ERR_FAIL_NULL_V(spatial_node, false);
 	ERR_FAIL_COND_V(!valid, false);
 
@@ -694,9 +694,17 @@ bool EditorNode3DGizmo::intersect_ray(Camera3D *p_camera, const Point2 &p_point,
 		if (rect.has_point(p_point)) {
 			r_pos = t.origin;
 			r_normal = -p_camera->project_ray_normal(p_point);
+			if (r_line_distance) {
+				*r_line_distance = -1.0f;
+			}
 			return true;
 		}
 	}
+
+	// A line hit is only kept as a fallback: a collision mesh under the cursor is a more precise hit.
+	bool line_hit = false;
+	Vector3 line_pos;
+	float line_distance = 0.0f;
 
 	if (collision_segments.size()) {
 		Plane camp(-p_camera->get_transform().basis.get_column(2).normalized(), p_camera->get_transform().origin);
@@ -741,9 +749,9 @@ bool EditorNode3DGizmo::intersect_ray(Camera3D *p_camera, const Point2 &p_point,
 		}
 
 		if (cpd < 8) {
-			r_pos = cp;
-			r_normal = -p_camera->project_ray_normal(p_point);
-			return true;
+			line_hit = true;
+			line_pos = cp;
+			line_distance = cpd;
 		}
 	}
 
@@ -764,10 +772,22 @@ bool EditorNode3DGizmo::intersect_ray(Camera3D *p_camera, const Point2 &p_point,
 				if (collision_mesh->intersect_ray(ray_from, ray_dir, rpos, rnorm)) {
 					r_pos = gt.xform(rpos);
 					r_normal = gt.basis.xform(rnorm).normalized();
+					if (r_line_distance) {
+						*r_line_distance = -1.0f;
+					}
 					return true;
 				}
 			}
 		}
+	}
+
+	if (line_hit) {
+		r_pos = line_pos;
+		r_normal = -p_camera->project_ray_normal(p_point);
+		if (r_line_distance) {
+			*r_line_distance = line_distance;
+		}
+		return true;
 	}
 
 	return false;

@@ -727,7 +727,10 @@ void Node3DEditorViewport::_select_clicked(bool p_allow_locked) {
 				editor_selection->add_node(selected);
 			}
 		} else {
-			if (!editor_selection->is_selected(selected)) {
+			// A plain click (no drag, no modifier) selects only the clicked node, even if it was
+			// part of a multi-selection. Dragging a selected node clears `clicked` before release,
+			// so moving the whole selection still works.
+			if (!editor_selection->is_selected(selected) || editor_selection->get_selection().size() > 1) {
 				editor_selection->clear();
 				editor_selection->add_node(selected);
 				EditorNode::get_singleton()->edit_node(selected);
@@ -753,9 +756,31 @@ ObjectID Node3DEditorViewport::_select_ray(const Point2 &p_pos) const {
 	HashSet<Ref<EditorNode3DGizmo>> found_gizmos;
 
 	Node *edited_scene = get_tree()->get_edited_scene_root();
-	ObjectID closest;
-	Node *item = nullptr;
-	float closest_dist = 1e20;
+
+	// OEngine: picking priority, closer to "what is under the cursor" than to "nearest gizmo line".
+	// - Solid hits: a collision mesh (the actual geometry) or an icon directly under the cursor.
+	// - Precise line hits: a gizmo line within a couple of pixels of the cursor.
+	// - Loose line hits: a gizmo line up to 8 pixels away.
+	// A solid hit wins unless a precise line is clearly in front of it, so a large wireframe gizmo
+	// (e.g. an interaction sphere) passing over a small mesh no longer steals the click. Lines keep
+	// their usual tolerance where no geometry is under the cursor.
+	const float precise_line_distance = 2.0f * EDSCALE;
+	const float line_in_front_ratio = 0.95f;
+
+	struct Best {
+		Node *item = nullptr;
+		float dist = 1e20;
+	} solid, precise_line, loose_line;
+
+	auto resolve_item = [edited_scene](Node *p_node) -> Node * {
+		// Nodes created at edit time by tool scripts have no owner and are not saved with the scene:
+		// select their closest saved ancestor instead.
+		Node *node = p_node;
+		while (node != edited_scene && !node->get_owner() && node->get_parent()) {
+			node = node->get_parent();
+		}
+		return node == edited_scene ? node : edited_scene->get_deepest_editable_node(node);
+	};
 
 	Vector<Node3D *> nodes_with_gizmos = Node3DEditor::get_singleton()->gizmo_bvh_ray_query(pos, pos + ray * camera->get_far());
 
@@ -776,8 +801,9 @@ ObjectID Node3DEditorViewport::_select_ray(const Point2 &p_pos) const {
 			found_gizmos.insert(seg);
 			Vector3 point;
 			Vector3 normal;
+			float line_distance = -1.0f;
 
-			bool inters = seg->intersect_ray(camera, shrinked_pos, point, normal);
+			bool inters = seg->intersect_ray(camera, shrinked_pos, point, normal, &line_distance);
 
 			if (!inters) {
 				continue;
@@ -789,23 +815,26 @@ ObjectID Node3DEditorViewport::_select_ray(const Point2 &p_pos) const {
 				continue;
 			}
 
-			if (dist < closest_dist) {
-				item = Object::cast_to<Node>(spat);
-				if (item != edited_scene) {
-					item = edited_scene->get_deepest_editable_node(item);
-				}
-
-				closest = item->get_instance_id();
-				closest_dist = dist;
+			Best &best = line_distance < 0.0f ? solid : (line_distance <= precise_line_distance ? precise_line : loose_line);
+			if (dist < best.dist) {
+				best.item = resolve_item(spat);
+				best.dist = dist;
 			}
 		}
+	}
+
+	Node *item = nullptr;
+	if (solid.item) {
+		item = (precise_line.item && precise_line.dist < solid.dist * line_in_front_ratio) ? precise_line.item : solid.item;
+	} else {
+		item = precise_line.item ? precise_line.item : loose_line.item;
 	}
 
 	if (!item) {
 		return ObjectID();
 	}
 
-	return closest;
+	return item->get_instance_id();
 }
 
 float Node3DEditorViewport::_min_screen_dist_to_aabb(const AABB &p_aabb, const Transform3D &p_transform, const Point2 &p_cursor) const {
@@ -2597,6 +2626,9 @@ void Node3DEditorViewport::_sinput(const Ref<InputEvent> &p_event) {
 					}
 
 					if (!_edit.instant && _edit.mode != TRANSFORM_NONE) {
+						// Pressing on a selected node starts moving the selection. If the mouse did not move
+						// and no modifier is held, this was a plain click: select only the clicked node.
+						bool select_clicked_only = false;
 						Node3D *selected = spatial_editor->get_single_selected_node();
 						Node3DEditorSelectedItem *se = selected ? editor_selection->get_node_editor_data<Node3DEditorSelectedItem>(selected) : nullptr;
 
@@ -2614,10 +2646,15 @@ void Node3DEditorViewport::_sinput(const Ref<InputEvent> &p_event) {
 						} else {
 							if (_edit.original_mouse_pos != _edit.mouse_pos) {
 								commit_transform();
+							} else if (clicked.is_valid() && !b->is_shift_pressed() && !b->is_command_or_control_pressed() && !b->is_alt_pressed()) {
+								select_clicked_only = true;
 							}
 						}
 						_edit.mode = TRANSFORM_NONE;
 						set_message("");
+						if (select_clicked_only) {
+							_select_clicked(false);
+						}
 						spatial_editor->update_transform_gizmo();
 					}
 				}
@@ -6945,6 +6982,7 @@ Node3DEditorViewport::Node3DEditorViewport(Node3DEditor *p_spatial_editor, int p
 	c->set_anchors_and_offsets_preset(Control::PRESET_FULL_RECT);
 	viewport = memnew(SubViewport);
 	viewport->set_disable_input(true);
+	RS::get_singleton()->viewport_set_editor_selection_outline(viewport->get_viewport_rid(), true);
 
 	c->add_child(viewport);
 	surface = memnew(Control);
