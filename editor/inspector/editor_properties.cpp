@@ -67,6 +67,7 @@
 #include "scene/resources/font.h"
 #include "scene/resources/mesh.h"
 #include "scene/resources/sky.h"
+#include "scene/resources/style_box.h"
 #include "servers/audio/audio_server.h"
 #include "servers/display/display_server.h"
 
@@ -215,6 +216,27 @@ void EditorPropertyText::_update_theme() {
 
 	text->add_theme_font_override(SceneStringName(font), font);
 	text->add_theme_font_size_override(SceneStringName(font_size), font_size);
+
+	if (string_name_prefix) {
+		// The "&" takes the LineEdit's leading margin, so it starts where text starts in other fields.
+		// The gap between "&" and the value is then just the container's standard separation
+		// (derived from `interface/theme/base_spacing`).
+		const Side start = is_layout_rtl() ? SIDE_RIGHT : SIDE_LEFT;
+		const Side end = is_layout_rtl() ? SIDE_LEFT : SIDE_RIGHT;
+		const float text_margin = get_theme_stylebox(CoreStringName(normal), SNAME("LineEdit"))->get_content_margin(start);
+
+		Ref<StyleBoxEmpty> prefix_style;
+		prefix_style.instantiate();
+		prefix_style->set_content_margin(start, text_margin);
+		prefix_style->set_content_margin(end, 0);
+		string_name_prefix->add_theme_style_override(CoreStringName(normal), prefix_style);
+
+		for (const StringName &style_name : { CoreStringName(normal), SNAME("focus"), SNAME("read_only") }) {
+			Ref<StyleBox> style = get_theme_stylebox(style_name, SNAME("LineEdit"))->duplicate();
+			style->set_content_margin(start, 0);
+			text->add_theme_style_override(style_name, style);
+		}
+	}
 }
 
 void EditorPropertyText::_text_submitted(const String &p_string) {
@@ -270,8 +292,13 @@ void EditorPropertyText::set_string_name(bool p_enabled) {
 		Label *prefix = memnew(Label("&"));
 		prefix->set_tooltip_text("StringName");
 		prefix->set_mouse_filter(MOUSE_FILTER_STOP);
+		prefix->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
 		text->get_parent()->add_child(prefix);
 		text->get_parent()->move_child(prefix, 0);
+		string_name_prefix = prefix;
+		if (is_inside_tree()) {
+			_update_theme();
+		}
 	}
 }
 

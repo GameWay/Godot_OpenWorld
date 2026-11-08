@@ -350,8 +350,10 @@ void EditorSpinSlider::_update_value_input_stylebox() {
 	// default margins.
 	Ref<StyleBox> stylebox = theme_cache.normal->duplicate();
 	// TODO: Handle this internally instead of relying on the theme.
-	int margin = get_label().is_empty() ? theme_cache.line_edit_margin_empty : theme_cache.line_edit_margin;
-	stylebox->set_content_margin(is_layout_rtl() ? SIDE_RIGHT : SIDE_LEFT, margin);
+	// Without a label the number is drawn at the stylebox's own margin, which the LineEdit already uses.
+	if (!get_label().is_empty()) {
+		stylebox->set_content_margin(is_layout_rtl() ? SIDE_RIGHT : SIDE_LEFT, theme_cache.line_edit_margin);
+	}
 
 	value_input->add_theme_style_override(CoreStringName(normal), stylebox);
 }
@@ -370,7 +372,9 @@ void EditorSpinSlider::_draw_spin_slider() {
 	Ref<Font> font = theme_cache.font;
 	int font_size = theme_cache.font_size;
 	int sep_base = 4 * EDSCALE;
-	int sep = sep_base + sb->get_offset().x; //make it have the same margin on both sides, looks better
+	// Gap between the label and the number, with the same margin on both sides of the label.
+	// Without a label there is nothing to separate, so the number starts at the stylebox margin.
+	int sep = label.is_empty() ? 0 : sep_base + sb->get_offset().x;
 
 	int label_width = font->get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).width;
 	int number_width = size.width - sb->get_minimum_size().width - label_width - sep;

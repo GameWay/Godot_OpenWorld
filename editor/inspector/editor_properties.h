@@ -94,6 +94,7 @@ public:
 class EditorPropertyText : public EditorProperty {
 	GDCLASS(EditorPropertyText, EditorProperty);
 	LineEdit *text = nullptr;
+	Label *string_name_prefix = nullptr;
 
 	bool monospaced = false;
 	bool updating = false;
