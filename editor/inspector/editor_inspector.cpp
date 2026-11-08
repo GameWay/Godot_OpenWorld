@@ -1979,6 +1979,26 @@ void EditorInspectorCategory::_notification(int p_what) {
 
 			draw_style_box(sb, Rect2(Vector2(), get_size()));
 
+			if (foldable) {
+				Ref<Texture2D> arrow;
+				if (!folded) {
+					arrow = theme_cache.arrow;
+				} else if (is_layout_rtl()) {
+					arrow = theme_cache.arrow_collapsed_mirrored;
+				} else {
+					arrow = theme_cache.arrow_collapsed;
+				}
+				if (arrow.is_valid()) {
+					Point2 arrow_pos;
+					arrow_pos.x = sb->get_content_margin(SIDE_LEFT) + theme_cache.padding_size;
+					if (is_layout_rtl()) {
+						arrow_pos.x = get_size().width - sb->get_content_margin(SIDE_RIGHT) - theme_cache.padding_size - arrow->get_width();
+					}
+					arrow_pos.y = (get_size().height - arrow->get_height()) / 2 + (sb->get_content_margin(SIDE_TOP) - sb->get_content_margin(SIDE_BOTTOM));
+					draw_texture(arrow, arrow_pos.round());
+				}
+			}
+
 			const Ref<Font> &font = theme_cache.bold_font;
 			int font_size = theme_cache.bold_font_size;
 
@@ -2078,6 +2098,9 @@ Size2 EditorInspectorCategory::get_minimum_size() const {
 	}
 	if (icon.is_valid()) {
 		ms.height = MAX(theme_cache.class_icon_size, ms.height);
+	}
+	if (foldable && theme_cache.arrow.is_valid()) {
+		ms.height = MAX(theme_cache.arrow->get_height(), ms.height);
 	}
 	ms.height += theme_cache.vertical_separation;
 
@@ -2210,7 +2233,72 @@ void EditorInspectorCategory::gui_input(const Ref<InputEvent> &p_event) {
 	const Ref<InputEventMouseButton> &mb = p_event;
 	if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::RIGHT) {
 		_popup_context_menu(get_screen_position() + mb->get_position());
+	} else if (foldable && mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::LEFT) {
+		accept_event();
+		_set_folded(!folded, true);
 	}
+
+	const Ref<InputEventKey> &k = p_event;
+	if (foldable && k.is_valid() && k->is_pressed() && k->is_action("ui_accept", true)) {
+		accept_event();
+		_set_folded(!folded, true);
+	}
+}
+
+void EditorInspectorCategory::setup_folding(const String &p_key) {
+	fold_key = p_key;
+	foldable = true;
+	set_default_cursor_shape(CURSOR_POINTING_HAND);
+	folded = EditorSettings::get_singleton()->get_project_metadata("inspector_folded_categories", fold_key, false);
+	update_minimum_size();
+	queue_redraw();
+}
+
+void EditorInspectorCategory::add_fold_content(Control *p_control) {
+	ERR_FAIL_NULL(p_control);
+	fold_content.push_back(p_control->get_instance_id());
+}
+
+void EditorInspectorCategory::_apply_fold() {
+	if (folded) {
+		for (const ObjectID &id : fold_content) {
+			Control *c = ObjectDB::get_instance<Control>(id);
+			if (c && c->is_visible()) {
+				c->hide();
+				hidden_by_fold.push_back(id);
+			}
+		}
+	} else {
+		for (const ObjectID &id : hidden_by_fold) {
+			Control *c = ObjectDB::get_instance<Control>(id);
+			if (c) {
+				c->show();
+			}
+		}
+		hidden_by_fold.clear();
+	}
+}
+
+void EditorInspectorCategory::_set_folded(bool p_folded, bool p_store) {
+	if (!foldable || folded == p_folded) {
+		return;
+	}
+	folded = p_folded;
+	if (p_store) {
+		// Store only folded categories; unfolded is the default.
+		EditorSettings::get_singleton()->set_project_metadata("inspector_folded_categories", fold_key, folded ? Variant(true) : Variant());
+	}
+	_apply_fold();
+	queue_redraw();
+	queue_accessibility_update();
+}
+
+void EditorInspectorCategory::fold() {
+	_set_folded(true, true);
+}
+
+void EditorInspectorCategory::unfold() {
+	_set_folded(false, true);
 }
 
 EditorInspectorCategory::EditorInspectorCategory() {
@@ -4083,6 +4171,7 @@ void EditorInspector::initialize_category_theme(EditorInspectorCategory::ThemeCa
 	p_cache.horizontal_separation = p_control->get_theme_constant(SNAME("h_separation"), SNAME("Tree"));
 	p_cache.vertical_separation = p_control->get_theme_constant(SNAME("separation"), SNAME("EditorPropertyContainer"));
 	p_cache.class_icon_size = p_control->get_theme_constant(SNAME("class_icon_size"), EditorStringName(Editor));
+	p_cache.padding_size = int(EDITOR_GET("interface/theme/base_spacing")) * 2;
 
 	p_cache.font_color = p_control->get_theme_color(SceneStringName(font_color), SNAME("Tree"));
 
@@ -4095,6 +4184,10 @@ void EditorInspector::initialize_category_theme(EditorInspectorCategory::ThemeCa
 	p_cache.icon_favorites = p_control->get_editor_theme_icon(SNAME("Favorites"));
 	p_cache.icon_unfavorite = p_control->get_editor_theme_icon(SNAME("Unfavorite"));
 	p_cache.icon_help = p_control->get_editor_theme_icon(SNAME("Help"));
+
+	p_cache.arrow = p_control->get_theme_icon(SNAME("arrow"), SNAME("Tree"));
+	p_cache.arrow_collapsed = p_control->get_theme_icon(SNAME("arrow_collapsed"), SNAME("Tree"));
+	p_cache.arrow_collapsed_mirrored = p_control->get_theme_icon(SNAME("arrow_collapsed_mirrored"), SNAME("Tree"));
 
 	p_cache.background = p_control->get_theme_stylebox(SNAME("bg"), SNAME("EditorInspectorCategory"));
 
@@ -5385,6 +5478,51 @@ void EditorInspector::update_tree() {
 		}
 	}
 
+	if (use_folding) {
+		// Make class categories foldable. Content of a class category runs until the next class category;
+		// custom (script `@export_category`) categories nest inside it and run until the next category of any kind.
+		LocalVector<EditorInspectorCategory *> foldable_categories;
+		EditorInspectorCategory *class_category = nullptr;
+		EditorInspectorCategory *custom_category = nullptr;
+		for (int i = 0; i < main_vbox->get_child_count(); i++) {
+			Control *child = Object::cast_to<Control>(main_vbox->get_child(i));
+			if (!child) {
+				continue;
+			}
+			EditorInspectorCategory *cat = Object::cast_to<EditorInspectorCategory>(child);
+			if (cat) {
+				bool is_custom = cat->info.hint_string.is_empty();
+				if (is_custom) {
+					if (class_category) {
+						class_category->add_fold_content(cat);
+					}
+					custom_category = cat;
+					String parent_key = class_category ? class_category->info.hint_string : String();
+					cat->setup_folding(parent_key + "::" + cat->info.name);
+				} else {
+					class_category = cat;
+					custom_category = nullptr;
+					// Class name for native classes, script path for script classes.
+					cat->setup_folding(cat->info.hint_string);
+				}
+				foldable_categories.push_back(cat);
+				continue;
+			}
+			if (class_category) {
+				class_category->add_fold_content(child);
+			}
+			if (custom_category) {
+				custom_category->add_fold_content(child);
+			}
+		}
+		// Apply nested (later) categories first, so outer ones don't record already hidden content.
+		for (int i = (int)foldable_categories.size() - 1; i >= 0; i--) {
+			if (foldable_categories[i]->is_folded()) {
+				foldable_categories[i]->_apply_fold();
+			}
+		}
+	}
+
 	if (!hide_metadata && !object->call(SNAME("_hide_metadata_from_inspector"))) {
 		// Add 4px of spacing between the "Add Metadata" button and the content above it.
 		Control *spacer = memnew(Control);
@@ -5642,6 +5780,12 @@ void EditorInspector::collapse_all_folding() {
 }
 
 void EditorInspector::expand_all_folding() {
+	for (int i = 0; i < main_vbox->get_child_count(); i++) {
+		EditorInspectorCategory *category = Object::cast_to<EditorInspectorCategory>(main_vbox->get_child(i));
+		if (category && category->is_foldable()) {
+			category->unfold();
+		}
+	}
 	for (EditorInspectorSection *E : sections) {
 		E->unfold();
 	}

@@ -405,6 +405,7 @@ class EditorInspectorCategory : public Control {
 		int horizontal_separation = 0;
 		int vertical_separation = 0;
 		int class_icon_size = 0;
+		int padding_size = 0; // From `interface/theme/base_spacing`, same as section headers.
 
 		Color font_color;
 
@@ -416,6 +417,10 @@ class EditorInspectorCategory : public Control {
 		Ref<Texture2D> icon_favorites;
 		Ref<Texture2D> icon_unfavorite;
 		Ref<Texture2D> icon_help;
+
+		Ref<Texture2D> arrow;
+		Ref<Texture2D> arrow_collapsed;
+		Ref<Texture2D> arrow_collapsed_mirrored;
 
 		Ref<StyleBox> background;
 		Ref<StyleBox> sub_inspector_background;
@@ -433,6 +438,16 @@ class EditorInspectorCategory : public Control {
 	int color_level = -1;
 
 	LocalVector<EditorProperty *> category_properties;
+
+	// Folding.
+	String fold_key; // Shared per class across all objects (stored in project editor metadata).
+	bool foldable = false;
+	bool folded = false;
+	LocalVector<ObjectID> fold_content; // Controls that belong to this category.
+	LocalVector<ObjectID> hidden_by_fold; // Controls this category hid when folding.
+
+	void _apply_fold();
+	void _set_folded(bool p_folded, bool p_store);
 
 	void _handle_menu_option(int p_option);
 	void _popup_context_menu(const Point2i &p_position);
@@ -454,6 +469,13 @@ public:
 	void set_color_level(int p_color_level);
 
 	void register_property(EditorProperty *p_property) { category_properties.push_back(p_property); }
+
+	void setup_folding(const String &p_key);
+	void add_fold_content(Control *p_control);
+	bool is_foldable() const { return foldable; }
+	bool is_folded() const { return folded; }
+	void fold();
+	void unfold();
 
 	virtual Size2 get_minimum_size() const override;
 	virtual Control *make_custom_tooltip(const String &p_text) const override;
