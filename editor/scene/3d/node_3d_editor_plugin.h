@@ -308,6 +308,11 @@ private:
 	void _register_all_gizmos();
 
 	void _selection_changed();
+
+	// OEngine: geometry instances drawn into the selection outline (instance RID -> owner node).
+	HashMap<RID, ObjectID> selection_outline_instances;
+	void _update_selection_outline();
+	void _update_selection_outline_style();
 	void _refresh_menu_icons();
 
 	bool do_snap_selected_nodes_to_floor = false;

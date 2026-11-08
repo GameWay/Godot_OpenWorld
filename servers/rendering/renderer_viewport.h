@@ -72,6 +72,9 @@ public:
 		RSE::ViewportScreenSpaceAA screen_space_aa = RSE::VIEWPORT_SCREEN_SPACE_AA_DISABLED;
 		bool use_taa = false;
 		bool use_debanding = false;
+		bool editor_selection_outline = false;
+		Color editor_selection_outline_color = Color(1.0, 0.55, 0.1);
+		float editor_selection_outline_width = 2.0;
 		bool force_motion_vectors = false;
 
 		RendererSceneRender::CameraData prev_camera_data;
@@ -280,6 +283,8 @@ public:
 	void viewport_set_screen_space_aa(RID p_viewport, RSE::ViewportScreenSpaceAA p_mode);
 	void viewport_set_use_taa(RID p_viewport, bool p_use_taa);
 	void viewport_set_use_debanding(RID p_viewport, bool p_use_debanding);
+	void viewport_set_editor_selection_outline(RID p_viewport, bool p_enabled);
+	void viewport_set_editor_selection_outline_style(RID p_viewport, const Color &p_color, float p_width);
 	void viewport_set_force_motion_vectors(RID p_viewport, bool p_force_motion_vectors);
 	void viewport_set_use_occlusion_culling(RID p_viewport, bool p_use_occlusion_culling);
 	void viewport_set_occlusion_rays_per_thread(int p_rays_per_thread);

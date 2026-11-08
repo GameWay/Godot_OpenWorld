@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include "core/math/color.h"
 #include "core/object/ref_counted.h"
 #include "servers/rendering/rendering_server_enums.h"
 
@@ -107,6 +108,11 @@ public:
 	RenderSceneBuffers() {}
 	virtual ~RenderSceneBuffers() {}
 
+
+	// OEngine: set by the viewport before rendering; draws the editor selection outline.
+	bool editor_selection_outline = false;
+	Color editor_selection_outline_color = Color(1.0, 0.55, 0.1);
+	float editor_selection_outline_width = 2.0; // In target pixels.
 	virtual void configure(const RenderSceneBuffersConfiguration *p_config) = 0;
 
 	// for those settings that are unlikely to require buffers to be recreated, we'll add setters

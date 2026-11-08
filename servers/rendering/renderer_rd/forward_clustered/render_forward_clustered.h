@@ -33,6 +33,9 @@
 #include "core/templates/paged_allocator.h"
 #include "servers/rendering/multi_uma_buffer.h"
 #include "servers/rendering/renderer_rd/cluster_builder_rd.h"
+#ifdef TOOLS_ENABLED
+#include "servers/rendering/renderer_rd/effects/editor_selection_outline.h"
+#endif
 #include "servers/rendering/renderer_rd/effects/fsr2.h"
 #include "servers/rendering/renderer_rd/effects/motion_vectors_store.h"
 #include "servers/rendering/renderer_rd/effects/ss_effects.h"
@@ -768,6 +771,14 @@ private:
 
 	RendererRD::TAA *taa = nullptr;
 	RendererRD::FSR2Effect *fsr2_effect = nullptr;
+
+#ifdef TOOLS_ENABLED
+	// OEngine: editor selection outline.
+	RendererRD::EditorSelectionOutline *editor_selection_outline_effect = nullptr;
+	PagedArrayPool<RenderGeometryInstance *> editor_selection_page_pool;
+	PagedArray<RenderGeometryInstance *> editor_selection_instances;
+	void _render_editor_selection_outline(RenderDataRD *p_render_data, bool p_reverse_cull);
+#endif
 	RendererRD::SSEffects *ss_effects = nullptr;
 
 #ifdef METAL_MFXTEMPORAL_ENABLED

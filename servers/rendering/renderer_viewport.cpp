@@ -332,6 +332,11 @@ void RendererViewport::_draw_3d(Viewport *p_viewport) {
 	}
 
 	float screen_mesh_lod_threshold = p_viewport->mesh_lod_threshold / float(p_viewport->size.width);
+	if (p_viewport->render_buffers.is_valid()) {
+		p_viewport->render_buffers->editor_selection_outline = p_viewport->editor_selection_outline;
+		p_viewport->render_buffers->editor_selection_outline_color = p_viewport->editor_selection_outline_color;
+		p_viewport->render_buffers->editor_selection_outline_width = p_viewport->editor_selection_outline_width;
+	}
 	RSG::scene->render_camera(p_viewport->render_buffers, p_viewport->camera, p_viewport->scenario, p_viewport->self, p_viewport->internal_size, p_viewport->jitter_phase_count, screen_mesh_lod_threshold, p_viewport->shadow_atlas, p_viewport->window_output_max_value, &p_viewport->render_info);
 
 	RENDER_TIMESTAMP("< Render 3D Scene");
@@ -1503,6 +1508,21 @@ void RendererViewport::viewport_set_use_debanding(RID p_viewport, bool p_use_deb
 	viewport->use_debanding = p_use_debanding;
 	RSG::texture_storage->render_target_set_use_debanding(viewport->render_target, p_use_debanding);
 	_configure_3d_render_buffers(viewport);
+}
+
+void RendererViewport::viewport_set_editor_selection_outline(RID p_viewport, bool p_enabled) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL(viewport);
+
+	viewport->editor_selection_outline = p_enabled;
+}
+
+void RendererViewport::viewport_set_editor_selection_outline_style(RID p_viewport, const Color &p_color, float p_width) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL(viewport);
+
+	viewport->editor_selection_outline_color = p_color;
+	viewport->editor_selection_outline_width = p_width;
 }
 
 void RendererViewport::viewport_set_force_motion_vectors(RID p_viewport, bool p_force_motion_vectors) {

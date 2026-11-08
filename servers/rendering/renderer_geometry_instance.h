@@ -39,6 +39,9 @@
 // API definition for our RenderGeometryInstance class so we can expose this through GDExtension in the near future
 class RenderGeometryInstance {
 public:
+	// OEngine: drawn into the editor selection outline mask.
+	bool editor_selection_outline = false;
+
 	virtual ~RenderGeometryInstance() {}
 
 	virtual void _mark_dirty() = 0;

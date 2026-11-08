@@ -2662,6 +2662,12 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		_render_buffers_post_process_and_tonemap(p_render_data);
 	}
 
+#ifdef TOOLS_ENABLED
+	if (rb_data.is_valid() && !is_reflection_probe && rb->editor_selection_outline) {
+		_render_editor_selection_outline(p_render_data, reverse_cull);
+	}
+#endif
+
 	if (rb_data.is_valid()) {
 		_render_buffers_debug_draw(p_render_data);
 
@@ -2680,6 +2686,100 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		}
 	}
 }
+
+#ifdef TOOLS_ENABLED
+void RenderForwardClustered::_render_editor_selection_outline(RenderDataRD *p_render_data, bool p_reverse_cull) {
+	Ref<RenderSceneBuffersRD> rb = p_render_data->render_buffers;
+	if (rb->get_view_count() != 1) {
+		return;
+	}
+
+	// Collect the selected geometry among the instances visible to this camera.
+	editor_selection_instances.clear();
+	for (uint32_t i = 0; i < p_render_data->instances->size(); i++) {
+		RenderGeometryInstance *inst = (*p_render_data->instances)[i];
+		if (inst->editor_selection_outline) {
+			editor_selection_instances.push_back(inst);
+		}
+	}
+	if (editor_selection_instances.size() == 0) {
+		return;
+	}
+
+	RD::get_singleton()->draw_command_begin_label("Editor Selection Outline");
+	RENDER_TIMESTAMP("Editor Selection Outline");
+
+	const Size2i internal_size = rb->get_internal_size();
+	const StringName scope = SNAME("editor_selection_outline");
+	const StringName mask_name = SNAME("mask");
+	if (!rb->has_texture(scope, mask_name)) {
+		rb->create_texture(scope, mask_name, RenderSceneBuffersRD::get_depth_format(false, false, true), RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, RD::TEXTURE_SAMPLES_1, internal_size);
+	}
+	RID mask = rb->get_texture(scope, mask_name);
+	RID mask_fb = FramebufferCacheRD::get_singleton()->get_cache(mask);
+
+	// Same camera as the scene, but without TAA jitter: the outline is drawn after TAA resolve.
+	const RenderSceneDataRD *src = p_render_data->scene_data;
+	RenderSceneDataRD scene_data;
+	scene_data.cam_transform = src->cam_transform;
+	scene_data.cam_projection = src->cam_projection;
+	scene_data.cam_orthogonal = src->cam_orthogonal;
+	scene_data.camera_visible_layers = src->camera_visible_layers;
+	scene_data.flip_y = src->flip_y;
+	scene_data.main_cam_transform = src->main_cam_transform;
+	scene_data.view_count = 1;
+	scene_data.view_eye_offset[0] = src->view_eye_offset[0];
+	scene_data.view_projection[0] = src->view_projection[0];
+	scene_data.prev_cam_transform = src->cam_transform;
+	scene_data.prev_cam_projection = src->cam_projection;
+	scene_data.prev_view_projection[0] = src->view_projection[0];
+	scene_data.z_near = src->z_near;
+	scene_data.z_far = src->z_far;
+	scene_data.lod_distance_multiplier = src->lod_distance_multiplier;
+	scene_data.screen_mesh_lod_threshold = src->screen_mesh_lod_threshold;
+	scene_data.opaque_prepass_threshold = src->opaque_prepass_threshold;
+	scene_data.time = src->time;
+	scene_data.time_step = src->time_step;
+
+	RenderDataRD render_data;
+	render_data.scene_data = &scene_data;
+	render_data.cluster_size = 1;
+	render_data.cluster_max_elements = 32;
+	render_data.instances = &editor_selection_instances;
+
+	_update_render_base_uniform_set();
+	uint32_t uniform_buffer_index = _setup_environment(&render_data, true, internal_size, internal_size, Color(), false, false, false);
+
+	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, PASS_MODE_DEPTH);
+	render_list[RENDER_LIST_SECONDARY].sort_by_key();
+	_fill_instance_data(RENDER_LIST_SECONDARY);
+
+	RID rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_SECONDARY, nullptr, false, RID(), RendererRD::MaterialStorage::get_singleton()->samplers_rd_get_default(), uniform_buffer_index);
+
+	{
+		RenderListParameters render_list_params(render_list[RENDER_LIST_SECONDARY].elements.ptr(), render_list[RENDER_LIST_SECONDARY].element_info.ptr(), render_list[RENDER_LIST_SECONDARY].elements.size(), p_reverse_cull, PASS_MODE_DEPTH, 0, true, false, rp_uniform_set, false, Vector2(), scene_data.lod_distance_multiplier, scene_data.screen_mesh_lod_threshold, 1, 0, scene_shader.default_specialization);
+		// Reverse Z: clearing to 0.0 means "nothing selected here".
+		_render_list_with_draw_list(&render_list_params, mask_fb, RD::DRAW_CLEAR_ALL, Vector<Color>(), 0.0f);
+	}
+
+	// The scene depth must be single-sampled to be read by the outline pass.
+	if (rb->get_msaa_3d() != RSE::VIEWPORT_MSAA_DISABLED) {
+		static const int texture_multisamples[RSE::VIEWPORT_MSAA_MAX] = { 1, 2, 4, 8 };
+		resolve_effects->resolve_depth(rb->get_depth_msaa(0), rb->get_depth_texture(0), internal_size, texture_multisamples[rb->get_msaa_3d()]);
+	}
+
+	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
+	RID target_fb = texture_storage->render_target_get_rd_framebuffer(rb->get_render_target());
+	if (target_fb.is_valid()) {
+		RendererRD::EditorSelectionOutline::Params params;
+		params.color = rb->editor_selection_outline_color;
+		params.width = rb->editor_selection_outline_width;
+		editor_selection_outline_effect->draw(mask, rb->get_depth_texture(0), target_fb, rb->get_target_size(), params);
+	}
+
+	RD::get_singleton()->draw_command_end_label();
+}
+#endif
 
 void RenderForwardClustered::_render_buffers_debug_draw(const RenderDataRD *p_render_data) {
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
@@ -5396,6 +5496,11 @@ RenderForwardClustered::RenderForwardClustered() {
 	_update_shader_quality_settings();
 	_update_global_pipeline_data_requirements_from_project();
 
+#ifdef TOOLS_ENABLED
+	editor_selection_page_pool.configure(64);
+	editor_selection_instances.set_page_pool(&editor_selection_page_pool);
+	editor_selection_outline_effect = memnew(RendererRD::EditorSelectionOutline);
+#endif
 	taa = memnew(RendererRD::TAA);
 	fsr2_effect = memnew(RendererRD::FSR2Effect);
 	ss_effects = memnew(RendererRD::SSEffects);
@@ -5406,6 +5511,15 @@ RenderForwardClustered::RenderForwardClustered() {
 }
 
 RenderForwardClustered::~RenderForwardClustered() {
+#ifdef TOOLS_ENABLED
+	if (editor_selection_outline_effect) {
+		memdelete(editor_selection_outline_effect);
+		editor_selection_outline_effect = nullptr;
+	}
+	editor_selection_instances.reset();
+	editor_selection_page_pool.reset();
+#endif
+
 	if (ss_effects != nullptr) {
 		memdelete(ss_effects);
 		ss_effects = nullptr;

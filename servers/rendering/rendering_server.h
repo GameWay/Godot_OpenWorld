@@ -610,6 +610,9 @@ public:
 	virtual void viewport_set_use_taa(RID p_viewport, bool p_use_taa) = 0;
 
 	virtual void viewport_set_use_debanding(RID p_viewport, bool p_use_debanding) = 0;
+	// OEngine: draw the editor selection outline in this viewport (editor only, Forward+).
+	virtual void viewport_set_editor_selection_outline(RID p_viewport, bool p_enabled) {}
+	virtual void viewport_set_editor_selection_outline_style(RID p_viewport, const Color &p_color, float p_width) {}
 
 	virtual void viewport_set_force_motion_vectors(RID p_viewport, bool p_force_motion_vectors) = 0;
 
@@ -778,6 +781,8 @@ public:
 	virtual void instance_geometry_set_lightmap(RID p_instance, RID p_lightmap, const Rect2 &p_lightmap_uv_scale, int p_lightmap_slice) = 0;
 	virtual void instance_geometry_set_lod_bias(RID p_instance, float p_lod_bias) = 0;
 	virtual void instance_geometry_set_transparency(RID p_instance, float p_transparency) = 0;
+	// OEngine: include this instance in the editor selection outline (editor only, Forward+).
+	virtual void instance_set_editor_selection_outline(RID p_instance, bool p_enabled) {}
 
 	virtual void instance_geometry_set_shader_parameter(RID p_instance, const StringName &, const Variant &p_value) = 0;
 	virtual Variant instance_geometry_get_shader_parameter(RID p_instance, const StringName &) const = 0;

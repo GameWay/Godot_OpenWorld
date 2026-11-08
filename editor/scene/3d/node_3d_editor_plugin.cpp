@@ -33,6 +33,7 @@
 #include "core/config/project_settings.h"
 #include "core/input/input.h"
 #include "core/math/geometry_3d.h"
+#include "scene/3d/visual_instance_3d.h"
 #include "core/math/math_funcs.h"
 #include "core/math/projection.h"
 #include "core/object/callable_mp.h"
@@ -2014,6 +2015,72 @@ void Node3DEditor::update_grid() {
 	}
 }
 
+void Node3DEditor::_update_selection_outline_style() {
+	const Color color = EDITOR_GET("editors/3d/selection_outline_color");
+	const float width = 2.0f * EDSCALE;
+	for (uint32_t i = 0; i < VIEWPORTS_COUNT; i++) {
+		if (viewports[i] && viewports[i]->get_viewport_node()) {
+			RS::get_singleton()->viewport_set_editor_selection_outline_style(viewports[i]->get_viewport_node()->get_viewport_rid(), color, width);
+		}
+	}
+}
+
+void Node3DEditor::_update_selection_outline() {
+	// Outline every visible geometry instance of the selected nodes and their children, like in UE.
+	static constexpr int MAX_OUTLINED_INSTANCES = 4096;
+
+	HashMap<RID, ObjectID> current;
+	LocalVector<Node *> stack;
+
+	const HashMap<ObjectID, Object *> &selection = editor_selection->get_selection();
+	for (const KeyValue<ObjectID, Object *> &E : selection) {
+		Node3D *sp = ObjectDB::get_instance<Node3D>(E.key);
+		if (sp && sp->is_inside_tree() && sp->is_visible_in_tree()) {
+			stack.push_back(sp);
+		}
+	}
+
+	while (!stack.is_empty() && current.size() < MAX_OUTLINED_INSTANCES) {
+		Node *node = stack[stack.size() - 1];
+		stack.resize(stack.size() - 1);
+
+		Node3D *node_3d = Object::cast_to<Node3D>(node);
+		if (node_3d && !node_3d->is_visible()) {
+			continue; // Hidden branch.
+		}
+
+		GeometryInstance3D *geometry = Object::cast_to<GeometryInstance3D>(node);
+		if (geometry && geometry->get_instance().is_valid()) {
+			current.insert(geometry->get_instance(), geometry->get_instance_id());
+		}
+
+		for (int i = 0; i < node->get_child_count(); i++) {
+			stack.push_back(node->get_child(i));
+		}
+	}
+
+	RenderingServer *rs = RenderingServer::get_singleton();
+
+	for (const KeyValue<RID, ObjectID> &E : selection_outline_instances) {
+		if (current.has(E.key)) {
+			continue;
+		}
+		// The node may have been freed together with its instance.
+		GeometryInstance3D *geometry = ObjectDB::get_instance<GeometryInstance3D>(E.value);
+		if (geometry && geometry->get_instance() == E.key) {
+			rs->instance_set_editor_selection_outline(E.key, false);
+		}
+	}
+
+	for (const KeyValue<RID, ObjectID> &E : current) {
+		if (!selection_outline_instances.has(E.key)) {
+			rs->instance_set_editor_selection_outline(E.key, true);
+		}
+	}
+
+	selection_outline_instances = current;
+}
+
 void Node3DEditor::_selection_changed() {
 	_refresh_menu_icons();
 
@@ -2571,6 +2638,7 @@ void Node3DEditor::_notification(int p_what) {
 			SceneTreeDock::get_singleton()->get_tree_editor()->connect("node_changed", callable_mp(this, &Node3DEditor::_refresh_menu_icons));
 			editor_selection->connect("selection_changed", callable_mp(this, &Node3DEditor::_selection_changed));
 
+			_update_selection_outline_style();
 			_update_preview_environment();
 
 #ifdef MODULE_TEXTURE_STREAMING_ENABLED
@@ -2593,6 +2661,7 @@ void Node3DEditor::_notification(int p_what) {
 		} break;
 
 		case NOTIFICATION_PROCESS: {
+			_update_selection_outline();
 			if (gizmo_bvh_needs_optimization) {
 				// Only call this once per frame and only call when dirty. This is very expensive.
 				gizmo_bvh.optimize_incremental(1);
@@ -2634,6 +2703,8 @@ void Node3DEditor::_notification(int p_what) {
 				}
 
 				gizmo_view_rotation_scale = GIZMO_CIRCLE_SIZE * (float)EDITOR_GET("editors/3d/view_plane_rotation_gizmo_scale");
+
+				_update_selection_outline_style();
 
 				// Update grid color by rebuilding grid.
 				_finish_grid();
