@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="DrawDebug" inherits="Object" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Immediate-mode debug drawing of lines, shapes and text, similar to the DrawDebug helpers of Unreal Engine.
+	</brief_description>
+	<description>
+		Singleton for quick visual debugging in 3D. Call its methods from anywhere (including [method Node._process], [method Node._physics_process], [code]@tool[/code] scripts and other threads):
+		[codeblock]
+		func _physics_process(delta):
+		    DrawDebug.sphere(global_position, 0.5, Color.GREEN)
+		    DrawDebug.arrow(global_position, global_position + velocity, Color.YELLOW)
+		    DrawDebug.text(global_position + Vector3.UP, "speed: %.1f" % velocity.length())
+		[/codeblock]
+		The lifetime of every primitive is controlled by its [code]duration[/code] argument: [code]0.0[/code] draws it for one frame (when called from a physics tick, until the next physics tick, so it does not flicker), a positive value draws it for that many seconds of real time, and a negative value keeps it until [method clear] or [method clear_persistent] is called.
+		When [code]depth_test[/code] is [code]false[/code], the primitive is drawn on top of all geometry.
+		All primitives are batched into four meshes (lines and triangles, depth-tested and on top) owned directly by the [RenderingServer]. Their vertex buffers work as a pool: they are updated in place every frame, grow to the next power of two when needed and shrink back after a long period of low usage, so drawing thousands of shapes every frame does not allocate nodes, resources or GPU buffers.
+		Drawing is enabled by default in debug builds and the editor. In release builds it is disabled unless [member ProjectSettings.debug/draw_debug/enabled_in_release_builds] is set; calls then do nothing.
+		[b]Note:[/b] Lines are always 1 pixel wide. Text is drawn as a 2D overlay of the main viewport (or the 3D editor viewports in the editor).
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="aabb">
+			<return type="void" />
+			<param index="0" name="aabb" type="AABB" />
+			<param index="1" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="2" name="duration" type="float" default="0.0" />
+			<param index="3" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws the wireframe of an [AABB].
+			</description>
+		</method>
+		<method name="arrow">
+			<return type="void" />
+			<param index="0" name="from" type="Vector3" />
+			<param index="1" name="to" type="Vector3" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<param index="5" name="head_size" type="float" default="0.0" />
+			<description>
+				Draws a line from [param from] to [param to] with an arrow head at [param to]. If [param head_size] is [code]0.0[/code] or less, it is 20% of the arrow length.
+			</description>
+		</method>
+		<method name="box">
+			<return type="void" />
+			<param index="0" name="center" type="Vector3" />
+			<param index="1" name="half_extents" type="Vector3" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws an axis-aligned wireframe box at [param center] with the given [param half_extents].
+			</description>
+		</method>
+		<method name="box_oriented">
+			<return type="void" />
+			<param index="0" name="transform" type="Transform3D" />
+			<param index="1" name="half_extents" type="Vector3" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a wireframe box with the given [param half_extents], positioned, rotated and scaled by [param transform].
+			</description>
+		</method>
+		<method name="camera_frustum">
+			<return type="void" />
+			<param index="0" name="camera" type="Camera3D" />
+			<param index="1" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="2" name="duration" type="float" default="0.0" />
+			<param index="3" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws the view frustum of a [Camera3D] that is inside the scene tree.
+			</description>
+		</method>
+		<method name="capsule">
+			<return type="void" />
+			<param index="0" name="from" type="Vector3" />
+			<param index="1" name="to" type="Vector3" />
+			<param index="2" name="radius" type="float" />
+			<param index="3" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<param index="6" name="segments" type="int" default="16" />
+			<description>
+				Draws a wireframe capsule whose hemisphere centers are [param from] and [param to].
+			</description>
+		</method>
+		<method name="circle">
+			<return type="void" />
+			<param index="0" name="center" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<param index="2" name="normal" type="Vector3" default="Vector3(0, 1, 0)" />
+			<param index="3" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<param index="6" name="segments" type="int" default="32" />
+			<description>
+				Draws a circle around [param center] in the plane perpendicular to [param normal].
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Removes every primitive, text and message, including persistent and timed ones.
+			</description>
+		</method>
+		<method name="clear_persistent">
+			<return type="void" />
+			<description>
+				Removes all persistent primitives, texts and messages (drawn with a negative [code]duration[/code]).
+			</description>
+		</method>
+		<method name="cone">
+			<return type="void" />
+			<param index="0" name="apex" type="Vector3" />
+			<param index="1" name="direction" type="Vector3" />
+			<param index="2" name="length" type="float" />
+			<param index="3" name="angle" type="float" default="0.5235988" />
+			<param index="4" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="5" name="duration" type="float" default="0.0" />
+			<param index="6" name="depth_test" type="bool" default="true" />
+			<param index="7" name="segments" type="int" default="16" />
+			<description>
+				Draws a wireframe cone from [param apex] along [param direction]. [param angle] is the half-angle of the cone in radians.
+			</description>
+		</method>
+		<method name="coordinate_system">
+			<return type="void" />
+			<param index="0" name="transform" type="Transform3D" />
+			<param index="1" name="scale" type="float" default="1.0" />
+			<param index="2" name="duration" type="float" default="0.0" />
+			<param index="3" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws the X (red), Y (green) and Z (blue) axes of [param transform], [param scale] units long (multiplied by the basis scale).
+			</description>
+		</method>
+		<method name="crosshair">
+			<return type="void" />
+			<param index="0" name="position" type="Vector3" />
+			<param index="1" name="size" type="float" default="0.5" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws three axis-aligned lines crossing at [param position], [param size] units long.
+			</description>
+		</method>
+		<method name="cylinder">
+			<return type="void" />
+			<param index="0" name="from" type="Vector3" />
+			<param index="1" name="to" type="Vector3" />
+			<param index="2" name="radius" type="float" />
+			<param index="3" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<param index="6" name="segments" type="int" default="16" />
+			<description>
+				Draws a wireframe cylinder between the centers of its caps [param from] and [param to].
+			</description>
+		</method>
+		<method name="frustum">
+			<return type="void" />
+			<param index="0" name="projection" type="Projection" />
+			<param index="1" name="transform" type="Transform3D" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a frustum described by [param projection], placed in the world with [param transform] (for a camera: its global transform).
+			</description>
+		</method>
+		<method name="get_pool_capacity" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="get_vertex_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="grid">
+			<return type="void" />
+			<param index="0" name="transform" type="Transform3D" />
+			<param index="1" name="cells" type="int" default="10" />
+			<param index="2" name="cell_size" type="float" default="1.0" />
+			<param index="3" name="color" type="Color" default="Color(0.5, 0.5, 0.5, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a square grid of [param cells] by [param cells] cells in the XZ plane of [param transform], centered on its origin.
+			</description>
+		</method>
+		<method name="line">
+			<return type="void" />
+			<param index="0" name="from" type="Vector3" />
+			<param index="1" name="to" type="Vector3" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a line between [param from] and [param to].
+			</description>
+		</method>
+		<method name="lines">
+			<return type="void" />
+			<param index="0" name="points" type="PackedVector3Array" />
+			<param index="1" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="2" name="duration" type="float" default="0.0" />
+			<param index="3" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws independent line segments: each pair of consecutive points in [param points] is one segment.
+			</description>
+		</method>
+		<method name="mesh">
+			<return type="void" />
+			<param index="0" name="mesh" type="Mesh" />
+			<param index="1" name="transform" type="Transform3D" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws the triangle edges of [param mesh] transformed by [param transform].
+			</description>
+		</method>
+		<method name="message">
+			<return type="void" />
+			<param index="0" name="text" type="String" />
+			<param index="1" name="color" type="Color" default="Color(1, 1, 1, 1)" />
+			<param index="2" name="duration" type="float" default="2.0" />
+			<param index="3" name="key" type="int" default="-1" />
+			<description>
+				Shows an on-screen text message in the top-left corner for [param duration] seconds (negative: until cleared, [code]0.0[/code]: one frame). If [param key] is [code]0[/code] or greater, a previous message with the same key is replaced instead of adding a new line, which is useful for values updated every frame.
+			</description>
+		</method>
+		<method name="plane">
+			<return type="void" />
+			<param index="0" name="plane" type="Plane" />
+			<param index="1" name="center" type="Vector3" default="Vector3(0, 0, 0)" />
+			<param index="2" name="size" type="float" default="2.0" />
+			<param index="3" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a square of [param size] units on [param plane], centered on the projection of [param center] onto it, with an arrow showing the plane normal.
+			</description>
+		</method>
+		<method name="point">
+			<return type="void" />
+			<param index="0" name="position" type="Vector3" />
+			<param index="1" name="size" type="float" default="0.1" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a point as a small solid cube of [param size] units.
+			</description>
+		</method>
+		<method name="polyline">
+			<return type="void" />
+			<param index="0" name="points" type="PackedVector3Array" />
+			<param index="1" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="2" name="duration" type="float" default="0.0" />
+			<param index="3" name="depth_test" type="bool" default="true" />
+			<param index="4" name="closed" type="bool" default="false" />
+			<description>
+				Draws a line strip through [param points]. If [param closed] is [code]true[/code], the last point is connected to the first.
+			</description>
+		</method>
+		<method name="ray">
+			<return type="void" />
+			<param index="0" name="origin" type="Vector3" />
+			<param index="1" name="direction" type="Vector3" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a line from [param origin] to [code]origin + direction[/code].
+			</description>
+		</method>
+		<method name="solid_aabb">
+			<return type="void" />
+			<param index="0" name="aabb" type="AABB" />
+			<param index="1" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="2" name="duration" type="float" default="0.0" />
+			<param index="3" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a filled [AABB].
+			</description>
+		</method>
+		<method name="solid_box">
+			<return type="void" />
+			<param index="0" name="center" type="Vector3" />
+			<param index="1" name="half_extents" type="Vector3" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a filled axis-aligned box at [param center] with the given [param half_extents].
+			</description>
+		</method>
+		<method name="solid_box_oriented">
+			<return type="void" />
+			<param index="0" name="transform" type="Transform3D" />
+			<param index="1" name="half_extents" type="Vector3" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a filled box with the given [param half_extents], positioned, rotated and scaled by [param transform].
+			</description>
+		</method>
+		<method name="solid_circle">
+			<return type="void" />
+			<param index="0" name="center" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<param index="2" name="normal" type="Vector3" default="Vector3(0, 1, 0)" />
+			<param index="3" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<param index="6" name="segments" type="int" default="32" />
+			<description>
+				Draws a filled disc around [param center] in the plane perpendicular to [param normal].
+			</description>
+		</method>
+		<method name="solid_mesh">
+			<return type="void" />
+			<param index="0" name="mesh" type="Mesh" />
+			<param index="1" name="transform" type="Transform3D" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws the triangles of [param mesh] transformed by [param transform] in a single color.
+			</description>
+		</method>
+		<method name="solid_plane">
+			<return type="void" />
+			<param index="0" name="plane" type="Plane" />
+			<param index="1" name="center" type="Vector3" default="Vector3(0, 0, 0)" />
+			<param index="2" name="size" type="float" default="2.0" />
+			<param index="3" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a filled square of [param size] units on [param plane], centered on the projection of [param center] onto it.
+			</description>
+		</method>
+		<method name="solid_sphere">
+			<return type="void" />
+			<param index="0" name="center" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<param index="5" name="segments" type="int" default="16" />
+			<description>
+				Draws a filled sphere.
+			</description>
+		</method>
+		<method name="solid_triangle">
+			<return type="void" />
+			<param index="0" name="a" type="Vector3" />
+			<param index="1" name="b" type="Vector3" />
+			<param index="2" name="c" type="Vector3" />
+			<param index="3" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="4" name="duration" type="float" default="0.0" />
+			<param index="5" name="depth_test" type="bool" default="true" />
+			<description>
+				Draws a filled triangle.
+			</description>
+		</method>
+		<method name="sphere">
+			<return type="void" />
+			<param index="0" name="center" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<param index="2" name="color" type="Color" default="Color(1, 0, 0, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="depth_test" type="bool" default="true" />
+			<param index="5" name="segments" type="int" default="16" />
+			<description>
+				Draws a wireframe sphere made of latitude and longitude lines. [param segments] is the number of longitude segments.
+			</description>
+		</method>
+		<method name="text">
+			<return type="void" />
+			<param index="0" name="position" type="Vector3" />
+			<param index="1" name="text" type="String" />
+			<param index="2" name="color" type="Color" default="Color(1, 1, 1, 1)" />
+			<param index="3" name="duration" type="float" default="0.0" />
+			<param index="4" name="font_size" type="int" default="16" />
+			<description>
+				Draws [param text] centered at the screen projection of [param position]. Text behind the camera is not drawn.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="enabled" type="bool" setter="set_enabled" getter="is_enabled" default="true">
+			If [code]false[/code], all drawing calls are ignored and everything currently drawn is cleared.
+		</member>
+	</members>
+</class>
