@@ -52,6 +52,15 @@
 				Calculates and returns all the vertex points of a convex shape defined by an array of [param planes].
 			</description>
 		</method>
+		<method name="get_closest_point_to_line">
+			<return type="Vector3" />
+			<param index="0" name="point" type="Vector3" />
+			<param index="1" name="line_point" type="Vector3" />
+			<param index="2" name="line_direction" type="Vector3" />
+			<description>
+				Returns the orthogonal projection of [param point] onto the infinite line through [param line_point] with direction [param line_direction]. The direction can have any length. If it is [constant Vector3.ZERO], returns [param line_point].
+			</description>
+		</method>
 		<method name="get_closest_point_to_segment">
 			<return type="Vector3" />
 			<param index="0" name="point" type="Vector3" />
@@ -78,6 +87,24 @@
 			<param index="3" name="q2" type="Vector3" />
 			<description>
 				Given the two 3D segments ([param p1], [param p2]) and ([param q1], [param q2]), finds those two points on the two segments that are closest to each other. Returns a [PackedVector3Array] that contains this point on ([param p1], [param p2]) as well the accompanying point on ([param q1], [param q2]).
+			</description>
+		</method>
+		<method name="get_distance_along_line">
+			<return type="float" />
+			<param index="0" name="point" type="Vector3" />
+			<param index="1" name="line_point" type="Vector3" />
+			<param index="2" name="line_direction" type="Vector3" />
+			<description>
+				Returns the distance from [param line_point] to the orthogonal projection of [param point] onto the infinite line, as computed by [method get_closest_point_to_line]. The result is nonnegative on either side of [param line_point]. If [param line_direction] is [constant Vector3.ZERO], returns [code]0.0[/code].
+			</description>
+		</method>
+		<method name="get_distance_to_line">
+			<return type="float" />
+			<param index="0" name="point" type="Vector3" />
+			<param index="1" name="line_point" type="Vector3" />
+			<param index="2" name="line_direction" type="Vector3" />
+			<description>
+				Returns the perpendicular distance from [param point] to the infinite line through [param line_point] with direction [param line_direction]. The closest point on the line is given by [method get_closest_point_to_line]. If [param line_direction] is [constant Vector3.ZERO], returns the distance to [param line_point].
 			</description>
 		</method>
 		<method name="get_triangle_barycentric_coords">

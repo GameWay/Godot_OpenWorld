@@ -330,6 +330,30 @@ inline bool segment_intersects_convex(const Vector3 &p_from, const Vector3 &p_to
 	return true;
 }
 
+inline Vector3 project_line_offset(const Vector3 &p_offset, const Vector3 &p_line_direction) {
+	const Vector3 absolute_direction = p_line_direction.abs();
+	const real_t scale = absolute_direction[absolute_direction.max_axis_index()];
+	if (scale == 0) {
+		return Vector3();
+	}
+
+	// Keep the squared length away from underflow and overflow.
+	return p_offset.project(p_line_direction / scale);
+}
+
+inline Vector3 get_closest_point_to_line(const Vector3 &p_point, const Vector3 &p_line_point, const Vector3 &p_line_direction) {
+	return p_line_point + project_line_offset(p_point - p_line_point, p_line_direction);
+}
+
+inline real_t get_distance_to_line(const Vector3 &p_point, const Vector3 &p_line_point, const Vector3 &p_line_direction) {
+	const Vector3 offset = p_point - p_line_point;
+	return (offset - project_line_offset(offset, p_line_direction)).length();
+}
+
+inline real_t get_distance_along_line(const Vector3 &p_point, const Vector3 &p_line_point, const Vector3 &p_line_direction) {
+	return project_line_offset(p_point - p_line_point, p_line_direction).length();
+}
+
 inline Vector3 get_closest_point_to_segment(const Vector3 &p_point, const Vector3 &p_segment_a, const Vector3 &p_segment_b) {
 	Vector3 p = p_point - p_segment_a;
 	Vector3 n = p_segment_b - p_segment_a;

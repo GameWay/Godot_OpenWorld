@@ -1214,6 +1214,18 @@ Vector<Vector3> Geometry3D::get_closest_points_between_segments(const Vector3 &p
 	return r;
 }
 
+Vector3 Geometry3D::get_closest_point_to_line(const Vector3 &p_point, const Vector3 &p_line_point, const Vector3 &p_line_direction) {
+	return ::Geometry3D::get_closest_point_to_line(p_point, p_line_point, p_line_direction);
+}
+
+real_t Geometry3D::get_distance_to_line(const Vector3 &p_point, const Vector3 &p_line_point, const Vector3 &p_line_direction) {
+	return ::Geometry3D::get_distance_to_line(p_point, p_line_point, p_line_direction);
+}
+
+real_t Geometry3D::get_distance_along_line(const Vector3 &p_point, const Vector3 &p_line_point, const Vector3 &p_line_direction) {
+	return ::Geometry3D::get_distance_along_line(p_point, p_line_point, p_line_direction);
+}
+
 Vector3 Geometry3D::get_closest_point_to_segment(const Vector3 &p_point, const Vector3 &p_a, const Vector3 &p_b) {
 	return ::Geometry3D::get_closest_point_to_segment(p_point, p_a, p_b);
 }
@@ -1302,6 +1314,9 @@ void Geometry3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_closest_points_between_segments", "p1", "p2", "q1", "q2"), &Geometry3D::get_closest_points_between_segments);
 
 	ClassDB::bind_method(D_METHOD("get_closest_point_to_segment", "point", "s1", "s2"), &Geometry3D::get_closest_point_to_segment);
+	ClassDB::bind_method(D_METHOD("get_closest_point_to_line", "point", "line_point", "line_direction"), &Geometry3D::get_closest_point_to_line);
+	ClassDB::bind_method(D_METHOD("get_distance_to_line", "point", "line_point", "line_direction"), &Geometry3D::get_distance_to_line);
+	ClassDB::bind_method(D_METHOD("get_distance_along_line", "point", "line_point", "line_direction"), &Geometry3D::get_distance_along_line);
 
 	ClassDB::bind_method(D_METHOD("get_closest_point_to_segment_uncapped", "point", "s1", "s2"), &Geometry3D::get_closest_point_to_segment_uncapped);
 
