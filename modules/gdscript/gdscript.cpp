@@ -748,6 +748,10 @@ Error GDScript::reload(bool p_keep_state) {
 		return OK;
 	}
 	reloading = true;
+#ifdef TOOLS_ENABLED
+	// Discard names left by a previous reload which failed before assigning export defaults.
+	reload_members_without_default.clear();
+#endif
 
 	bool has_instances;
 	{
@@ -915,12 +919,55 @@ Error GDScript::reload(bool p_keep_state) {
 	if (p_keep_state) {
 		// Update the properties in the inspector.
 		update_exports();
+		_assign_export_defaults_to_reloaded_members();
 	}
+	reload_members_without_default.clear();
 #endif
 
 	reloading = false;
 	return OK;
 }
+
+#ifdef TOOLS_ENABLED
+bool GDScript::_make_member_value_from_default(const GDScriptDataType &p_type, const Variant &p_default, Variant &r_value) {
+	Variant value = p_default.duplicate(true);
+	// Container default values may be untyped; give them the member's element types.
+	if (p_type.has_container_element_types()) {
+		if (value.get_type() == Variant::ARRAY) {
+			Array typed_array = GDScriptHelper::construct_empty_value_for_data_type(p_type);
+			typed_array.assign(value);
+			value = typed_array;
+		} else if (value.get_type() == Variant::DICTIONARY) {
+			Dictionary typed_dictionary = GDScriptHelper::construct_empty_value_for_data_type(p_type);
+			typed_dictionary.assign(value);
+			value = typed_dictionary;
+		}
+	}
+	if (!p_type.is_type(value, false)) {
+		return false;
+	}
+	r_value = value;
+	return true;
+}
+
+void GDScript::_assign_export_defaults_to_reloaded_members() {
+	// Exported members added by hot reload whose initializer the compiler did not fold
+	// (for example typed container literals) still have an empty value. Use the default
+	// value the inspector compares against, so saving the scene does not store the empty value.
+	for (const StringName &member_name : reload_members_without_default) {
+		const MemberInfo *member = member_indices.getptr(member_name);
+		const Variant *default_value = member_default_values_cache.getptr(member_name);
+		if (member == nullptr || default_value == nullptr) {
+			continue;
+		}
+		for (GDScriptInstance &instance : instances) {
+			if (member->index < (int)instance.members.size()) {
+				_make_member_value_from_default(member->data_type, *default_value, instance.members[member->index]);
+			}
+		}
+	}
+}
+#endif
 
 ScriptLanguage *GDScript::get_language() const {
 	return GDScriptLanguage::get_singleton();
@@ -2079,6 +2126,19 @@ void GDScriptInstance::reload_members() {
 				new_members[E.value.index] = value;
 			}
 		}
+
+#ifdef TOOLS_ENABLED
+		if (!member_value_assigned) {
+			// A member added by hot reload has no previous value. Its initializer is not run here,
+			// so use the constant initializer to keep the instance consistent with the default value.
+			const Variant *default_value = script->member_default_values.getptr(E.key);
+			member_value_assigned = default_value != nullptr && GDScript::_make_member_value_from_default(E.value.data_type, *default_value, new_members[E.value.index]);
+		}
+		if (!member_value_assigned) {
+			// Retried with the export default values once GDScript::reload() updates them.
+			script->reload_members_without_default.insert(E.key);
+		}
+#endif
 
 		if (!member_value_assigned) {
 			new_members[E.value.index] = GDScriptHelper::construct_empty_value_for_data_type(E.value.data_type);

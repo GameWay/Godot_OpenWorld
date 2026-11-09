@@ -143,6 +143,10 @@ private:
 	HashMap<StringName, Variant> member_default_values;
 	List<PropertyInfo> members_cache;
 	HashMap<StringName, Variant> member_default_values_cache;
+	// Members added by hot reload which reload_members() could not initialize from a constant initializer.
+	HashSet<StringName> reload_members_without_default;
+	static bool _make_member_value_from_default(const GDScriptDataType &p_type, const Variant &p_default, Variant &r_value);
+	void _assign_export_defaults_to_reloaded_members();
 	Ref<GDScript> base_cache;
 	HashSet<ObjectID> inheriters_cache;
 	bool source_changed_cache = false;
