@@ -53,6 +53,7 @@
 #include "editor/gui/create_dialog.h"
 #include "editor/gui/directory_create_dialog.h"
 #include "editor/gui/editor_dir_dialog.h"
+#include "editor/gui/editor_file_dialog.h"
 #include "editor/import/3d/scene_import_settings.h"
 #include "editor/inspector/editor_context_menu_plugin.h"
 #include "editor/inspector/editor_resource_preview.h"
@@ -2843,6 +2844,18 @@ void FileSystemDock::_file_option(int p_option, const Vector<String> &p_selected
 			make_dir_dialog->popup_centered();
 		} break;
 
+		case FILE_MENU_REIMPORT_FROM_FILE: {
+			if (p_selected.size() != 1 || p_selected[0].ends_with("/")) {
+				return;
+			}
+			reimport_from_file_path = p_selected[0];
+			reimport_from_file_dialog->clear_filters();
+			reimport_from_file_dialog->add_filter("*." + reimport_from_file_path.get_extension());
+			reimport_from_file_dialog->set_current_dir(ProjectSettings::get_singleton()->globalize_path(reimport_from_file_path.get_base_dir()));
+			reimport_from_file_dialog->set_current_file("");
+			reimport_from_file_dialog->popup_file_dialog();
+		} break;
+
 		case FILE_MENU_REIMPORT: {
 			ImportDock::get_singleton()->reimport_resources(p_selected);
 		} break;
@@ -3824,6 +3837,9 @@ void FileSystemDock::_file_and_folders_fill_popup(PopupMenu *p_popup, const Vect
 
 			if (resource_valid) {
 				p_popup->add_icon_item(get_editor_theme_icon(SNAME("Load")), TTRC("Reimport"), FILE_MENU_REIMPORT);
+				if (single_path) {
+					p_popup->add_icon_item(get_editor_theme_icon(SNAME("Load")), TTRC("Reimport from File..."), FILE_MENU_REIMPORT_FROM_FILE);
+				}
 			}
 		}
 	}
@@ -4646,6 +4662,47 @@ void FileSystemDock::_on_open_editor_settings_file_exts() {
 	ed_settings->set_current_section("docks/filesystem");
 }
 
+void FileSystemDock::_reimport_from_file_selected(const String &p_path) {
+	const String target = reimport_from_file_path;
+	reimport_from_file_path.clear();
+	if (target.is_empty()) {
+		return;
+	}
+	if (EditorFileSystem::get_singleton()->is_scanning() || EditorFileSystem::get_singleton()->is_importing()) {
+		EditorNode::get_singleton()->show_warning(TTR("Please wait for the filesystem scan or import to finish, then try again."));
+		return;
+	}
+	if (!FileAccess::exists(target) || !FileAccess::exists(target + ".import")) {
+		EditorNode::get_singleton()->show_warning(TTR("The file to reimport no longer exists or is no longer imported."));
+		return;
+	}
+	if (p_path.get_extension().nocasecmp_to(target.get_extension()) != 0) {
+		EditorNode::get_singleton()->show_warning(TTR("The replacement file must have the same extension as the file to reimport."));
+		return;
+	}
+
+	const String absolute_target = ProjectSettings::get_singleton()->globalize_path(target);
+	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	if (!da->is_equivalent(p_path, absolute_target)) {
+		// Stage the copy first so a read/copy failure leaves the original source intact.
+		const String temporary_path = absolute_target + "." + itos(OS::get_singleton()->get_ticks_usec()) + ".tmp";
+		Error err = DirAccess::copy_absolute(p_path, temporary_path);
+		if (err == OK) {
+			err = DirAccess::rename_absolute(temporary_path, absolute_target);
+		}
+		if (err != OK) {
+			DirAccess::remove_absolute(temporary_path);
+			EditorNode::get_singleton()->show_warning(vformat(TTR("Could not replace the source file: %s"), TTR(error_names[err])));
+			return;
+		}
+	}
+
+	// Keep the existing .import metadata, including the UID and importer options.
+	Vector<String> paths;
+	paths.push_back(target);
+	ImportDock::get_singleton()->reimport_resources(paths);
+}
+
 void FileSystemDock::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("navigate_to_path", "path"), &FileSystemDock::navigate_to_path);
 
@@ -4899,6 +4956,13 @@ FileSystemDock::FileSystemDock() {
 	remove_dialog->connect("file_removed", callable_mp(this, &FileSystemDock::_file_removed));
 	remove_dialog->connect("folder_removed", callable_mp(this, &FileSystemDock::_folder_removed));
 	add_child(remove_dialog);
+
+	reimport_from_file_dialog = memnew(EditorFileDialog);
+	reimport_from_file_dialog->set_title(TTR("Reimport from File"));
+	reimport_from_file_dialog->set_access(EditorFileDialog::ACCESS_FILESYSTEM);
+	reimport_from_file_dialog->set_file_mode(EditorFileDialog::FILE_MODE_OPEN_FILE);
+	reimport_from_file_dialog->connect("file_selected", callable_mp(this, &FileSystemDock::_reimport_from_file_selected));
+	add_child(reimport_from_file_dialog);
 
 	move_dialog = memnew(EditorDirDialog);
 	add_child(move_dialog);

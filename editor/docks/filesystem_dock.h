@@ -50,6 +50,7 @@ class DependencyEditor;
 class DependencyEditorOwners;
 class DependencyRemoveDialog;
 class EditorDirDialog;
+class EditorFileDialog;
 class HBoxContainer;
 class LineEdit;
 class ProgressBar;
@@ -123,6 +124,7 @@ private:
 		FILE_MENU_REMOVE,
 		FILE_MENU_DUPLICATE,
 		FILE_MENU_REIMPORT,
+		FILE_MENU_REIMPORT_FROM_FILE,
 		FILE_MENU_NEW,
 		FILE_MENU_SHOW_IN_EXPLORER,
 		FILE_MENU_OPEN_EXTERNAL,
@@ -200,6 +202,10 @@ private:
 	DependencyEditor *deps_editor = nullptr;
 	DependencyEditorOwners *owners_editor = nullptr;
 	DependencyRemoveDialog *remove_dialog = nullptr;
+
+	EditorFileDialog *reimport_from_file_dialog = nullptr;
+	String reimport_from_file_path;
+	void _reimport_from_file_selected(const String &p_path);
 
 	EditorDirDialog *move_dialog = nullptr;
 	DirectoryCreateDialog *make_dir_dialog = nullptr;
