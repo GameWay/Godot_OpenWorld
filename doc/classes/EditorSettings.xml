@@ -1914,7 +1914,7 @@
 			How many files have uncommitted changes, in the editor's toolbar; click it to open Changes on the Git tab. Its tooltip shows the branch and the commits to push and pull.
 		</member>
 		<member name="version_control/vc_git/enabled" type="bool" setter="" getter="">
-			The editor's git client: the Git tab, git status in the FileSystem and Scene docks, the Inspector and the script editor, and Local History. Takes effect after a restart.
+			The editor's git client: the Git tab, git status in the FileSystem and Scene docks, the Inspector and the script editor, and Local History. Turning it off removes all of it and stops its background work right away; turning it on brings it back without a restart.
 		</member>
 		<member name="version_control/vc_git/history/absolute_dates" type="bool" setter="" getter="">
 			Dates in Git Log like [code]2026-10-19 14:05[/code] instead of "3 hours ago".

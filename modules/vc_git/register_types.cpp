@@ -59,15 +59,16 @@ static const char *VC_GIT_MASKS_SETTING = "editor/version_control/vc_git/auto_ad
 static const char *VC_GIT_PROJECT_ADDON = "res://addons/git/plugin.cfg";
 static const char *VC_GIT_COMPLETE_MARKER = ".complete";
 
-static void _vc_git_def(const String &p_name, const Variant &p_default, PropertyHint p_hint = PROPERTY_HINT_NONE, const String &p_hint_string = String(), bool p_restart = false) {
+static void _vc_git_def(const String &p_name, const Variant &p_default, PropertyHint p_hint = PROPERTY_HINT_NONE, const String &p_hint_string = String(), bool p_basic = false) {
 	const String path = String(VC_GIT_SETTINGS) + p_name;
-	_EDITOR_DEF(path, p_default, p_restart);
+	_EDITOR_DEF(path, p_default, false, p_basic);
 	if (p_hint != PROPERTY_HINT_NONE) {
 		EditorSettings::get_singleton()->add_property_hint(PropertyInfo(p_default.get_type(), path, p_hint, p_hint_string));
 	}
 }
 
 static void _vc_git_register_settings() {
+	// Shown without Advanced Settings; applied right away (see _vc_git_apply_enabled()).
 	_vc_git_def("enabled", true, PROPERTY_HINT_NONE, String(), true);
 
 	_vc_git_def("changes/auto_stage", true);
@@ -172,12 +173,10 @@ static String _vc_git_extract() {
 	return dir;
 }
 
-static void _vc_git_start() {
-	_vc_git_register_settings();
-	if (!bool(EDITOR_GET(VC_GIT_ENABLED_SETTING))) {
-		return;
-	}
+// The running plugin; null while vc_git is off. An ObjectID, since the editor frees its plugins on exit.
+static ObjectID vc_git_plugin;
 
+static void _vc_git_add_plugin() {
 	if (ProjectSettings::get_singleton()->has_setting("editor_plugins/enabled")) {
 		const PackedStringArray enabled = GLOBAL_GET("editor_plugins/enabled");
 		if (enabled.has(VC_GIT_PROJECT_ADDON)) {
@@ -202,7 +201,36 @@ static void _vc_git_start() {
 	// What the scripts can't reach from GDScript: Editor Settings opened at vc_git's section.
 	ep->set_meta("vc_git_open_settings", callable_mp_static(&_vc_git_open_settings));
 	ep->set_script(scr);
-	EditorNode::add_editor_plugin(ep);
+	EditorNode::add_editor_plugin(ep, true);
+	vc_git_plugin = ep->get_instance_id();
+}
+
+static void _vc_git_remove_plugin() {
+	EditorPlugin *ep = Object::cast_to<EditorPlugin>(ObjectDB::get_instance(vc_git_plugin));
+	vc_git_plugin = ObjectID();
+	if (ep == nullptr) {
+		return;
+	}
+	// Like disabling an add-on: the plugin's _exit_tree() takes its UI and background work down.
+	EditorNode::remove_editor_plugin(ep, true);
+	memdelete(ep);
+}
+
+// Turns vc_git on or off to match version_control/vc_git/enabled, without restarting the editor.
+static void _vc_git_apply_enabled() {
+	const bool enabled = EDITOR_GET(VC_GIT_ENABLED_SETTING);
+	const bool running = ObjectDB::get_instance(vc_git_plugin) != nullptr;
+	if (enabled && !running) {
+		_vc_git_add_plugin();
+	} else if (!enabled && running) {
+		_vc_git_remove_plugin();
+	}
+}
+
+static void _vc_git_start() {
+	_vc_git_register_settings();
+	EditorSettings::get_singleton()->connect(SNAME("settings_changed"), callable_mp_static(&_vc_git_apply_enabled));
+	_vc_git_apply_enabled();
 }
 
 void initialize_vc_git_module(ModuleInitializationLevel p_level) {
