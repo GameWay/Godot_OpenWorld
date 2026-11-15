@@ -1882,7 +1882,8 @@ void GI::SDFGI::pre_process_gi(const Transform3D &p_transform, RenderDataRD *p_r
 	sdfgi_data.occlusion_clamp[0] = occlusion_clamp;
 	sdfgi_data.occlusion_clamp[1] = occlusion_clamp;
 	sdfgi_data.occlusion_clamp[2] = occlusion_clamp;
-	sdfgi_data.sky_reflections = gi->sdfgi_sky_reflections;
+	// OEngine: read every frame so the value can be toggled while the game runs.
+	sdfgi_data.sky_reflections = GLOBAL_GET_CACHED(bool, "rendering/global_illumination/sdfgi/sky_reflections") ? 1 : 0;
 	sdfgi_data.normal_bias = (normal_bias / csize) * sdfgi_data.cascade_probe_size[0];
 
 	//vec2 tex_pixel_size = 1.0 / vec2(ivec2( (OCT_SIZE+2) * params.probe_axis_size * params.probe_axis_size, (OCT_SIZE+2) * params.probe_axis_size ) );
@@ -2394,7 +2395,10 @@ void GI::SDFGI::render_region(Ref<RenderSceneBuffersRD> p_render_buffers, int p_
 				push_constant.occlusion_index = i;
 				RD::get_singleton()->compute_list_set_push_constant(compute_list, &push_constant, sizeof(SDFGIShader::PreprocessPushConstant));
 
-				Vector3i groups = Vector3i(probe_size + 1, probe_size + 1, probe_size + 1) - offset; //if offset, it's one less probe per axis to compute
+				// OEngine: one group per pair of probe intervals (a region spans 2 * OCCLUSION_SIZE cells).
+				// Upstream used probe_size + 1, which matches only for the default divisor of 16.
+				const int32_t occlusion_regions = gi->sdfgi_probe_divisor / 2 + 1;
+				Vector3i groups = Vector3i(occlusion_regions, occlusion_regions, occlusion_regions) - offset; //if offset, it's one less probe per axis to compute
 				RD::get_singleton()->compute_list_dispatch(compute_list, groups.x, groups.y, groups.z);
 			}
 			RD::get_singleton()->compute_list_add_barrier(compute_list);
@@ -3543,7 +3547,6 @@ GI::GI() {
 	sdfgi_ray_count = RSE::EnvironmentSDFGIRayCount(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/probe_ray_count")), 0, int32_t(RSE::ENV_SDFGI_RAY_COUNT_MAX - 1)));
 	sdfgi_frames_to_converge = RSE::EnvironmentSDFGIFramesToConverge(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/frames_to_converge")), 0, int32_t(RSE::ENV_SDFGI_CONVERGE_MAX - 1)));
 	sdfgi_frames_to_update_light = RSE::EnvironmentSDFGIFramesToUpdateLight(CLAMP(int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/frames_to_update_lights")), 0, int32_t(RSE::ENV_SDFGI_UPDATE_LIGHT_MAX - 1)));
-	sdfgi_sky_reflections = GLOBAL_GET("rendering/global_illumination/sdfgi/sky_reflections");
 	sdfgi_probe_divisor = int32_t(GLOBAL_GET("rendering/global_illumination/sdfgi/probe_density")) == 1 ? 32 : 16;
 }
 

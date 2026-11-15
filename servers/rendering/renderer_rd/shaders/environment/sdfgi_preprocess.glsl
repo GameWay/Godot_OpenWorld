@@ -507,8 +507,12 @@ void main() {
 #define OCC_HALF_SIZE (OCCLUSION_SIZE / 2)
 
 	ivec3 local_ofs = ivec3(uvec3(invocation_idx % OCC_HALF_SIZE, (invocation_idx % (OCC_HALF_SIZE * OCC_HALF_SIZE)) / OCC_HALF_SIZE, invocation_idx / (OCC_HALF_SIZE * OCC_HALF_SIZE))) * 4;
+	// OEngine: each thread owns a 4x4x4 block of the region. With a higher probe density
+	// (OCCLUSION_SIZE 4) the region needs fewer than the 64 threads of the group; the extra
+	// threads must not touch cells outside it (shared memory and other regions' occlusion).
+	bool occ_thread_active = invocation_idx < uint(OCC_HALF_SIZE * OCC_HALF_SIZE * OCC_HALF_SIZE);
 
-	if (!region_out_of_bounds) {
+	if (!region_out_of_bounds && occ_thread_active) {
 		for (int i = 0; i < 16; i++) { //skip x, so it can be packed
 
 			ivec3 offset = local_ofs + ((ivec3(i * 4) >> ivec3(0, 2, 4)) & ivec3(3, 3, 3));
@@ -543,12 +547,14 @@ void main() {
 			if (invocation_idx < group_size_offset[occ_step].x) {
 				uint pv = group_pos[group_size_offset[occ_step].y + invocation_idx];
 				ivec3 proc_abs = (ivec3(int(pv)) >> ivec3(0, 8, 16)) & ivec3(0xFF);
+				// OEngine: the step table is built for OCCLUSION_SIZE 8; skip cells outside smaller octants.
+				bool occ_in_octant = all(lessThan(proc_abs, ivec3(OCCLUSION_SIZE)));
 
 				if (shrink) {
 					proc_abs = ivec3(OCCLUSION_SIZE) - proc_abs - ivec3(1);
 				}
 
-				for (int i = 0; i < 8; i++) {
+				for (int i = 0; occ_in_octant && i < 8; i++) {
 					ivec3 bits = ((ivec3(i) >> ivec3(0, 1, 2)) & ivec3(1, 1, 1));
 					ivec3 proc_sign = bits * 2 - 1;
 					ivec3 local_offset = ivec3(OCCLUSION_SIZE) + proc_abs * proc_sign - (ivec3(1) - bits);
@@ -659,7 +665,7 @@ void main() {
 #if 1
 	//bias solid voxels away
 
-	if (!region_out_of_bounds) {
+	if (!region_out_of_bounds && occ_thread_active) {
 		for (int i = 0; i < 64; i++) {
 			ivec3 local_offset = local_ofs + ((ivec3(i) >> ivec3(0, 2, 4)) & ivec3(3, 3, 3));
 			ivec3 offset = region_offset + local_offset;
@@ -799,7 +805,7 @@ void main() {
 	barrier();
 
 	// There are no more barriers after this, so we can early return.
-	if (region_out_of_bounds) {
+	if (region_out_of_bounds || !occ_thread_active) {
 		return;
 	}
 

@@ -710,7 +710,6 @@ public:
 	RSE::EnvironmentSDFGIRayCount sdfgi_ray_count = RSE::ENV_SDFGI_RAY_COUNT_16;
 	RSE::EnvironmentSDFGIFramesToConverge sdfgi_frames_to_converge = RSE::ENV_SDFGI_CONVERGE_IN_30_FRAMES;
 	RSE::EnvironmentSDFGIFramesToUpdateLight sdfgi_frames_to_update_light = RSE::ENV_SDFGI_UPDATE_LIGHT_IN_4_FRAMES;
-	bool sdfgi_sky_reflections = true;
 	// OEngine: probe intervals per cascade axis (upstream 16). 32 places a probe every 4 cells
 	// instead of 8, so narrow pits stay lit in coarser cascades, at extra integration cost.
 	int32_t sdfgi_probe_divisor = 16;
