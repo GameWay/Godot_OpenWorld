@@ -7419,6 +7419,13 @@ void EditorNode::preload_reimporting_with_path_in_edited_scenes(const List<Strin
 	progress.step(TTR("Preparation done."), editor_data.get_edited_scene_count());
 }
 
+void EditorNode::reload_instances_of_scenes(const List<String> &p_scenes) {
+	scenes_modification_table.clear();
+	preload_reimporting_with_path_in_edited_scenes(p_scenes);
+	reload_instances_with_path_in_edited_scenes();
+	scenes_modification_table.clear();
+}
+
 void EditorNode::reload_instances_with_path_in_edited_scenes() {
 	if (scenes_modification_table.is_empty()) {
 		return;

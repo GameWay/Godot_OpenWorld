@@ -51,6 +51,7 @@
 #include "editor/file_system/editor_paths.h"
 #include "editor/gui/editor_file_dialog.h"
 #include "editor/gui/editor_quick_open_dialog.h"
+#include "editor/gui/editor_toaster.h"
 #include "editor/inspector/editor_context_menu_plugin.h"
 #include "editor/inspector/multi_node_edit.h"
 #include "editor/scene/3d/node_3d_editor_plugin.h"
@@ -1450,6 +1451,25 @@ void SceneTreeDock::_tool_selected(int p_tool, bool p_confirm_override) {
 			undo_redo->add_do_method(scene_tree, "update_tree");
 			undo_redo->add_undo_method(scene_tree, "update_tree");
 			undo_redo->commit_action();
+		} break;
+		case TOOL_SCENE_APPLY_TO_SOURCE: {
+			if (!profile_allow_editing) {
+				break;
+			}
+
+			const List<Node *> selection = editor_selection->get_full_selected_node_list();
+			if (selection.size() != 1 || !_validate_no_foreign_selected(selection)) {
+				break;
+			}
+			Node *node = selection.front()->get();
+			Node *root = EditorNode::get_singleton()->get_edited_scene();
+			if (!node || !root || node == root || !node->is_instance() || !root->is_editable_instance(node)) {
+				break;
+			}
+
+			apply_to_source_instance = node->get_instance_id();
+			apply_to_source_confirm->set_text(vformat(TTR("Write the edits made inside \"%s\" into \"%s\" as its new defaults?\n\nEvery instance of that scene without its own overrides will change.\nProperties of the instance root itself (position, etc.) stay local to this scene.\n\nThe scene file is overwritten (No Undo!), and the undo history of open scenes that use it is cleared."), node->get_name(), node->get_scene_file_path()));
+			apply_to_source_confirm->popup_centered();
 		} break;
 		case TOOL_SCENE_OPEN: {
 			const List<Node *> selection = editor_selection->get_top_selected_node_list();
@@ -4340,6 +4360,13 @@ void SceneTreeDock::_tree_rmb(const Vector2 &p_menu_pos) {
 					menu->set_item_indeterminate(-1, true);
 				}
 
+				// OEngine: push Editable Children edits back into the instanced scene file.
+				if (full_selection_list.size() == 1) {
+					menu->add_item(TTR("Apply Overrides to Source Scene"), TOOL_SCENE_APPLY_TO_SOURCE);
+					menu->set_item_tooltip(-1, TTR("Write the edits made to this instance's children, and the nodes added inside it, into its scene file as the new defaults.\nRequires \"Editable Children\"."));
+					menu->set_item_disabled(-1, editable_state != STATE_CHECKED);
+				}
+
 				END_SECTION()
 			}
 			is_tool_scene_open_available = true;
@@ -5195,6 +5222,236 @@ void SceneTreeDock::_gather_resources(Node *p_node, List<Pair<Ref<Resource>, Nod
 	}
 }
 
+// OEngine: Apply Overrides to Source Scene.
+// The instance's scene file is instantiated in its own edit state, the instance's overrides and the
+// nodes added inside it are copied onto that copy, and it is packed back into the same file. Then
+// the open scenes recreate their instances of it, keeping their own overrides as before.
+namespace {
+
+// A node inside a nested instance needs every instance above it (up to the source root)
+// to have editable children, or the override would not be saved.
+void _oe_mark_editable_chain(Node *p_source_root, Node *p_node) {
+	Node *owner = p_node ? p_node->get_owner() : nullptr;
+	while (owner && owner != p_source_root) {
+		p_source_root->set_editable_instance(owner, true);
+		owner = owner->get_owner();
+	}
+}
+
+// A built-in resource of another file (e.g. a material made inside the edited scene) must become
+// the source scene's own copy; otherwise both files would claim the same sub-resource.
+Variant _oe_value_for_source(const Variant &p_value, const String &p_source_path) {
+	if (p_value.get_type() != Variant::OBJECT) {
+		return p_value;
+	}
+	Ref<Resource> resource = p_value;
+	if (resource.is_valid() && resource->get_path().contains("::") && resource->get_path().get_slice("::", 0) != p_source_path) {
+		return resource->duplicate(true);
+	}
+	return p_value;
+}
+
+// Owners of a node duplicated from the edited scene into the source scene: what belonged to the
+// edited scene now belongs to the source root; nodes of instances inside the copy keep their own root.
+void _oe_assign_owners(Node *p_original, Node *p_copy, Node *p_original_top, Node *p_copy_top, Node *p_edited_root, Node *p_source_root) {
+	Node *owner = p_original->get_owner();
+	if (owner == p_edited_root) {
+		p_copy->set_owner(p_source_root);
+	} else if (owner && (owner == p_original_top || p_original_top->is_ancestor_of(owner))) {
+		Node *mapped = p_copy_top->get_node_or_null(p_original_top->get_path_to(owner));
+		if (mapped) {
+			p_copy->set_owner(mapped);
+		}
+	}
+	if (p_original->is_instance() && p_edited_root->is_editable_instance(p_original)) {
+		p_source_root->set_editable_instance(p_copy, true);
+	}
+	for (int i = 0; i < p_original->get_child_count(); i++) {
+		Node *child = p_original->get_child(i);
+		Node *child_copy = p_copy->get_node_or_null(NodePath(String(child->get_name())));
+		if (child_copy) {
+			_oe_assign_owners(child, child_copy, p_original_top, p_copy_top, p_edited_root, p_source_root);
+		}
+	}
+}
+
+struct OEApplyContext {
+	EditorNode *editor = nullptr;
+	Node *edited_root = nullptr;
+	Node *instance = nullptr;
+	Node *source_root = nullptr;
+	String source_path;
+	List<Node *> added_nodes;
+	int applied = 0;
+	PackedStringArray skipped;
+};
+
+void _oe_collect_overrides(OEApplyContext &p_context, Node *p_node) {
+	for (int i = 0; i < p_node->get_child_count(); i++) {
+		Node *child = p_node->get_child(i);
+		if (p_context.editor->is_additional_node_in_scene(p_context.edited_root, p_context.instance, child)) {
+			// Its whole subtree is copied with it; ownerless transient nodes are not part of the scene.
+			if (child->get_owner() == p_context.edited_root) {
+				p_context.added_nodes.push_back(child);
+			}
+			continue;
+		}
+
+		const NodePath path = p_context.instance->get_path_to(child);
+		Node *source = p_context.source_root->get_node_or_null(path);
+		if (!source) {
+			p_context.skipped.push_back(String(path));
+			continue;
+		}
+
+		HashMap<StringName, Variant> modified = p_context.editor->get_modified_properties_for_node(child, false);
+		for (const KeyValue<StringName, Variant> &E : modified) {
+			Variant value = E.value;
+			// Node references come back as paths; resolve them inside the source scene.
+			if (value.get_type() == Variant::NODE_PATH && child->get(E.key).get_type() == Variant::OBJECT) {
+				Node *target = source->get_node_or_null(value);
+				if (!target) {
+					p_context.skipped.push_back(String(path) + ":" + String(E.key));
+					continue;
+				}
+				value = target;
+			}
+			source->set(E.key, _oe_value_for_source(value, p_context.source_path));
+			_oe_mark_editable_chain(p_context.source_root, source);
+			p_context.applied++;
+		}
+
+		List<Node::GroupInfo> groups;
+		child->get_groups(&groups);
+		for (const Node::GroupInfo &group : groups) {
+			if (group.persistent && !source->is_in_group(group.name)) {
+				source->add_to_group(group.name, true);
+				_oe_mark_editable_chain(p_context.source_root, source);
+				p_context.applied++;
+			}
+		}
+
+		_oe_collect_overrides(p_context, child);
+	}
+}
+
+} // namespace
+
+bool SceneTreeDock::_apply_instance_overrides_to_source(Node *p_instance, String &r_error, int &r_applied) {
+	EditorNode *editor = EditorNode::get_singleton();
+	EditorData &scene_data = EditorNode::get_editor_data();
+	Node *edited_root = editor->get_edited_scene();
+	const String source_path = p_instance->get_scene_file_path();
+	ERR_FAIL_COND_V(!edited_root || source_path.is_empty(), false);
+
+	const int open_idx = scene_data.get_edited_scene_from_path(source_path);
+	if (open_idx != -1 && EditorUndoRedoManager::get_singleton()->is_history_unsaved(scene_data.get_scene_history_id(open_idx))) {
+		r_error = vformat(TTR("\"%s\" is open with unsaved changes. Save or close it first."), source_path);
+		return false;
+	}
+
+	Ref<PackedScene> packed = ResourceLoader::load(source_path, "PackedScene");
+	if (packed.is_null()) {
+		r_error = vformat(TTR("Can't load \"%s\"."), source_path);
+		return false;
+	}
+	Node *source_root = packed->instantiate(PackedScene::GEN_EDIT_STATE_MAIN);
+	if (!source_root) {
+		r_error = vformat(TTR("Can't instantiate \"%s\"."), source_path);
+		return false;
+	}
+
+	OEApplyContext context;
+	context.editor = editor;
+	context.edited_root = edited_root;
+	context.instance = p_instance;
+	context.source_root = source_root;
+	context.source_path = source_path;
+	_oe_collect_overrides(context, p_instance);
+
+	for (Node *added : context.added_nodes) {
+		Node *parent = source_root->get_node_or_null(p_instance->get_path_to(added->get_parent()));
+		if (!parent) {
+			context.skipped.push_back(String(p_instance->get_path_to(added)));
+			continue;
+		}
+		Node *copy = added->duplicate(Node::DUPLICATE_DEFAULT);
+		copy->set_name(added->get_name());
+		parent->add_child(copy, true);
+		parent->move_child(copy, MIN(added->get_index(), parent->get_child_count() - 1));
+		_oe_assign_owners(added, copy, added, copy, edited_root, source_root);
+		_oe_mark_editable_chain(source_root, parent);
+		context.applied++;
+	}
+
+	if (context.applied == 0) {
+		memdelete(source_root);
+		r_error = TTR("This instance has no edits to apply.");
+		return false;
+	}
+
+	Ref<PackedScene> result;
+	result.instantiate();
+	Error err = result->pack(source_root);
+	memdelete(source_root);
+	if (err != OK) {
+		r_error = vformat(TTR("Couldn't pack \"%s\" (error %d)."), source_path, err);
+		return false;
+	}
+	int flags = ResourceSaver::FLAG_REPLACE_SUBRESOURCE_PATHS;
+	if (EDITOR_GET("filesystem/on_save/compress_binary_resources")) {
+		flags |= ResourceSaver::FLAG_COMPRESS;
+	}
+	err = ResourceSaver::save(result, source_path, flags);
+	if (err != OK) {
+		r_error = vformat(TTR("Couldn't save \"%s\" (error %d)."), source_path, err);
+		return false;
+	}
+	EditorFileSystem::get_singleton()->update_file(source_path);
+
+	// The added nodes now come from the scene file; keeping them here would duplicate them.
+	for (Node *added : context.added_nodes) {
+		if (added->get_parent()) {
+			added->get_parent()->remove_child(added);
+		}
+		added->queue_free();
+	}
+
+	const int edited_history = scene_data.get_current_edited_scene_history_id();
+	if (open_idx != -1) {
+		editor->reload_scene(source_path);
+	}
+	List<String> scenes;
+	scenes.push_back(source_path);
+	editor->reload_instances_of_scenes(scenes);
+	// Removed overrides and nodes must be saved, otherwise the next load would duplicate them.
+	EditorUndoRedoManager::get_singleton()->set_history_as_unsaved(edited_history);
+	scene_tree->update_tree();
+
+	if (!context.skipped.is_empty()) {
+		WARN_PRINT(vformat("Apply Overrides to Source Scene: skipped (not found in %s): %s", source_path, String(", ").join(context.skipped)));
+	}
+	r_applied = context.applied;
+	return true;
+}
+
+void SceneTreeDock::_apply_to_source_confirmed() {
+	Node *node = Object::cast_to<Node>(ObjectDB::get_instance(apply_to_source_instance));
+	apply_to_source_instance = ObjectID();
+	if (!node || !node->is_inside_tree()) {
+		return;
+	}
+	const String source_path = node->get_scene_file_path();
+	String error;
+	int applied = 0;
+	if (!_apply_instance_overrides_to_source(node, error, applied)) {
+		accept->set_text(error);
+		accept->popup_centered();
+		return;
+	}
+	EditorToaster::get_singleton()->popup_str(vformat(TTR("Applied %d edit(s) to \"%s\". Save this scene to keep the cleanup."), applied, source_path));
+}
+
 void SceneTreeDock::_edit_subresource(int p_idx, const PopupMenu *p_from_menu) {
 	const ObjectID &id = p_from_menu->get_item_metadata(p_idx);
 
@@ -5500,6 +5757,12 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 	clear_inherit_confirm->set_text(TTRC("Clear Inheritance? (No Undo!)"));
 	clear_inherit_confirm->set_ok_button_text(TTRC("Clear"));
 	add_child(clear_inherit_confirm);
+
+	apply_to_source_confirm = memnew(ConfirmationDialog);
+	apply_to_source_confirm->set_title(TTRC("Apply Overrides to Source Scene"));
+	apply_to_source_confirm->set_ok_button_text(TTRC("Apply"));
+	apply_to_source_confirm->connect(SceneStringName(confirmed), callable_mp(this, &SceneTreeDock::_apply_to_source_confirmed));
+	add_child(apply_to_source_confirm);
 
 	set_process_input(true);
 

@@ -1027,6 +1027,9 @@ public:
 	void find_all_instances_inheriting_path_in_node(Node *p_root, Node *p_node, const String &p_instance_path, HashSet<Node *> &p_instance_list);
 	void preload_reimporting_with_path_in_edited_scenes(const List<String> &p_scenes);
 	void reload_instances_with_path_in_edited_scenes();
+	// OEngine: recreate instances of the given scenes in all open tabs after their files were rewritten,
+	// keeping each instance's own overrides and added nodes.
+	void reload_instances_of_scenes(const List<String> &p_scenes);
 
 	bool is_exiting() const { return exiting; }
 

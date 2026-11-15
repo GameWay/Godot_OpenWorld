@@ -88,6 +88,7 @@ class SceneTreeDock : public EditorDock {
 		TOOL_SCENE_CLEAR_INHERITANCE,
 		TOOL_SCENE_CLEAR_INHERITANCE_CONFIRM,
 		TOOL_SCENE_OPEN_INHERITED,
+		TOOL_SCENE_APPLY_TO_SOURCE,
 		TOOL_TOGGLE_SCENE_UNIQUE_NAME,
 		TOOL_CREATE_2D_SCENE,
 		TOOL_CREATE_3D_SCENE,
@@ -178,6 +179,11 @@ class SceneTreeDock : public EditorDock {
 	PopupMenu *menu_subresources = nullptr;
 	PopupMenu *menu_properties = nullptr;
 	ConfirmationDialog *clear_inherit_confirm = nullptr;
+	// OEngine: Apply Overrides to Source Scene.
+	ConfirmationDialog *apply_to_source_confirm = nullptr;
+	ObjectID apply_to_source_instance;
+	void _apply_to_source_confirmed();
+	bool _apply_instance_overrides_to_source(Node *p_instance, String &r_error, int &r_applied);
 
 	bool first_enter = true;
 
