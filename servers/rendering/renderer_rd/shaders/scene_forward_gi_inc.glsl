@@ -124,7 +124,9 @@ vec2 octahedron_encode(vec3 n) {
 }
 
 void sdfgi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_normal, vec3 cam_specular_normal, bool use_specular, float roughness, out vec3 diffuse_light, out vec3 specular_light, out float blend) {
-	cascade_pos += cam_normal * sdfgi.normal_bias;
+	// OEngine: densities can differ per cascade.
+	float probe_axis_size = sdfgi.cascades[cascade].probe_axis_size;
+	cascade_pos += cam_normal * sdfgi.normal_bias * (probe_axis_size - 1.0);
 
 	vec3 base_pos = floor(cascade_pos);
 	//cascade_pos += mix(vec3(0.0),vec3(0.01),lessThan(abs(cascade_pos-base_pos),vec3(0.01))) * cam_normal;
@@ -134,7 +136,7 @@ void sdfgi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_normal
 	vec3 specular_accum;
 
 	ivec3 tex_pos = ivec3(probe_base_pos.xy, int(cascade));
-	tex_pos.x += probe_base_pos.z * sdfgi.probe_axis_size;
+	tex_pos.x += probe_base_pos.z * int(probe_axis_size);
 	tex_pos.xy = tex_pos.xy * (SDFGI_OCT_SIZE + 2) + ivec2(1);
 
 	vec3 diffuse_posf = (vec3(tex_pos) + vec3(octahedron_encode(cam_normal) * float(SDFGI_OCT_SIZE), 0.0)) * sdfgi.lightprobe_tex_pixel_size;
@@ -169,7 +171,8 @@ void sdfgi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_normal
 			ivec3 occ_indexv = abs((sdfgi.cascades[cascade].probe_world_offset + probe_posi) & ivec3(1, 1, 1)) * ivec3(1, 2, 4);
 			vec4 occ_mask = mix(vec4(0.0), vec4(1.0), equal(ivec4(occ_indexv.x | occ_indexv.y), ivec4(0, 1, 2, 3)));
 
-			vec3 occ_pos = clamp(cascade_pos, probe_pos - sdfgi.occlusion_clamp, probe_pos + sdfgi.occlusion_clamp) * sdfgi.probe_to_uvw;
+			float occlusion_clamp = sdfgi.cascades[cascade].occlusion_clamp;
+			vec3 occ_pos = clamp(cascade_pos, probe_pos - occlusion_clamp, probe_pos + occlusion_clamp) * sdfgi.cascades[cascade].probe_to_uvw;
 			occ_pos.z += float(cascade);
 			if (occ_indexv.z != 0) { //z bit is on, means index is >=4, so make it switch to the other half of textures
 				occ_pos.x += 1.0;
@@ -186,7 +189,7 @@ void sdfgi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_normal
 		vec3 diffuse;
 		vec3 pos_uvw = diffuse_posf;
 		pos_uvw.xy += vec2(offset.xy) * sdfgi.lightprobe_uv_offset.xy;
-		pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.z;
+		pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.x * probe_axis_size;
 		diffuse = textureLod(sampler2DArray(sdfgi_lightprobe_texture, SAMPLER_LINEAR_CLAMP), pos_uvw, 0.0).rgb;
 
 		diffuse_accum += vec4(diffuse * weight * sdfgi.cascades[cascade].exposure_normalization, weight);
@@ -195,7 +198,7 @@ void sdfgi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_normal
 			vec3 specular = vec3(0.0);
 			vec3 pos_uvw = specular_posf;
 			pos_uvw.xy += vec2(offset.xy) * sdfgi.lightprobe_uv_offset.xy;
-			pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.z;
+			pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.x * probe_axis_size;
 			if (roughness < 0.99) {
 				specular = textureLod(sampler2DArray(sdfgi_lightprobe_texture, SAMPLER_LINEAR_CLAMP), pos_uvw + vec3(0, 0, float(sdfgi.max_cascades)), 0.0).rgb;
 			}
@@ -223,7 +226,7 @@ void sdfgi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_normal
 
 	{
 		//process blend
-		float blend_from = (float(sdfgi.probe_axis_size - 1) / 2.0) - 2.5;
+		float blend_from = ((probe_axis_size - 1.0) / 2.0) - 2.5;
 		float blend_to = blend_from + 2.0;
 
 		vec3 inner_pos = cam_pos * sdfgi.cascades[cascade].to_probe;

@@ -227,7 +227,8 @@ void main() {
 		tex_pos.xy = tex_pos.xy * (OCT_SIZE + 2) + ivec2(1);
 
 		vec3 base_tex_posf = vec3(tex_pos);
-		vec2 tex_pixel_size = 1.0 / vec2(ivec2((OCT_SIZE + 2) * params.probe_axis_size * params.probe_axis_size, (OCT_SIZE + 2) * params.probe_axis_size));
+		// OEngine: the texture is sized for the densest cascade, this one may use only part of it.
+		vec2 tex_pixel_size = 1.0 / vec2(textureSize(sampler2DArray(lightprobe_texture, linear_sampler), 0).xy);
 		vec3 probe_uv_offset = vec3(ivec3(OCT_SIZE + 2, OCT_SIZE + 2, (OCT_SIZE + 2) * params.probe_axis_size)) * tex_pixel_size.xyx;
 
 		for (uint j = 0; j < 8; j++) {

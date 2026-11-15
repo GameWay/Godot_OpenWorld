@@ -275,7 +275,10 @@ struct SDFVoxelGICascadeData {
 	float to_probe;
 	ivec3 probe_world_offset;
 	float to_cell; // 1/bounds * grid_size
-	vec3 pad;
+	// OEngine: the probe grid of this cascade (densities can differ per cascade).
+	float probe_axis_size;
+	float probe_to_uvw;
+	float occlusion_clamp;
 	float exposure_normalization;
 };
 

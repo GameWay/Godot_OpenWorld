@@ -1979,7 +1979,7 @@ void fragment_shader(in SceneData scene_data) {
 		for (uint i = 0; i < sdfgi.max_cascades; i++) {
 			cascade_pos = (cam_pos - sdfgi.cascades[i].position) * sdfgi.cascades[i].to_probe;
 
-			if (any(lessThan(cascade_pos, vec3(0.0))) || any(greaterThanEqual(cascade_pos, sdfgi.cascade_probe_size))) {
+			if (any(lessThan(cascade_pos, vec3(0.0))) || any(greaterThanEqual(cascade_pos, vec3(sdfgi.cascades[i].probe_axis_size - 1.0)))) {
 				continue; //skip cascade
 			}
 

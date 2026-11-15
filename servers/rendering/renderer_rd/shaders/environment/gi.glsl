@@ -36,7 +36,10 @@ struct ProbeCascadeData {
 	float to_probe;
 	ivec3 probe_world_offset;
 	float to_cell; // 1/bounds * grid_size
-	vec3 pad;
+	// OEngine: the probe grid of this cascade (densities can differ per cascade).
+	float probe_axis_size;
+	float probe_to_uvw;
+	float occlusion_clamp;
 	float exposure_normalization;
 };
 
@@ -192,7 +195,9 @@ vec3 reconstruct_position(ivec2 screen_pos) {
 }
 
 void sdfvoxel_gi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_normal, vec3 cam_specular_normal, float roughness, out vec3 diffuse_light, out vec3 specular_light) {
-	cascade_pos += cam_normal * sdfgi.normal_bias;
+	float probe_axis_size = sdfgi.cascades[cascade].probe_axis_size;
+	float probe_to_uvw = sdfgi.cascades[cascade].probe_to_uvw;
+	cascade_pos += cam_normal * sdfgi.normal_bias * (probe_axis_size - 1.0);
 
 	vec3 base_pos = floor(cascade_pos);
 	//cascade_pos += mix(vec3(0.0),vec3(0.01),lessThan(abs(cascade_pos-base_pos),vec3(0.01))) * cam_normal;
@@ -202,7 +207,7 @@ void sdfvoxel_gi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_
 	vec3 specular_accum;
 
 	ivec3 tex_pos = ivec3(probe_base_pos.xy, int(cascade));
-	tex_pos.x += probe_base_pos.z * sdfgi.probe_axis_size;
+	tex_pos.x += probe_base_pos.z * int(probe_axis_size);
 	tex_pos.xy = tex_pos.xy * (SDFGI_OCT_SIZE + 2) + ivec2(1);
 
 	vec3 diffuse_posf = (vec3(tex_pos) + vec3(octahedron_encode(cam_normal) * float(SDFGI_OCT_SIZE), 0.0)) * sdfgi.lightprobe_tex_pixel_size;
@@ -234,7 +239,8 @@ void sdfvoxel_gi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_
 			ivec3 occ_indexv = abs((sdfgi.cascades[cascade].probe_world_offset + probe_posi) & ivec3(1, 1, 1)) * ivec3(1, 2, 4);
 			vec4 occ_mask = mix(vec4(0.0), vec4(1.0), equal(ivec4(occ_indexv.x | occ_indexv.y), ivec4(0, 1, 2, 3)));
 
-			vec3 occ_pos = clamp(cascade_pos, probe_pos - sdfgi.occlusion_clamp, probe_pos + sdfgi.occlusion_clamp) * sdfgi.probe_to_uvw;
+			float occlusion_clamp = sdfgi.cascades[cascade].occlusion_clamp;
+			vec3 occ_pos = clamp(cascade_pos, probe_pos - occlusion_clamp, probe_pos + occlusion_clamp) * probe_to_uvw;
 			occ_pos.z += float(cascade);
 			if (occ_indexv.z != 0) { //z bit is on, means index is >=4, so make it switch to the other half of textures
 				occ_pos.x += 1.0;
@@ -248,7 +254,7 @@ void sdfvoxel_gi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_
 
 		// OEngine: a probe buried in geometry only sees the inside of the surface and darkens
 		// nearby pixels in voxel-aligned bands. Trust it much less than probes in open space.
-		float probe_distance = textureLod(sampler3D(sdf_cascades[cascade], linear_sampler), probe_pos * sdfgi.probe_to_uvw, 0.0).r * 255.0 - 1.1;
+		float probe_distance = textureLod(sampler3D(sdf_cascades[cascade], linear_sampler), probe_pos * probe_to_uvw, 0.0).r * 255.0 - 1.1;
 		weight *= mix(0.05, 1.0, clamp(probe_distance, 0.0, 1.0));
 
 		// Compute lightprobe texture position
@@ -256,7 +262,7 @@ void sdfvoxel_gi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_
 		vec3 diffuse;
 		vec3 pos_uvw = diffuse_posf;
 		pos_uvw.xy += vec2(offset.xy) * sdfgi.lightprobe_uv_offset.xy;
-		pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.z;
+		pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.x * probe_axis_size;
 		diffuse = textureLod(sampler2DArray(lightprobe_texture, linear_sampler), pos_uvw, 0.0).rgb;
 
 		diffuse_accum += vec4(diffuse * weight * sdfgi.cascades[cascade].exposure_normalization, weight);
@@ -265,7 +271,7 @@ void sdfvoxel_gi_process(uint cascade, vec3 cascade_pos, vec3 cam_pos, vec3 cam_
 			vec3 specular = vec3(0.0);
 			vec3 pos_uvw = specular_posf;
 			pos_uvw.xy += vec2(offset.xy) * sdfgi.lightprobe_uv_offset.xy;
-			pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.z;
+			pos_uvw.x += float(offset.z) * sdfgi.lightprobe_uv_offset.x * probe_axis_size;
 			if (roughness < 0.99) {
 				specular = textureLod(sampler2DArray(lightprobe_texture, linear_sampler), pos_uvw + vec3(0, 0, float(sdfgi.max_cascades)), 0.0).rgb;
 			}
@@ -320,7 +326,7 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 	for (uint i = 0; i < sdfgi.max_cascades; i++) {
 		cascade_pos = (cam_pos - sdfgi.cascades[i].position) * sdfgi.cascades[i].to_probe;
 
-		if (any(lessThan(cascade_pos, vec3(0.0))) || any(greaterThanEqual(cascade_pos, sdfgi.cascade_probe_size))) {
+		if (any(lessThan(cascade_pos, vec3(0.0))) || any(greaterThanEqual(cascade_pos, vec3(sdfgi.cascades[i].probe_axis_size - 1.0)))) {
 			continue; //skip cascade
 		}
 
@@ -338,7 +344,7 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 
 		{
 			//process blend
-			float blend_from = (float(sdfgi.probe_axis_size - 1) / 2.0) - 2.5;
+			float blend_from = ((sdfgi.cascades[cascade].probe_axis_size - 1.0) / 2.0) - 2.5;
 			float blend_to = blend_from + 2.0;
 
 			vec3 inner_pos = cam_pos * sdfgi.cascades[cascade].to_probe;
@@ -384,13 +390,13 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 			const uint max_rough_steps = 256u;
 			uint steps = 0u;
 
-			float blend_size = (sdfgi.grid_size.x / float(sdfgi.probe_axis_size - 1)) * 0.5;
 
 			float radius_sizes[SDFGI_MAX_CASCADES];
 			cascade = 0xFFFF;
 
 			float base_distance = length(cam_pos);
 			for (uint i = 0; i < sdfgi.max_cascades; i++) {
+				float blend_size = (sdfgi.grid_size.x / (sdfgi.cascades[i].probe_axis_size - 1.0)) * 0.5;
 				radius_sizes[i] = (1.0 / sdfgi.cascades[i].to_cell) * (sdfgi.grid_size.x * 0.5 - blend_size);
 				if (cascade == 0xFFFF && base_distance < radius_sizes[i]) {
 					cascade = i;

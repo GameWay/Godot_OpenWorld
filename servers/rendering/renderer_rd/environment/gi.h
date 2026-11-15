@@ -276,6 +276,7 @@ private:
 			PRE_PROCESS_JUMP_FLOOD_UPSCALE,
 			PRE_PROCESS_OCCLUSION,
 			PRE_PROCESS_STORE,
+			PRE_PROCESS_OCCLUSION_HIGH, // OEngine: occlusion of cascades with SDFGI_PROBE_DIVISOR_HIGH.
 			PRE_PROCESS_MAX
 		};
 
@@ -575,7 +576,7 @@ public:
 				float offset[3];
 				float to_cell;
 				int32_t probe_offset[3];
-				uint32_t pad;
+				uint32_t probe_axis_size; // OEngine: probes per axis of this cascade.
 				float pad2[4];
 			};
 
@@ -606,6 +607,10 @@ public:
 
 			float cell_size;
 			Vector3i position;
+			// OEngine: probe intervals per axis of this cascade (SDFGI::PROBE_DIVISOR or GI::sdfgi_probe_divisor_high);
+			// probe_axis_count is one more, as the probes enclose the endpoints.
+			int32_t probe_divisor = 16;
+			uint32_t probe_axis_count = 17;
 
 			static const Vector3i DIRTY_ALL;
 			Vector3i dirty_regions; //(0,0,0 is not dirty, negative is refresh from the end, DIRTY_ALL is refresh all.
@@ -664,6 +669,8 @@ public:
 
 		int num_cascades = 6;
 		float min_cell_size = 0;
+		// OEngine: the largest probe count per axis of the cascades. Probe textures are sized for it;
+		// a cascade with fewer probes uses the first probe_axis_count of each axis.
 		uint32_t probe_axis_count = 0; //amount of probes per axis, this is an odd number because it encloses endpoints
 
 		RID debug_uniform_set[RendererSceneRender::MAX_RENDER_VIEWS];
@@ -711,8 +718,12 @@ public:
 	RSE::EnvironmentSDFGIFramesToConverge sdfgi_frames_to_converge = RSE::ENV_SDFGI_CONVERGE_IN_30_FRAMES;
 	RSE::EnvironmentSDFGIFramesToUpdateLight sdfgi_frames_to_update_light = RSE::ENV_SDFGI_UPDATE_LIGHT_IN_4_FRAMES;
 	// OEngine: probe intervals per cascade axis (upstream 16). 32 places a probe every 4 cells
-	// instead of 8, so narrow pits stay lit in coarser cascades, at extra integration cost.
-	int32_t sdfgi_probe_divisor = 16;
+	// instead of 8, so narrow pits stay lit, at about 7 times the integration cost per cascade.
+	// The nearest sdfgi_high_density_cascades cascades use it, the others the upstream density.
+	static constexpr int32_t SDFGI_PROBE_DIVISOR_NORMAL = 16;
+	static constexpr int32_t SDFGI_PROBE_DIVISOR_HIGH = 32;
+	int32_t sdfgi_high_density_cascades = 0;
+	int32_t sdfgi_get_probe_divisor(uint32_t p_cascade) const { return int32_t(p_cascade) < sdfgi_high_density_cascades ? SDFGI_PROBE_DIVISOR_HIGH : SDFGI_PROBE_DIVISOR_NORMAL; }
 
 	float sdfgi_solid_cell_ratio = 0.25;
 	Vector3 sdfgi_debug_probe_pos;
@@ -756,7 +767,10 @@ public:
 			float to_probe; // 1/bounds * grid_size
 			int32_t probe_world_offset[3];
 			float to_cell; // 1/bounds * grid_size
-			float pad[3];
+			// OEngine: the probe grid of this cascade.
+			float probe_axis_size; // probes per axis
+			float probe_to_uvw; // 1 / (probe_axis_size - 1)
+			float occlusion_clamp; // in probe units, see pre_process_gi()
 			float exposure_normalization;
 		};
 

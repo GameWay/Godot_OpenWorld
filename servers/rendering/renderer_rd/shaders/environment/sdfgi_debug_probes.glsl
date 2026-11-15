@@ -228,7 +228,8 @@ void main() {
 	vec3 tex_pos_ofs = vec3(octahedron_encode(normal_interp) * float(OCT_SIZE), 0.0);
 	vec3 tex_posf = vec3(vec2(tex_pos.xy * (OCT_SIZE + 2) + ivec2(1)), float(tex_pos.z)) + tex_pos_ofs;
 
-	tex_posf.xy /= vec2(ivec2(params.probe_axis_size * params.probe_axis_size * (OCT_SIZE + 2), params.probe_axis_size * (OCT_SIZE + 2)));
+	// OEngine: the texture is sized for the densest cascade.
+	tex_posf.xy /= vec2(textureSize(sampler2DArray(lightprobe_texture, linear_sampler), 0).xy);
 
 	vec4 indirect_light = textureLod(sampler2DArray(lightprobe_texture, linear_sampler), tex_posf, 0.0);
 

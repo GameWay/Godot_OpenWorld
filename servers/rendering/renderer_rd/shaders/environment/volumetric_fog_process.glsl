@@ -111,7 +111,10 @@ struct SDFVoxelGICascadeData {
 	float to_probe;
 	ivec3 probe_world_offset;
 	float to_cell; // 1/bounds * grid_size
-	vec3 pad;
+	// OEngine: the probe grid of this cascade (densities can differ per cascade).
+	float probe_axis_size;
+	float probe_to_uvw;
+	float occlusion_clamp;
 	float exposure_normalization;
 };
 
@@ -731,7 +734,7 @@ void main() {
 			for (uint i = 0; i < sdfgi.max_cascades; i++) {
 				vec3 cascade_pos = (world_pos - sdfgi.cascades[i].position) * sdfgi.cascades[i].to_probe;
 
-				if (any(lessThan(cascade_pos, vec3(0.0))) || any(greaterThanEqual(cascade_pos, sdfgi.cascade_probe_size))) {
+				if (any(lessThan(cascade_pos, vec3(0.0))) || any(greaterThanEqual(cascade_pos, vec3(sdfgi.cascades[i].probe_axis_size - 1.0)))) {
 					continue; //skip cascade
 				}
 
@@ -741,7 +744,8 @@ void main() {
 				vec4 ambient_accum = vec4(0.0);
 
 				ivec3 tex_pos = ivec3(probe_base_pos.xy, int(i));
-				tex_pos.x += probe_base_pos.z * sdfgi.probe_axis_size;
+				int probe_axis_size = int(sdfgi.cascades[i].probe_axis_size); // OEngine: per cascade
+				tex_pos.x += probe_base_pos.z * probe_axis_size;
 
 				for (uint j = 0; j < 8; j++) {
 					ivec3 offset = (ivec3(j) >> ivec3(0, 1, 2)) & ivec3(1, 1, 1);
@@ -762,7 +766,8 @@ void main() {
 						ivec3 occ_indexv = abs((sdfgi.cascades[i].probe_world_offset + probe_posi) & ivec3(1, 1, 1)) * ivec3(1, 2, 4);
 						vec4 occ_mask = mix(vec4(0.0), vec4(1.0), equal(ivec4(occ_indexv.x | occ_indexv.y), ivec4(0, 1, 2, 3)));
 
-						vec3 occ_pos = clamp(cascade_pos, probe_pos - sdfgi.occlusion_clamp, probe_pos + sdfgi.occlusion_clamp) * sdfgi.probe_to_uvw;
+						float occlusion_clamp = sdfgi.cascades[i].occlusion_clamp;
+						vec3 occ_pos = clamp(cascade_pos, probe_pos - occlusion_clamp, probe_pos + occlusion_clamp) * sdfgi.cascades[i].probe_to_uvw;
 						occ_pos.z += float(i);
 						if (occ_indexv.z != 0) { //z bit is on, means index is >=4, so make it switch to the other half of textures
 							occ_pos.x += 1.0;
@@ -778,7 +783,7 @@ void main() {
 
 					ivec3 uvw = tex_pos;
 					uvw.xy += offset.xy;
-					uvw.x += offset.z * sdfgi.probe_axis_size;
+					uvw.x += offset.z * probe_axis_size;
 
 					vec3 ambient = texelFetch(sampler2DArray(sdfgi_ambient_texture, linear_sampler), uvw, 0).rgb;
 

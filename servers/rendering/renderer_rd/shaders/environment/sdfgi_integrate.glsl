@@ -21,7 +21,7 @@ struct CascadeData {
 	vec3 offset; //offset of (0,0,0) in world coordinates
 	float to_cell; // 1/bounds * grid_size
 	ivec3 probe_world_offset;
-	uint pad;
+	uint probe_axis_size; // OEngine: probes per axis of this cascade.
 	vec4 pad2;
 };
 
@@ -519,7 +519,10 @@ void main() {
 		vec3 probe_pos = cascades.data[params.cascade].offset + vec3(probe_cell) * probe_cell_size;
 
 		//to parent local coords
-		float probe_cell_size_next = cell_to_probe / cascades.data[params.cascade + 1].to_cell;
+		// OEngine: the parent cascade can have another probe density.
+		int parent_axis_size = int(cascades.data[params.cascade + 1].probe_axis_size);
+		float cell_to_probe_next = float(params.grid_size.x / float(parent_axis_size - 1));
+		float probe_cell_size_next = cell_to_probe_next / cascades.data[params.cascade + 1].to_cell;
 		probe_pos -= cascades.data[params.cascade + 1].offset;
 		probe_pos /= probe_cell_size_next;
 
@@ -542,7 +545,7 @@ void main() {
 
 			ivec2 tex_pos;
 			tex_pos = offset.xy;
-			tex_pos.x += offset.z * int(params.probe_axis_size);
+			tex_pos.x += offset.z * parent_axis_size;
 
 			for (int j = 0; j < SH_SIZE; j++) {
 				// copy from history texture
