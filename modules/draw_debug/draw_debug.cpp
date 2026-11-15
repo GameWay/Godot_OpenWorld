@@ -131,6 +131,10 @@ void DrawDebug::_check_stale_frames() {
 		}
 		frame_texts.clear();
 		process_frame_tag = process_frame;
+
+		// Expired timed primitives are normally removed when a frame is drawn. Without drawing
+		// (headless, dedicated server, a window that can't draw) they would pile up forever.
+		_remove_timed(_now(), false);
 	}
 
 	// Primitives drawn from a physics tick are kept until the next tick, so they don't flicker
@@ -1098,6 +1102,8 @@ void DrawDebug::message(const String &p_text, const Color &p_color, double p_dur
 	if (!enabled) {
 		return;
 	}
+
+	_check_stale_frames();
 
 	// A zero duration still shows the message for one drawn frame.
 	const double expire = p_duration < 0.0 ? PERSISTENT_EXPIRE : _now() + p_duration;
