@@ -1874,6 +1874,87 @@
 		<member name="version_control/username" type="String" setter="" getter="">
 			Default username for editor's Version Control integration.
 		</member>
+		<member name="version_control/vc_git/changes/auto_add_new_files" type="bool" setter="" getter="">
+			New files join the active changelist unless they match [member ProjectSettings.editor/version_control/vc_git/auto_add_ignore_masks].
+		</member>
+		<member name="version_control/vc_git/changes/auto_stage" type="bool" setter="" getter="">
+			A file that starts changing is checked for the next commit right away.
+		</member>
+		<member name="version_control/vc_git/changes/confirm_shortcut_commit" type="bool" setter="" getter="">
+			Asks before [kbd]Ctrl + Enter[/kbd] ([kbd]Cmd + Enter[/kbd] on macOS) in the commit message commits.
+		</member>
+		<member name="version_control/vc_git/diff/context_lines" type="int" setter="" getter="">
+			Unchanged lines shown around each change in diffs, or [code]-1[/code] for the whole file.
+		</member>
+		<member name="version_control/vc_git/diff/dim_godot_noise" type="bool" setter="" getter="">
+			Lines Godot rewrites by itself in scenes and resources ([code]uid[/code], [code]load_steps[/code]) are grayed out in diffs.
+		</member>
+		<member name="version_control/vc_git/diff/ignore_whitespace" type="bool" setter="" getter="">
+			Changes to indentation and spacing alone aren't shown in diffs.
+		</member>
+		<member name="version_control/vc_git/diff/image_mode" type="String" setter="" getter="">
+			How a changed image is compared with the previous version: [code]side[/code] by side, with a [code]swipe[/code] line or as an [code]onion[/code] skin.
+		</member>
+		<member name="version_control/vc_git/diff/scenes_node_by_node" type="bool" setter="" getter="">
+			Scenes, resources and [code]project.godot[/code] list their changed nodes and properties; the Scene button in a diff switches to text.
+		</member>
+		<member name="version_control/vc_git/diff/side_by_side" type="bool" setter="" getter="">
+			Old and new lines next to each other instead of in one column.
+		</member>
+		<member name="version_control/vc_git/diff/syntax_highlighting" type="bool" setter="" getter="">
+			Code in diffs is colored like in the script editor.
+		</member>
+		<member name="version_control/vc_git/editor/inspector_changes" type="bool" setter="" getter="">
+			A "Last commit" row with Revert under properties changed since the last commit in the Inspector, and added or changed nodes colored in the Scene dock.
+		</member>
+		<member name="version_control/vc_git/editor/show_blame" type="bool" setter="" getter="">
+			Author and age of each line next to the line numbers in the script editor; click one to see its commit.
+		</member>
+		<member name="version_control/vc_git/editor/toolbar_file_status" type="bool" setter="" getter="">
+			How many files have uncommitted changes, in the editor's toolbar; click it to open Changes on the Git tab. Its tooltip shows the branch and the commits to push and pull.
+		</member>
+		<member name="version_control/vc_git/enabled" type="bool" setter="" getter="">
+			The editor's git client: the Git tab, git status in the FileSystem and Scene docks, the Inspector and the script editor, and Local History. Takes effect after a restart.
+		</member>
+		<member name="version_control/vc_git/history/absolute_dates" type="bool" setter="" getter="">
+			Dates in Git Log like [code]2026-10-19 14:05[/code] instead of "3 hours ago".
+		</member>
+		<member name="version_control/vc_git/local_history/enabled" type="bool" setter="" getter="">
+			Keeps snapshots of the project's files on save, every [member version_control/vc_git/local_history/interval_minutes] and before git operations rewrite files. They aren't commits: branches, the index and git status stay as they are. Right-click a file or folder > Git: Local History… to compare an earlier version with now and put it back.
+		</member>
+		<member name="version_control/vc_git/local_history/interval_minutes" type="int" setter="" getter="">
+			How often a Local History snapshot is taken when something changed.
+		</member>
+		<member name="version_control/vc_git/local_history/keep_days" type="int" setter="" getter="">
+			Older Local History snapshots are dropped; [code]git gc[/code] frees their space later.
+		</member>
+		<member name="version_control/vc_git/local_history/max_file_size_mb" type="int" setter="" getter="">
+			Files bigger than this are left out of Local History. Files in Git LFS, ignored files and [code].godot/[/code] are left out too.
+		</member>
+		<member name="version_control/vc_git/sync/auto_fetch" type="bool" setter="" getter="">
+			Fetches remotes in the background every [member version_control/vc_git/sync/auto_fetch_minutes]. New commits show up in Git Log and the sync bar, and a toast says when they arrive; pulling stays up to you.
+		</member>
+		<member name="version_control/vc_git/sync/auto_fetch_minutes" type="int" setter="" getter="">
+			How often remotes are fetched in the background, see [member version_control/vc_git/sync/auto_fetch].
+		</member>
+		<member name="version_control/vc_git/sync/auto_reload_external_changes" type="bool" setter="" getter="">
+			Open scripts that git changed on disk reload without the editor asking first. Sets [member text_editor/behavior/files/auto_reload_scripts_on_external_change].
+		</member>
+		<member name="version_control/vc_git/sync/auto_save_scripts" type="bool" setter="" getter="">
+			Saves scripts every [member version_control/vc_git/sync/auto_save_seconds]: sets the editor's own autosave interval while on, and gives yours back when turned off.
+		</member>
+		<member name="version_control/vc_git/sync/auto_save_seconds" type="int" setter="" getter="">
+			The autosave interval while [member version_control/vc_git/sync/auto_save_scripts] is on.
+		</member>
+		<member name="version_control/vc_git/sync/reminder_hours" type="int" setter="" getter="">
+			How long work stays uncommitted or unpushed before [member version_control/vc_git/sync/reminders] remind of it.
+		</member>
+		<member name="version_control/vc_git/sync/reminders" type="bool" setter="" getter="">
+			A toast when changed files stay uncommitted, or commits stay only on this computer, for [member version_control/vc_git/sync/reminder_hours]; again after as long if they still do.
+		</member>
+		<member name="version_control/vc_git/sync/save_before_git" type="bool" setter="" getter="">
+			Saves open files before git operations without asking. Otherwise the editor asks when a pull, checkout or other operation would leave unsaved edits behind.
+		</member>
 	</members>
 	<signals>
 		<signal name="settings_changed">

@@ -519,6 +519,7 @@ private:
 	static int build_callback_count;
 	static int plugin_init_callback_count;
 	static Vector<EditorNodeInitCallback> _init_callbacks;
+	static Vector<EditorNodeInitCallback> _addons_init_callbacks;
 
 	String _get_system_info() const;
 
@@ -810,6 +811,10 @@ public:
 
 	static void add_plugin_init_callback(EditorPluginInitializeCallback p_callback);
 	static void add_init_callback(EditorNodeInitCallback p_callback) { _init_callbacks.push_back(p_callback); }
+	// OEngine: opens Editor Settings at a section ("section/subsection"), with advanced settings shown.
+	void open_editor_settings(const String &p_section);
+	// OEngine: called once the project's addon plugins are enabled, to add plugins built into the editor.
+	static void add_addons_init_callback(EditorNodeInitCallback p_callback) { _addons_init_callbacks.push_back(p_callback); }
 	static void add_build_callback(EditorBuildCallback p_callback);
 
 	static bool immediate_confirmation_dialog(const String &p_text, const String &p_ok_text = TTRC("OK"), const String &p_cancel_text = TTRC("Cancel"), uint32_t p_wrap_width = 0);

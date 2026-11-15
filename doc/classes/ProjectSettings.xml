@@ -1225,6 +1225,9 @@
 		</member>
 		<member name="editor/version_control/plugin_name" type="String" setter="" getter="" default="&quot;&quot;">
 		</member>
+		<member name="editor/version_control/vc_git/auto_add_ignore_masks" type="Array" setter="" getter="" default="[&quot;*.tmp&quot;, &quot;*.bak&quot;, &quot;*.orig&quot;, &quot;*~&quot;, &quot;.DS_Store&quot;]">
+			New files matching one of these globs aren't added to git by the editor's git client (see [member EditorSettings.version_control/vc_git/changes/auto_add_new_files]): [code]*.psd[/code] matches file names, [code]build/[/code] a folder, [code]addons/*.tmp[/code] a path. Kept in [code]project.godot[/code], so the whole team shares them.
+		</member>
 		<member name="filesystem/import/blender/enabled" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], Blender 3D scene files with the [code].blend[/code] extension will be imported by converting them to glTF 2.0.
 			This requires configuring a path to a Blender executable in the [member EditorSettings.filesystem/import/blender/blender_path] setting. Blender 3.0 or later is required.

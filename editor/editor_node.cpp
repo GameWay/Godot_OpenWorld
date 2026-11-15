@@ -1297,6 +1297,12 @@ void EditorNode::_execute_upgrades() {
 	}
 }
 
+void EditorNode::open_editor_settings(const String &p_section) {
+	editor_settings_dialog->set_advanced_mode_enabled(true);
+	editor_settings_dialog->popup_edit_settings();
+	editor_settings_dialog->set_current_section(p_section);
+}
+
 void EditorNode::init_plugins() {
 	_initializing_plugins = true;
 	Vector<String> addons;
@@ -1308,6 +1314,10 @@ void EditorNode::init_plugins() {
 		set_addon_plugin_enabled(addon, true);
 	}
 	_initializing_plugins = false;
+
+	for (EditorNodeInitCallback callback : _addons_init_callbacks) {
+		callback();
+	}
 
 	if (!pending_addons.is_empty()) {
 		EditorFileSystem::get_singleton()->connect("script_classes_updated", callable_mp(this, &EditorNode::_enable_pending_addons), CONNECT_ONE_SHOT);
@@ -6396,6 +6406,7 @@ void EditorNode::_file_dialog_unregister(FileDialog *p_dialog) {
 }
 
 Vector<EditorNodeInitCallback> EditorNode::_init_callbacks;
+Vector<EditorNodeInitCallback> EditorNode::_addons_init_callbacks;
 
 void EditorNode::_begin_first_scan() {
 	if (!waiting_for_first_scan) {
