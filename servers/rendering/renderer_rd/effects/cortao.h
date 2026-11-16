@@ -100,6 +100,11 @@ public:
 		int temporal_frames = 16; // 1 disables the accumulation.
 		float temporal_depth_tolerance = 0.05;
 		float temporal_clamp_margin = 0.05;
+		int disocclusion_blur_frames = 4; // Pixels with less history get a wider blur, 0 disables it.
+
+		// Distance fade (rendering/environment/ssao/fadeout_from and fadeout_to). Pixels past fade_to are not traced.
+		float fade_from = 50.0;
+		float fade_to = 300.0;
 	};
 
 	struct ViewData {
@@ -165,6 +170,11 @@ private:
 		float depth_tolerance;
 		float clamp_margin;
 		float pad;
+
+		float fade_mul;
+		float fade_add;
+		float disocclusion_frames;
+		float disocclusion_radius;
 	};
 
 	enum {

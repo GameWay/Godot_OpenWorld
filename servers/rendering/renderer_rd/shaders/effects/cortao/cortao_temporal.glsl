@@ -7,7 +7,8 @@
 // OEngine: temporal accumulation of the CORTAO output.
 // CORTAO only removes part of its noise spatially and expects a temporal filter after it. The history is reprojected
 // with the camera motion, rejected on depth mismatches, and clamped to the current 3x3 neighborhood so that moving
-// objects do not leave trails. The final texture holds the occlusion in R and the view space bent normal in GBA.
+// objects do not leave trails. Pixels with little history get an extra depth and normal aware blur, and the result
+// fades out with the distance. The final texture holds the occlusion in R and the view space bent normal in GBA.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -16,6 +17,7 @@ layout(set = 0, binding = 1) uniform texture2D source_ssao; // RGBA8_SNORM: occl
 layout(set = 0, binding = 2) uniform texture2D history_prev; // RGBA16F: occlusion, bent normal in the previous view space.
 layout(set = 0, binding = 3) uniform texture2D history_depth_prev; // RG32F: linear depth, accumulated frames.
 layout(set = 0, binding = 4) uniform sampler nearest_sampler;
+layout(set = 0, binding = 5) uniform texture2D source_normal_roughness;
 
 layout(rgba16f, set = 1, binding = 0) uniform restrict writeonly image2D history_cur;
 layout(rg32f, set = 1, binding = 1) uniform restrict writeonly image2D history_depth_cur;
@@ -41,8 +43,19 @@ layout(push_constant, std430) uniform Params {
 	float depth_tolerance;
 	float clamp_margin;
 	float pad;
+
+	// Distance fade: 1.0 up to the fade start, 0.0 from its end (fade = depth * mul + add).
+	float fade_mul;
+	float fade_add;
+	// Pixels with fewer accumulated frames than this get the disocclusion blur (0 disables it).
+	float disocclusion_frames;
+	float disocclusion_radius; // In pixels.
 }
 params;
+
+vec3 load_normal(ivec2 p_pos) {
+	return normalize(texelFetch(sampler2D(source_normal_roughness, nearest_sampler), p_pos, 0).xyz * 2.0 - 1.0);
+}
 
 vec4 load_history(ivec2 p_pos, ivec2 p_size) {
 	return texelFetch(sampler2D(history_prev, nearest_sampler), clamp(p_pos, ivec2(0), p_size - 1), 0);
@@ -133,6 +146,42 @@ void main() {
 	float clamped_ao = clamp(history.x, ao_min - params.clamp_margin, ao_max + params.clamp_margin);
 	frames = min(frames, mix(params.max_frames, 2.0, clamp(abs(clamped_ao - history.x) * 8.0, 0.0, 1.0)));
 
+	vec3 normal = load_normal(pos);
+
+	// Disocclusion: newly visible pixels have little or no history and would show the raw noise for a few frames.
+	// Blur them over a wider, depth and normal aware footprint, fading the blur out as the history builds up.
+	if (frames < params.disocclusion_frames) {
+		float blur = 1.0 - clamp((frames - 1.0) / max(params.disocclusion_frames - 1.0, 1.0), 0.0, 1.0);
+		vec4 sum = vec4(current.x, bent_normal);
+		float weight_sum = 1.0;
+		int radius = int(params.disocclusion_radius);
+		for (int y = -2; y <= 2; y++) {
+			for (int x = -2; x <= 2; x++) {
+				if (x == 0 && y == 0) {
+					continue;
+				}
+				ivec2 p = clamp(pos + ivec2(x, y) * radius, ivec2(0), size - 1);
+				float sample_depth = texelFetch(sampler2D(packed_data, nearest_sampler), p, 0).r;
+				if (sample_depth <= 0.0) {
+					continue;
+				}
+				float depth_weight = exp2(-abs(sample_depth - depth) / depth * 64.0);
+				float normal_weight = pow(max(dot(load_normal(p), normal), 0.0), 8.0);
+				float w = depth_weight * normal_weight;
+				vec4 s = texelFetch(sampler2D(source_ssao, nearest_sampler), p, 0);
+				sum += vec4(s.x, s.yzw) * w;
+				weight_sum += w;
+			}
+		}
+		sum /= weight_sum;
+		current.x = mix(current.x, sum.x, blur);
+		vec3 blurred_bent_normal = sum.yzw;
+		float blurred_length = length(blurred_bent_normal);
+		if (blurred_length > 0.0001) {
+			bent_normal = normalize(mix(bent_normal, blurred_bent_normal / blurred_length, blur));
+		}
+	}
+
 	float blend = 1.0 / frames;
 	float ao = mix(clamped_ao, current.x, blend);
 
@@ -145,5 +194,10 @@ void main() {
 
 	imageStore(history_cur, pos, vec4(ao, accumulated_bent_normal));
 	imageStore(history_depth_cur, pos, vec4(depth, frames, 0.0, 0.0));
-	imageStore(dest, pos, vec4(pow(clamp(ao, 0.0, 1.0), params.intensity), accumulated_bent_normal * 0.5 + 0.5));
+
+	// Distance fade, applied to the output only: occlusion toward 1.0, bent normal toward the surface normal.
+	float fade = clamp(depth * params.fade_mul + params.fade_add, 0.0, 1.0);
+	float final_ao = mix(1.0, pow(clamp(ao, 0.0, 1.0), params.intensity), fade);
+	vec3 final_bent_normal = normalize(mix(normal, accumulated_bent_normal, fade));
+	imageStore(dest, pos, vec4(final_ao, final_bent_normal * 0.5 + 0.5));
 }

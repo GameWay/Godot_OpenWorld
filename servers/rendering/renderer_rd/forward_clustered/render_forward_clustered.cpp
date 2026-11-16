@@ -1561,6 +1561,10 @@ void RenderForwardClustered::_process_cortao(RenderDataRD *p_render_data, const 
 	settings.temporal_frames = GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/temporal_frames");
 	settings.temporal_depth_tolerance = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/cortao/temporal_depth_tolerance");
 	settings.temporal_clamp_margin = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/cortao/temporal_clamp_margin");
+	settings.disocclusion_blur_frames = GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/disocclusion_blur_frames");
+	// Same distance fade as ASSAO.
+	settings.fade_from = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/fadeout_from");
+	settings.fade_to = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/fadeout_to");
 
 	// The depth buffer was rendered with the TAA jitter, so the projections used by CORTAO include it.
 	const RenderSceneDataRD *scene_data = p_render_data->scene_data;

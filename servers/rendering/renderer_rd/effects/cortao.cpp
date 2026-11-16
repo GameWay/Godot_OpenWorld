@@ -79,7 +79,7 @@ CORTAO::CORTAO(const Config &p_config) {
 	static_assert(sizeof(PrepassParameters) == 32);
 	static_assert(sizeof(MainPassParameters) == 80);
 	static_assert(sizeof(FilterPassParameters) == 16);
-	static_assert(sizeof(TemporalPushConstant) == 112);
+	static_assert(sizeof(TemporalPushConstant) == 128); // The guaranteed push constant size.
 
 	config = p_config;
 	config.sample_count = CLAMP(config.sample_count, 1, 64);
@@ -264,6 +264,10 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 	const StringName history_depth_prev_name = history->current ? SNAME("history_depth0") : SNAME("history_depth1");
 
 	const uint32_t random_seed = hash_murmur3_one_32(history->frame);
+	// Distance fade, kept valid when the range is empty or reversed.
+	const float fade_from = MAX(p_settings.fade_from, 0.0f);
+	const float fade_to = MAX(p_settings.fade_to, fade_from + 0.001f);
+
 	const bool use_filter = config.filter != FILTER_DISABLED;
 	const int filter_variant = config.filter == FILTER_13_TAPS ? 1 : 0;
 
@@ -362,6 +366,9 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 			params.inverse_max_slope_compensation = 1.0f / MAX(p_settings.slope_compensation, 1.0f);
 			params.backface_threshold = CLAMP(p_settings.backface_threshold, 0.0f, 1.0f);
 			params.backface_boost = CLAMP(p_settings.backface_boost, 0.0f, 1.0f);
+			// OEngine: the shader skips pixels farther than this (the end of the distance fade), carried in the padding.
+			const float max_depth = fade_to;
+			memcpy(&params.pad[0], &max_depth, sizeof(float));
 
 			const int variant = orthogonal ? 1 : 0;
 			RID shader = main_shader.version_get_shader(main_shader_version, variant);
@@ -438,6 +445,11 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 			push.max_frames = float(CLAMP(p_settings.temporal_frames, 1, 256));
 			push.depth_tolerance = MAX(p_settings.temporal_depth_tolerance, 0.0f);
 			push.clamp_margin = MAX(p_settings.temporal_clamp_margin, 0.0f);
+			push.fade_mul = -1.0f / (fade_to - fade_from);
+			push.fade_add = fade_from / (fade_to - fade_from) + 1.0f;
+			push.disocclusion_frames = float(MAX(p_settings.disocclusion_blur_frames, 0));
+			// About twice the spacing of the filter pass taps, scaled with the resolution.
+			push.disocclusion_radius = float(CLAMP(int(Math::round(float(size.y) / 540.0f)), 1, 4));
 
 			RID shader = temporal_shader.version_get_shader(temporal_shader_version, 0);
 			RD::Uniform u_packed(RD::UNIFORM_TYPE_TEXTURE, 0, packed);
@@ -445,12 +457,13 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 			RD::Uniform u_history_prev(RD::UNIFORM_TYPE_TEXTURE, 2, history_prev);
 			RD::Uniform u_history_depth_prev(RD::UNIFORM_TYPE_TEXTURE, 3, history_depth_prev);
 			RD::Uniform u_sampler(RD::UNIFORM_TYPE_SAMPLER, 4, nearest_clamp_sampler);
+			RD::Uniform u_normal(RD::UNIFORM_TYPE_TEXTURE, 5, p_normal_roughness_slices[v]);
 			RD::Uniform u_history_cur(RD::UNIFORM_TYPE_IMAGE, 0, history_cur);
 			RD::Uniform u_history_depth_cur(RD::UNIFORM_TYPE_IMAGE, 1, history_depth_cur);
 			RD::Uniform u_dest(RD::UNIFORM_TYPE_IMAGE, 2, final);
 
 			RD::get_singleton()->compute_list_bind_compute_pipeline(compute_list, temporal_pipeline.get_rid());
-			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 0, u_packed, u_source, u_history_prev, u_history_depth_prev, u_sampler), 0);
+			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 0, u_packed, u_source, u_history_prev, u_history_depth_prev, u_sampler, u_normal), 0);
 			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 1, u_history_cur, u_history_depth_cur, u_dest), 1);
 			RD::get_singleton()->compute_list_set_push_constant(compute_list, &push, sizeof(TemporalPushConstant));
 			RD::get_singleton()->compute_list_dispatch_threads(compute_list, size.x, size.y, 1);

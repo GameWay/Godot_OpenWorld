@@ -2983,6 +2983,10 @@
 		<member name="rendering/environment/ssao/blur_passes" type="int" setter="" getter="" default="2">
 			Number of blur passes to use when computing screen-space ambient occlusion. A higher number will result in a smoother look, but will be slower to compute and will have less high-frequency detail.
 		</member>
+		<member name="rendering/environment/ssao/cortao/disocclusion_blur_frames" type="int" setter="" getter="" default="4">
+			Pixels that have accumulated fewer frames than this, such as surfaces that just became visible, get an extra depth and normal aware blur over a wider area, which fades out as their history builds up. It hides the noise of the first frames after a disocclusion. [code]0[/code] disables it.
+			[b]Note:[/b] Only used when [member Environment.ssao_mode] is [constant Environment.SSAO_MODE_CORTAO] in the Forward+ renderer.
+		</member>
 		<member name="rendering/environment/ssao/cortao/filter" type="int" setter="" getter="" default="1">
 			The CORTAO filter pass: a sparse depth and normal aware blur that prepares the noisy occlusion and bent normals for the temporal accumulation. [b]Disabled[/b] leaves all denoising to the temporal accumulation. [b]Auto[/b] uses 13 taps below 24 samples and 5 taps otherwise. Changing it recompiles the CORTAO shaders.
 			[b]Note:[/b] Only used when [member Environment.ssao_mode] is [constant Environment.SSAO_MODE_CORTAO] in the Forward+ renderer.
@@ -3025,9 +3029,11 @@
 		</member>
 		<member name="rendering/environment/ssao/fadeout_from" type="float" setter="" getter="" default="50.0">
 			Distance at which the screen-space ambient occlusion effect starts to fade out. Use this hide ambient occlusion from far away.
+			With [constant Environment.SSAO_MODE_CORTAO], the bent normals fade out toward the surface normals over the same distance.
 		</member>
 		<member name="rendering/environment/ssao/fadeout_to" type="float" setter="" getter="" default="300.0">
 			Distance at which the screen-space ambient occlusion is fully faded out. Use this hide ambient occlusion from far away.
+			With [constant Environment.SSAO_MODE_CORTAO], pixels farther than this distance are not computed, which saves GPU time in large outdoor scenes.
 		</member>
 		<member name="rendering/environment/ssao/half_size" type="bool" setter="" getter="" default="true" keywords="resolution">
 			If [code]true[/code], screen-space ambient occlusion will be rendered at half size and then upscaled before being added to the scene. This is significantly faster but may miss small details. If [code]false[/code], screen-space ambient occlusion will be rendered at full size.

@@ -76,5 +76,17 @@ uvec2 deinterleave(uint index) {
 
 void main() {
 	uvec2 pixel_coords = gl_WorkGroupID.xy * gl_WorkGroupSize.xy + deinterleave(gl_LocalInvocationIndex);
+
+	// OEngine: pixels past the end of the distance fade are not traced (the padding carries that distance).
+	float max_depth = uintBitsToFloat(params.parameters._padding0);
+	uvec2 resolution = uvec2(cortao_getResolution(params.parameters.packedResolution));
+	if (max_depth > 0.0 && all(lessThan(pixel_coords, resolution))) {
+		float depth = texelFetch(sampler2D(packed_data, nearest_clamp_sampler), ivec2(pixel_coords), 0).r;
+		if (depth > max_depth) {
+			imageStore(dest, ivec2(pixel_coords), vec4(1.0, 0.0, 0.0, 1.0));
+			return;
+		}
+	}
+
 	cortao_mainPass(pixel_coords, params.parameters);
 }
