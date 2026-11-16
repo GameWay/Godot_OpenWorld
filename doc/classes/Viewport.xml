@@ -767,6 +767,10 @@
 			Draws the atlas used by [AreaLight3D] nodes in the upper left quadrant of the [Viewport].
 			[b]Note:[/b] Only supported when using the Forward+ or Mobile rendering method.
 		</constant>
+		<constant name="DEBUG_DRAW_SSAO_BENT_NORMAL" value="29" enum="DebugDraw">
+			Draws the view space bent normals (the mean unoccluded directions) computed by CORTAO, encoded as [code]n * 0.5 + 0.5[/code]. Requires [member Environment.ssao_enabled] with [member Environment.ssao_mode] set to [constant Environment.SSAO_MODE_CORTAO].
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
+		</constant>
 		<constant name="DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST" value="0" enum="DefaultCanvasItemTextureFilter">
 			The texture filter reads from the nearest pixel only. This makes the texture look pixelated from up close, and grainy from a distance (due to mipmaps not being sampled).
 		</constant>

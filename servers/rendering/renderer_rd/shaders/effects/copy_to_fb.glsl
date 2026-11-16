@@ -17,6 +17,7 @@
 #define FLAG_ALPHA_TO_ONE (1 << 5)
 #define FLAG_LINEAR (1 << 6)
 #define FLAG_NORMAL (1 << 7)
+#define FLAG_BENT_NORMAL (1 << 9) // OEngine: CORTAO output, bent normal in GBA.
 #define FLAG_USE_SRC_SECTION (1 << 8)
 
 #ifdef USE_MULTIVIEW
@@ -71,6 +72,7 @@ void main() {
 #define FLAG_ALPHA_TO_ONE (1 << 5)
 #define FLAG_LINEAR (1 << 6)
 #define FLAG_NORMAL (1 << 7)
+#define FLAG_BENT_NORMAL (1 << 9) // OEngine: CORTAO output, bent normal in GBA.
 
 layout(push_constant, std430) uniform Params {
 	vec4 section;
@@ -187,6 +189,9 @@ void main() {
 	}
 	if (bool(params.flags & FLAG_NORMAL)) {
 		color.rgb = normalize(color.rgb * 2.0 - 1.0) * 0.5 + 0.5;
+	}
+	if (bool(params.flags & FLAG_BENT_NORMAL)) {
+		color = vec4(color.gba, 1.0);
 	}
 
 	frag_color = color / params.luminance_multiplier;

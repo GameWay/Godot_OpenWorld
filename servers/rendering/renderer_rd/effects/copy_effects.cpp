@@ -603,13 +603,16 @@ void CopyEffects::copy_to_atlas_fb(RID p_source_rd_texture, RID p_dest_framebuff
 	RD::get_singleton()->draw_list_draw(draw_list, true);
 }
 
-void CopyEffects::copy_to_fb_rect(RID p_source_rd_texture, RID p_dest_framebuffer, const Rect2i &p_rect, bool p_flip_y, bool p_force_luminance, bool p_alpha_to_zero, bool p_srgb, RID p_secondary, bool p_multiview, bool p_alpha_to_one, bool p_linear, bool p_normal, const Rect2 &p_src_rect, float p_linear_luminance_multiplier, bool p_bilinear_filtering) {
+void CopyEffects::copy_to_fb_rect(RID p_source_rd_texture, RID p_dest_framebuffer, const Rect2i &p_rect, bool p_flip_y, bool p_force_luminance, bool p_alpha_to_zero, bool p_srgb, RID p_secondary, bool p_multiview, bool p_alpha_to_one, bool p_linear, bool p_normal, const Rect2 &p_src_rect, float p_linear_luminance_multiplier, bool p_bilinear_filtering, bool p_bent_normal) {
 	UniformSetCacheRD *uniform_set_cache = UniformSetCacheRD::get_singleton();
 	ERR_FAIL_NULL(uniform_set_cache);
 	MaterialStorage *material_storage = MaterialStorage::get_singleton();
 	ERR_FAIL_NULL(material_storage);
 
 	memset(&copy_to_fb.push_constant, 0, sizeof(CopyToFbPushConstant));
+	if (p_bent_normal) {
+		copy_to_fb.push_constant.flags |= COPY_TO_FB_FLAG_BENT_NORMAL;
+	}
 	copy_to_fb.push_constant.luminance_multiplier = 1.0;
 
 	if (p_flip_y) {

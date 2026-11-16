@@ -4677,6 +4677,7 @@ void Node3DEditorViewport::_menu_option(int p_option) {
 		case VIEW_DISPLAY_DEBUG_VOXEL_GI_EMISSION:
 		case VIEW_DISPLAY_DEBUG_SCENE_LUMINANCE:
 		case VIEW_DISPLAY_DEBUG_SSAO:
+		case VIEW_DISPLAY_DEBUG_SSAO_BENT_NORMAL:
 		case VIEW_DISPLAY_DEBUG_SSIL:
 		case VIEW_DISPLAY_DEBUG_PSSM_SPLITS:
 		case VIEW_DISPLAY_DEBUG_DECAL_ATLAS:
@@ -4707,6 +4708,7 @@ void Node3DEditorViewport::_menu_option(int p_option) {
 				VIEW_DISPLAY_DEBUG_VOXEL_GI_EMISSION,
 				VIEW_DISPLAY_DEBUG_SCENE_LUMINANCE,
 				VIEW_DISPLAY_DEBUG_SSAO,
+				VIEW_DISPLAY_DEBUG_SSAO_BENT_NORMAL,
 				VIEW_DISPLAY_DEBUG_SSIL,
 				VIEW_DISPLAY_DEBUG_GI_BUFFER,
 				VIEW_DISPLAY_DEBUG_DISABLE_LOD,
@@ -4739,6 +4741,7 @@ void Node3DEditorViewport::_menu_option(int p_option) {
 				Viewport::DEBUG_DRAW_VOXEL_GI_EMISSION,
 				Viewport::DEBUG_DRAW_SCENE_LUMINANCE,
 				Viewport::DEBUG_DRAW_SSAO,
+				Viewport::DEBUG_DRAW_SSAO_BENT_NORMAL,
 				Viewport::DEBUG_DRAW_SSIL,
 				Viewport::DEBUG_DRAW_GI_BUFFER,
 				Viewport::DEBUG_DRAW_DISABLE_LOD,
@@ -7080,6 +7083,8 @@ Node3DEditorViewport::Node3DEditorViewport(Node3DEditor *p_spatial_editor, int p
 	display_submenu->add_separator();
 	_add_advanced_debug_draw_mode_item(display_submenu, TTRC("SSAO"), VIEW_DISPLAY_DEBUG_SSAO, SupportedRenderingMethods::FORWARD_PLUS,
 			TTRC("Displays the screen-space ambient occlusion buffer. Requires SSAO to be enabled in Environment to have a visible effect."));
+	_add_advanced_debug_draw_mode_item(display_submenu, TTRC("SSAO Bent Normals"), VIEW_DISPLAY_DEBUG_SSAO_BENT_NORMAL, SupportedRenderingMethods::FORWARD_PLUS,
+			TTRC("Displays the view space bent normals (mean unoccluded directions) computed by CORTAO. Requires SSAO in CORTAO mode to be enabled in Environment to have a visible effect."));
 	_add_advanced_debug_draw_mode_item(display_submenu, TTRC("SSIL"), VIEW_DISPLAY_DEBUG_SSIL, SupportedRenderingMethods::FORWARD_PLUS,
 			TTRC("Displays the screen-space indirect lighting buffer. Requires SSIL to be enabled in Environment to have a visible effect."));
 	display_submenu->add_separator();

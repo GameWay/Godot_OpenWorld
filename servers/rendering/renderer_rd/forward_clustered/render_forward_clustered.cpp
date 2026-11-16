@@ -2871,6 +2871,13 @@ void RenderForwardClustered::_render_buffers_debug_draw(const RenderDataRD *p_re
 		copy_effects->copy_to_fb_rect(final, texture_storage->render_target_get_rd_framebuffer(render_target), Rect2(Vector2(), rtsize), false, true);
 	}
 
+	// OEngine: bent normals from CORTAO (view space), only present when the SSAO texture is the RGBA8 CORTAO output.
+	if (get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_SSAO_BENT_NORMAL && rb->has_texture(RB_SCOPE_SSAO, RB_FINAL) && RD::get_singleton()->texture_get_format(rb->get_texture(RB_SCOPE_SSAO, RB_FINAL)).format == RD::DATA_FORMAT_R8G8B8A8_UNORM) {
+		RID final = rb->get_texture_slice(RB_SCOPE_SSAO, RB_FINAL, 0, 0);
+		Size2i rtsize = texture_storage->render_target_get_size(render_target);
+		copy_effects->copy_to_fb_rect(final, texture_storage->render_target_get_rd_framebuffer(render_target), Rect2(Vector2(), rtsize), false, false, false, false, RID(), false, false, false, false, Rect2(), 1.0, true, true);
+	}
+
 	if (get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_SSIL && rb->has_texture(RB_SCOPE_SSIL, RB_FINAL)) {
 		RID final = rb->get_texture_slice(RB_SCOPE_SSIL, RB_FINAL, 0, 0);
 		Size2i rtsize = texture_storage->render_target_get_size(render_target);
