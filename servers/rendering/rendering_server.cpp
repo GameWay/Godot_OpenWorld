@@ -3090,7 +3090,7 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("environment_set_adjustment", "env", "enable", "brightness", "contrast", "saturation", "use_1d_color_correction", "color_correction"), &RenderingServer::environment_set_adjustment);
 	ClassDB::bind_method(D_METHOD("environment_set_ssr", "env", "enable", "max_steps", "fade_in", "fade_out", "depth_tolerance"), &RenderingServer::environment_set_ssr);
 	ClassDB::bind_method(D_METHOD("environment_set_ssao", "env", "enable", "radius", "intensity", "power", "detail", "horizon", "sharpness", "light_affect", "ao_channel_affect"), &RenderingServer::environment_set_ssao);
-	ClassDB::bind_method(D_METHOD("environment_set_ssao_cortao", "env", "enable", "intensity", "screen_radius", "slope_compensation", "backface_boost", "bent_normal_affect", "specular_occlusion"), &RenderingServer::environment_set_ssao_cortao);
+	ClassDB::bind_method(D_METHOD("environment_set_ssao_cortao", "env", "enable", "intensity", "screen_radius", "slope_compensation", "backface_boost", "bent_normal_affect", "specular_occlusion", "mip_bias", "backface_threshold", "filter_depth_sensitivity", "filter_normal_sensitivity"), &RenderingServer::environment_set_ssao_cortao);
 	ClassDB::bind_method(D_METHOD("environment_set_fog", "env", "enable", "light_color", "light_energy", "sun_scatter", "density", "height", "height_density", "aerial_perspective", "sky_affect", "fog_mode"), &RenderingServer::environment_set_fog, DEFVAL(RSE::ENV_FOG_MODE_EXPONENTIAL));
 	ClassDB::bind_method(D_METHOD("environment_set_fog_depth", "env", "curve", "begin", "end"), &RenderingServer::environment_set_fog_depth);
 	ClassDB::bind_method(D_METHOD("environment_set_sdfgi", "env", "enable", "cascades", "min_cell_size", "y_scale", "use_occlusion", "bounce_feedback", "read_sky", "energy", "normal_bias", "probe_bias"), &RenderingServer::environment_set_sdfgi);
@@ -3754,6 +3754,17 @@ void RenderingServer::init() {
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/blur_passes", PROPERTY_HINT_RANGE, "0,6"), 2);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/environment/ssao/fadeout_from", PROPERTY_HINT_RANGE, "0.0,512,0.1,or_greater"), 50.0);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/environment/ssao/fadeout_to", PROPERTY_HINT_RANGE, "64,65536,0.1,or_greater"), 300.0);
+	// OEngine: CORTAO quality (Forward+). Changing the sample count, ray count, filter, packed normal bits or 16-bit options recompiles its shaders.
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/cortao/sample_count", PROPERTY_HINT_ENUM, "From Quality,4 (Minimal),6 (Very Low),8 (Low),12 (Medium),16 (High),24 (Very High),32 (Ultra)"), 0);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/cortao/ray_count", PROPERTY_HINT_ENUM, "8,16,32"), 1);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/cortao/filter", PROPERTY_HINT_ENUM, "Disabled,Auto,5 Taps,13 Taps"), 1);
+	GLOBAL_DEF("rendering/environment/ssao/cortao/filter_symmetry", false);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/cortao/packed_normal_bits", PROPERTY_HINT_RANGE, "4,20,2"), 10);
+	GLOBAL_DEF("rendering/environment/ssao/cortao/filter_16_bit", true);
+	GLOBAL_DEF("rendering/environment/ssao/cortao/main_pass_16_bit", false);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/cortao/temporal_frames", PROPERTY_HINT_RANGE, "1,64,1"), 16);
+	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/environment/ssao/cortao/temporal_depth_tolerance", PROPERTY_HINT_RANGE, "0.001,1,0.001"), 0.05);
+	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/environment/ssao/cortao/temporal_clamp_margin", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.05);
 
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssil/quality", PROPERTY_HINT_ENUM, "Very Low (Fast),Low (Fast),Medium (Average),High (Slow),Ultra (Custom)"), 2);
 	GLOBAL_DEF("rendering/environment/ssil/half_size", true);

@@ -462,6 +462,42 @@ float Environment::get_ssao_cortao_specular_occlusion() const {
 	return ssao_cortao_specular_occlusion;
 }
 
+void Environment::set_ssao_cortao_mip_bias(float p_value) {
+	ssao_cortao_mip_bias = p_value;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_mip_bias() const {
+	return ssao_cortao_mip_bias;
+}
+
+void Environment::set_ssao_cortao_backface_threshold(float p_value) {
+	ssao_cortao_backface_threshold = p_value;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_backface_threshold() const {
+	return ssao_cortao_backface_threshold;
+}
+
+void Environment::set_ssao_cortao_filter_depth_sensitivity(float p_value) {
+	ssao_cortao_filter_depth_sensitivity = p_value;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_filter_depth_sensitivity() const {
+	return ssao_cortao_filter_depth_sensitivity;
+}
+
+void Environment::set_ssao_cortao_filter_normal_sensitivity(float p_value) {
+	ssao_cortao_filter_normal_sensitivity = p_value;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_filter_normal_sensitivity() const {
+	return ssao_cortao_filter_normal_sensitivity;
+}
+
 void Environment::_update_ssao() {
 	RS::get_singleton()->environment_set_ssao(
 			environment,
@@ -482,7 +518,11 @@ void Environment::_update_ssao() {
 			ssao_cortao_slope_compensation,
 			ssao_cortao_backface_boost,
 			ssao_cortao_bent_normal_affect,
-			ssao_cortao_specular_occlusion);
+			ssao_cortao_specular_occlusion,
+			ssao_cortao_mip_bias,
+			ssao_cortao_backface_threshold,
+			ssao_cortao_filter_depth_sensitivity,
+			ssao_cortao_filter_normal_sensitivity);
 }
 
 // SSIL
@@ -1451,6 +1491,14 @@ void Environment::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_ssao_cortao_bent_normal_affect"), &Environment::get_ssao_cortao_bent_normal_affect);
 	ClassDB::bind_method(D_METHOD("set_ssao_cortao_specular_occlusion", "amount"), &Environment::set_ssao_cortao_specular_occlusion);
 	ClassDB::bind_method(D_METHOD("get_ssao_cortao_specular_occlusion"), &Environment::get_ssao_cortao_specular_occlusion);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_mip_bias", "value"), &Environment::set_ssao_cortao_mip_bias);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_mip_bias"), &Environment::get_ssao_cortao_mip_bias);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_backface_threshold", "value"), &Environment::set_ssao_cortao_backface_threshold);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_backface_threshold"), &Environment::get_ssao_cortao_backface_threshold);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_filter_depth_sensitivity", "value"), &Environment::set_ssao_cortao_filter_depth_sensitivity);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_filter_depth_sensitivity"), &Environment::get_ssao_cortao_filter_depth_sensitivity);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_filter_normal_sensitivity", "value"), &Environment::set_ssao_cortao_filter_normal_sensitivity);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_filter_normal_sensitivity"), &Environment::get_ssao_cortao_filter_normal_sensitivity);
 
 	ADD_GROUP("SSAO", "ssao_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "ssao_enabled", PROPERTY_HINT_GROUP_ENABLE), "set_ssao_enabled", "is_ssao_enabled");
@@ -1470,6 +1518,10 @@ void Environment::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_backface_boost", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_cortao_backface_boost", "get_ssao_cortao_backface_boost");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_bent_normal_affect", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_cortao_bent_normal_affect", "get_ssao_cortao_bent_normal_affect");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_specular_occlusion", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_cortao_specular_occlusion", "get_ssao_cortao_specular_occlusion");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_mip_bias", PROPERTY_HINT_RANGE, "-8,0,0.1"), "set_ssao_cortao_mip_bias", "get_ssao_cortao_mip_bias");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_backface_threshold", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_cortao_backface_threshold", "get_ssao_cortao_backface_threshold");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_filter_depth_sensitivity", PROPERTY_HINT_RANGE, "0,4096,1,or_greater"), "set_ssao_cortao_filter_depth_sensitivity", "get_ssao_cortao_filter_depth_sensitivity");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_filter_normal_sensitivity", PROPERTY_HINT_RANGE, "0,1024,1,or_greater"), "set_ssao_cortao_filter_normal_sensitivity", "get_ssao_cortao_filter_normal_sensitivity");
 
 	// SSIL
 	ClassDB::bind_method(D_METHOD("set_ssil_enabled", "enabled"), &Environment::set_ssil_enabled);

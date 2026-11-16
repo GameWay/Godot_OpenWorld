@@ -6,14 +6,17 @@
 
 // OEngine: CORTAO main pass. Traces rays against circular occluders built from the packed buffer and outputs
 // occlusion and a view space bent normal. See thirdparty/cortao/shaders/CORTAOMainPass.h.
-// CORTAO_SAMPLE_COUNT and the projection type come from the variant defines.
+// The projection type comes from the variant defines. CORTAO_SAMPLE_COUNT, CORTAO_RAY_COUNT,
+// CORTAO_BENT_NORMAL_LOOKUP_TABLE, CORTAO_PACKED_NORMAL_BITS and CORTAO_16_BIT come from the general defines.
 
 #extension GL_EXT_control_flow_attributes : enable
 
+#if CORTAO_16_BIT
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+#endif
+
 #define CORTAO_GLSL 1
-#define CORTAO_RAY_COUNT 16
 #define CORTAO_OCCLUDER_LOOKUP_TABLE 1
-#define CORTAO_BENT_NORMAL_LOOKUP_TABLE 1
 
 #include "thirdparty/cortao/shaders/CORTAOMainPass.h"
 
@@ -26,32 +29,37 @@ params;
 
 layout(set = 0, binding = 0) uniform texture2D packed_data; // R32F bits, with mipmaps.
 layout(set = 0, binding = 1) uniform texture2D source_normal_roughness;
-layout(set = 0, binding = 2) uniform texture3D occluder_lookup_table; // R16_UNORM, 16 rays.
-layout(set = 0, binding = 3) uniform texture2D bent_normal_lookup_table; // R8G8_SNORM, 256x256 = 2^16 entries.
+layout(set = 0, binding = 2) uniform utexture3D occluder_lookup_table; // R8/R16/R32_UINT for 8/16/32 rays.
+layout(set = 0, binding = 3) uniform texture2D bent_normal_lookup_table; // R8G8_SNORM, 256 entries per row.
 layout(set = 0, binding = 4) uniform sampler nearest_border_sampler;
 layout(set = 0, binding = 5) uniform sampler nearest_clamp_sampler;
 
 layout(rgba8_snorm, set = 1, binding = 0) uniform restrict writeonly image2D dest; // Occlusion, bent normal.
 
-uint cortao_samplePackedData(vec2 texCoords, float mipmap) {
+cortao_uint cortao_samplePackedData(cortao_float2 texCoords, cortao_float mipmap) {
 	return floatBitsToUint(textureLod(sampler2D(packed_data, nearest_border_sampler), texCoords, mipmap).r);
 }
 
-vec3 cortao_loadNormal(ivec2 pixelCoords) {
-	return normalize(texelFetch(sampler2D(source_normal_roughness, nearest_clamp_sampler), pixelCoords, 0).xyz * 2.0 - 1.0);
+cortao_half3 cortao_loadNormal(cortao_int2 pixelCoords) {
+	return cortao_half3(normalize(texelFetch(sampler2D(source_normal_roughness, nearest_clamp_sampler), pixelCoords, 0).xyz * 2.0 - 1.0));
 }
 
-uint cortao_sampleOccluderLookupTable(vec3 texCoords) {
-	return uint(textureLod(sampler3D(occluder_lookup_table, nearest_clamp_sampler), texCoords, 0.0).r * 65535.0 + 0.5);
+cortao_uint cortao_sampleOccluderLookupTable(cortao_float3 texCoords) {
+	// Nearest clamp-to-edge lookup done as a texel fetch: integer texture sampling needs Shader Model 6.7 on D3D12, loads do not.
+	const ivec3 size = ivec3(24, 24, 16); // All the lookup tables we ship are 24x24x16.
+	ivec3 texel = clamp(ivec3(floor(texCoords * vec3(size))), ivec3(0), size - 1);
+	return texelFetch(usampler3D(occluder_lookup_table, nearest_clamp_sampler), texel, 0).r;
 }
 
-vec3 cortao_loadBentNormalLookupTable(uint rayBits) {
+#if CORTAO_BENT_NORMAL_LOOKUP_TABLE
+cortao_half3 cortao_loadBentNormalLookupTable(cortao_uint rayBits) {
 	vec2 bent_normal = texelFetch(sampler2D(bent_normal_lookup_table, nearest_clamp_sampler), ivec2(rayBits & 0xFFu, rayBits >> 8u), 0).xy;
-	return vec3(bent_normal, sqrt(max(0.0, 1.0 - dot(bent_normal, bent_normal))));
+	return cortao_half3(bent_normal, sqrt(max(0.0, 1.0 - dot(bent_normal, bent_normal))));
 }
+#endif
 
-void cortao_writeResult(ivec2 pixelCoords, float occlusion, vec3 bentNormal, mat3 tangentSpaceTransform, uint rayBits) {
-	imageStore(dest, pixelCoords, vec4(occlusion, bentNormal));
+void cortao_writeResult(cortao_int2 pixelCoords, cortao_half occlusion, cortao_half3 bentNormal, cortao_half3x3 tangentSpaceTransform, cortao_uint rayBits) {
+	imageStore(dest, pixelCoords, vec4(float(occlusion), vec3(bentNormal)));
 }
 
 // Reorders the threads inside the workgroup to be more cache coherent.

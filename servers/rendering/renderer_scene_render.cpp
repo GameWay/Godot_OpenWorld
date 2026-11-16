@@ -514,8 +514,8 @@ float RendererSceneRender::environment_get_ssao_ao_channel_affect(RID p_env) con
 
 // OEngine: CORTAO
 
-void RendererSceneRender::environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion) {
-	environment_storage.environment_set_ssao_cortao(p_env, p_enable, p_intensity, p_screen_radius, p_slope_compensation, p_backface_boost, p_bent_normal_affect, p_specular_occlusion);
+void RendererSceneRender::environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion, float p_mip_bias, float p_backface_threshold, float p_filter_depth_sensitivity, float p_filter_normal_sensitivity) {
+	environment_storage.environment_set_ssao_cortao(p_env, p_enable, p_intensity, p_screen_radius, p_slope_compensation, p_backface_boost, p_bent_normal_affect, p_specular_occlusion, p_mip_bias, p_backface_threshold, p_filter_depth_sensitivity, p_filter_normal_sensitivity);
 }
 
 bool RendererSceneRender::environment_get_ssao_cortao_enabled(RID p_env) const {
@@ -544,6 +544,22 @@ float RendererSceneRender::environment_get_ssao_cortao_bent_normal_affect(RID p_
 
 float RendererSceneRender::environment_get_ssao_cortao_specular_occlusion(RID p_env) const {
 	return environment_storage.environment_get_ssao_cortao_specular_occlusion(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_mip_bias(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_mip_bias(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_backface_threshold(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_backface_threshold(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_filter_depth_sensitivity(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_filter_depth_sensitivity(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_filter_normal_sensitivity(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_filter_normal_sensitivity(p_env);
 }
 
 // SSIL

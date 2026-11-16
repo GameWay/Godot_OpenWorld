@@ -31,7 +31,10 @@
 #include "cortao.h"
 
 #include "thirdparty/cortao/tables/CORTAOBentNormalLookupTable16Rays.h"
+#include "thirdparty/cortao/tables/CORTAOBentNormalLookupTable8Rays.h"
 #include "thirdparty/cortao/tables/CORTAOOccluderLookupTable16Rays.h"
+#include "thirdparty/cortao/tables/CORTAOOccluderLookupTable32Rays.h"
+#include "thirdparty/cortao/tables/CORTAOOccluderLookupTable8Rays.h"
 
 #include "core/templates/hashfuncs.h"
 #include "servers/rendering/renderer_compositor.h"
@@ -41,20 +44,61 @@
 
 namespace RendererRD {
 
-static const int cortao_sample_counts[] = { 4, 8, 12, 16, 24 }; // RSE::EnvironmentSSAOQuality VERY_LOW to ULTRA.
+template <typename T>
+static RID _create_lookup_table_3d(RD::DataFormat p_format, const uint32_t *p_size, const T *p_data, size_t p_bytes) {
+	RD::TextureFormat tf;
+	tf.format = p_format;
+	tf.texture_type = RD::TEXTURE_TYPE_3D;
+	tf.width = p_size[0];
+	tf.height = p_size[1];
+	tf.depth = p_size[2];
+	tf.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT;
 
-CORTAO::CORTAO() {
+	Vector<uint8_t> data;
+	data.resize(p_bytes);
+	memcpy(data.ptrw(), p_data, p_bytes);
+	return RD::get_singleton()->texture_create(tf, RD::TextureView(), { data });
+}
+
+static RID _create_bent_normal_lookup_table(const int8_t *p_data, size_t p_bytes) {
+	// 2^rays R8G8_SNORM entries, 256 per row, indexed by the ray bits.
+	const uint32_t entries = p_bytes / 2;
+	RD::TextureFormat tf;
+	tf.format = RD::DATA_FORMAT_R8G8_SNORM;
+	tf.width = MIN(entries, 256u);
+	tf.height = MAX(entries / 256u, 1u);
+	tf.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT;
+
+	Vector<uint8_t> data;
+	data.resize(p_bytes);
+	memcpy(data.ptrw(), p_data, p_bytes);
+	return RD::get_singleton()->texture_create(tf, RD::TextureView(), { data });
+}
+
+CORTAO::CORTAO(const Config &p_config) {
 	static_assert(sizeof(PrepassParameters) == 32);
 	static_assert(sizeof(MainPassParameters) == 80);
 	static_assert(sizeof(FilterPassParameters) == 16);
 	static_assert(sizeof(TemporalPushConstant) == 112);
-	static_assert(sizeof(cortao_sample_counts) / sizeof(cortao_sample_counts[0]) == SAMPLE_COUNT_MAX);
+
+	config = p_config;
+	config.sample_count = CLAMP(config.sample_count, 1, 64);
+	if (config.ray_count != 8 && config.ray_count != 32) {
+		config.ray_count = 16;
+	}
+	config.packed_normal_bits = CLAMP(config.packed_normal_bits & ~1, 4, 20);
+	// 16-bit math needs float16 and int16 support in shaders.
+	const bool half_supported = RD::get_singleton()->has_feature(RD::SUPPORTS_HALF_FLOAT);
+	config.main_pass_16_bit = config.main_pass_16_bit && half_supported;
+	config.filter_16_bit = config.filter_16_bit && half_supported;
+
+	const String normal_bits_define = vformat("\n#define CORTAO_PACKED_NORMAL_BITS %d\n", config.packed_normal_bits);
 
 	{
 		Vector<String> modes;
 		modes.push_back("\n#define CORTAO_PERSPECTIVE_PROJECTION 1\n");
 		modes.push_back("\n#define CORTAO_ORTHOGRAPHIC_PROJECTION 1\n");
-		prepass_shader.initialize(modes);
+		prepass_shader.initialize(modes, normal_bits_define);
 		prepass_shader_version = prepass_shader.version_create();
 		for (int i = 0; i < 2; i++) {
 			prepass_pipelines[i].create_compute_pipeline(prepass_shader.version_get_shader(prepass_shader_version, i));
@@ -63,13 +107,17 @@ CORTAO::CORTAO() {
 
 	{
 		Vector<String> modes;
-		for (int i = 0; i < SAMPLE_COUNT_MAX; i++) {
-			modes.push_back(vformat("\n#define CORTAO_SAMPLE_COUNT %d\n#define CORTAO_PERSPECTIVE_PROJECTION 1\n", cortao_sample_counts[i]));
-			modes.push_back(vformat("\n#define CORTAO_SAMPLE_COUNT %d\n#define CORTAO_ORTHOGRAPHIC_PROJECTION 1\n", cortao_sample_counts[i]));
-		}
-		main_shader.initialize(modes);
+		modes.push_back("\n#define CORTAO_PERSPECTIVE_PROJECTION 1\n");
+		modes.push_back("\n#define CORTAO_ORTHOGRAPHIC_PROJECTION 1\n");
+		String defines = normal_bits_define;
+		defines += vformat("#define CORTAO_SAMPLE_COUNT %d\n", config.sample_count);
+		defines += vformat("#define CORTAO_RAY_COUNT %d\n", config.ray_count);
+		// There is no bent normal lookup table for 32 rays, CORTAO then sums the unoccluded rays.
+		defines += vformat("#define CORTAO_BENT_NORMAL_LOOKUP_TABLE %d\n", config.ray_count <= 16 ? 1 : 0);
+		defines += vformat("#define CORTAO_16_BIT %d\n", config.main_pass_16_bit ? 1 : 0);
+		main_shader.initialize(modes, defines);
 		main_shader_version = main_shader.version_create();
-		for (int i = 0; i < SAMPLE_COUNT_MAX * 2; i++) {
+		for (int i = 0; i < 2; i++) {
 			main_pipelines[i].create_compute_pipeline(main_shader.version_get_shader(main_shader_version, i));
 		}
 	}
@@ -78,10 +126,14 @@ CORTAO::CORTAO() {
 		Vector<String> modes;
 		modes.push_back("\n#define CORTAO_LARGE_FILTER 0\n");
 		modes.push_back("\n#define CORTAO_LARGE_FILTER 1\n");
-		filter_shader.initialize(modes);
+		String defines = normal_bits_define;
+		defines += vformat("#define CORTAO_FILTER_SYMMETRY %d\n", config.filter_symmetry ? 1 : 0);
+		defines += vformat("#define CORTAO_16_BIT %d\n", config.filter_16_bit ? 1 : 0);
+		filter_shader.initialize(modes, defines);
 		filter_shader_version = filter_shader.version_create();
-		for (int i = 0; i < 2; i++) {
-			filter_pipelines[i].create_compute_pipeline(filter_shader.version_get_shader(filter_shader_version, i));
+		if (config.filter != FILTER_DISABLED) {
+			const int variant = config.filter == FILTER_13_TAPS ? 1 : 0;
+			filter_pipelines[variant].create_compute_pipeline(filter_shader.version_get_shader(filter_shader_version, variant));
 		}
 	}
 
@@ -93,38 +145,24 @@ CORTAO::CORTAO() {
 		temporal_pipeline.create_compute_pipeline(temporal_shader.version_get_shader(temporal_shader_version, 0));
 	}
 
-	{
-		// Occluder lookup table: R16_UNORM instead of R16_UINT, integer texture sampling needs SM 6.7 on D3D12.
-		RD::TextureFormat tf;
-		tf.format = RD::DATA_FORMAT_R16_UNORM;
-		tf.texture_type = RD::TEXTURE_TYPE_3D;
-		tf.width = ::CORTAO::occluderLookupTable16RaysSize[0];
-		tf.height = ::CORTAO::occluderLookupTable16RaysSize[1];
-		tf.depth = ::CORTAO::occluderLookupTable16RaysSize[2];
-		tf.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT;
-
-		Vector<uint8_t> data;
-		data.resize(sizeof(::CORTAO::occluderLookupTable16Rays));
-		memcpy(data.ptrw(), ::CORTAO::occluderLookupTable16Rays, sizeof(::CORTAO::occluderLookupTable16Rays));
-		occluder_lookup_table = RD::get_singleton()->texture_create(tf, RD::TextureView(), { data });
-		RD::get_singleton()->set_resource_name(occluder_lookup_table, "CORTAO occluder lookup table");
+	// Lookup tables for the ray count. They are read with texel fetches (integer texture sampling needs Shader Model 6.7 on D3D12).
+	switch (config.ray_count) {
+		case 8:
+			occluder_lookup_table = _create_lookup_table_3d(RD::DATA_FORMAT_R8_UINT, ::CORTAO::occluderLookupTable8RaysSize, ::CORTAO::occluderLookupTable8Rays, sizeof(::CORTAO::occluderLookupTable8Rays));
+			bent_normal_lookup_table = _create_bent_normal_lookup_table(::CORTAO::bentNormalLookupTable8Rays, sizeof(::CORTAO::bentNormalLookupTable8Rays));
+			break;
+		case 32:
+			occluder_lookup_table = _create_lookup_table_3d(RD::DATA_FORMAT_R32_UINT, ::CORTAO::occluderLookupTable32RaysSize, ::CORTAO::occluderLookupTable32Rays, sizeof(::CORTAO::occluderLookupTable32Rays));
+			// Not read by the shader, bound to fill the slot.
+			bent_normal_lookup_table = _create_bent_normal_lookup_table(::CORTAO::bentNormalLookupTable8Rays, sizeof(::CORTAO::bentNormalLookupTable8Rays));
+			break;
+		default:
+			occluder_lookup_table = _create_lookup_table_3d(RD::DATA_FORMAT_R16_UINT, ::CORTAO::occluderLookupTable16RaysSize, ::CORTAO::occluderLookupTable16Rays, sizeof(::CORTAO::occluderLookupTable16Rays));
+			bent_normal_lookup_table = _create_bent_normal_lookup_table(::CORTAO::bentNormalLookupTable16Rays, sizeof(::CORTAO::bentNormalLookupTable16Rays));
+			break;
 	}
-
-	{
-		// Bent normal lookup table: 2^16 R8G8_SNORM entries, as a 256x256 texture indexed by the ray bits.
-		RD::TextureFormat tf;
-		tf.format = RD::DATA_FORMAT_R8G8_SNORM;
-		tf.width = 256;
-		tf.height = 256;
-		tf.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT;
-
-		static_assert(sizeof(::CORTAO::bentNormalLookupTable16Rays) == 256 * 256 * 2);
-		Vector<uint8_t> data;
-		data.resize(sizeof(::CORTAO::bentNormalLookupTable16Rays));
-		memcpy(data.ptrw(), ::CORTAO::bentNormalLookupTable16Rays, sizeof(::CORTAO::bentNormalLookupTable16Rays));
-		bent_normal_lookup_table = RD::get_singleton()->texture_create(tf, RD::TextureView(), { data });
-		RD::get_singleton()->set_resource_name(bent_normal_lookup_table, "CORTAO bent normal lookup table");
-	}
+	RD::get_singleton()->set_resource_name(occluder_lookup_table, "CORTAO occluder lookup table");
+	RD::get_singleton()->set_resource_name(bent_normal_lookup_table, "CORTAO bent normal lookup table");
 
 	{
 		RD::SamplerState sampler_state;
@@ -147,10 +185,8 @@ CORTAO::CORTAO() {
 CORTAO::~CORTAO() {
 	for (int i = 0; i < 2; i++) {
 		prepass_pipelines[i].free();
-		filter_pipelines[i].free();
-	}
-	for (int i = 0; i < SAMPLE_COUNT_MAX * 2; i++) {
 		main_pipelines[i].free();
+		filter_pipelines[i].free();
 	}
 	temporal_pipeline.free();
 
@@ -163,10 +199,6 @@ CORTAO::~CORTAO() {
 	RD::get_singleton()->free_rid(bent_normal_lookup_table);
 	RD::get_singleton()->free_rid(nearest_border_sampler);
 	RD::get_singleton()->free_rid(nearest_clamp_sampler);
-}
-
-void CORTAO::set_quality(RSE::EnvironmentSSAOQuality p_quality) {
-	quality = RSE::EnvironmentSSAOQuality(CLAMP(int(p_quality), 0, SAMPLE_COUNT_MAX - 1));
 }
 
 uint32_t CORTAO::_get_mip_count(const Size2i &p_size) {
@@ -232,8 +264,8 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 	const StringName history_depth_prev_name = history->current ? SNAME("history_depth0") : SNAME("history_depth1");
 
 	const uint32_t random_seed = hash_murmur3_one_32(history->frame);
-	const int quality_index = int(quality);
-	const bool large_filter = quality < RSE::ENV_SSAO_QUALITY_ULTRA;
+	const bool use_filter = config.filter != FILTER_DISABLED;
+	const int filter_variant = config.filter == FILTER_13_TAPS ? 1 : 0;
 
 	RD::get_singleton()->draw_command_begin_label("CORTAO");
 
@@ -326,12 +358,12 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 
 			const float max_apparent_circle_radius = inv_y * CLAMP(p_settings.screen_radius, 0.01f, 1.0f) * 2.0f;
 			params.max_apparent_circle_radius_coefficient = max_apparent_circle_radius / Math::sqrt(max_apparent_circle_radius * max_apparent_circle_radius + 1.0f);
-			params.mip_bias = Math::log2(proj_y * float(size.y) * 0.5f) - 4.0f;
+			params.mip_bias = Math::log2(proj_y * float(size.y) * 0.5f) + p_settings.mip_bias;
 			params.inverse_max_slope_compensation = 1.0f / MAX(p_settings.slope_compensation, 1.0f);
-			params.backface_threshold = 0.5f;
+			params.backface_threshold = CLAMP(p_settings.backface_threshold, 0.0f, 1.0f);
 			params.backface_boost = CLAMP(p_settings.backface_boost, 0.0f, 1.0f);
 
-			const int variant = quality_index * 2 + (orthogonal ? 1 : 0);
+			const int variant = orthogonal ? 1 : 0;
 			RID shader = main_shader.version_get_shader(main_shader_version, variant);
 			RD::Uniform u_packed(RD::UNIFORM_TYPE_TEXTURE, 0, packed);
 			RD::Uniform u_normal(RD::UNIFORM_TYPE_TEXTURE, 1, p_normal_roughness_slices[v]);
@@ -349,20 +381,20 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 			RD::get_singleton()->compute_list_add_barrier(compute_list);
 		}
 
-		/* Filter pass */
-		{
+		/* Filter pass (optional) */
+		if (use_filter) {
 			FilterPassParameters params = {};
 			params.packed_resolution = packed_resolution;
-			params.depth_sensitivity = 512.0f;
-			params.normal_sensitivity = 128.0f;
+			params.depth_sensitivity = MAX(p_settings.filter_depth_sensitivity, 0.0f);
+			params.normal_sensitivity = MAX(p_settings.filter_normal_sensitivity, 0.0f);
 
-			RID shader = filter_shader.version_get_shader(filter_shader_version, large_filter ? 1 : 0);
+			RID shader = filter_shader.version_get_shader(filter_shader_version, filter_variant);
 			RD::Uniform u_packed(RD::UNIFORM_TYPE_TEXTURE, 0, packed);
 			RD::Uniform u_source(RD::UNIFORM_TYPE_TEXTURE, 1, raw);
 			RD::Uniform u_border_sampler(RD::UNIFORM_TYPE_SAMPLER, 2, nearest_border_sampler);
 			RD::Uniform u_dest(RD::UNIFORM_TYPE_IMAGE, 0, filtered);
 
-			RD::get_singleton()->compute_list_bind_compute_pipeline(compute_list, filter_pipelines[large_filter ? 1 : 0].get_rid());
+			RD::get_singleton()->compute_list_bind_compute_pipeline(compute_list, filter_pipelines[filter_variant].get_rid());
 			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 0, u_packed, u_source, u_border_sampler), 0);
 			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 1, u_dest), 1);
 			RD::get_singleton()->compute_list_set_push_constant(compute_list, &params, sizeof(FilterPassParameters));
@@ -403,13 +435,13 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 			push.inv_resolution[1] = 1.0f / float(size.y);
 			push.intensity = MAX(p_settings.intensity, 0.0f);
 			push.flags = (orthogonal ? TEMPORAL_FLAG_ORTHOGONAL : 0) | ((history_valid && orthogonal == prev_orthogonal) ? TEMPORAL_FLAG_HISTORY_VALID : 0);
-			push.max_frames = 16.0f;
-			push.depth_tolerance = 0.05f;
-			push.clamp_margin = 0.05f;
+			push.max_frames = float(CLAMP(p_settings.temporal_frames, 1, 256));
+			push.depth_tolerance = MAX(p_settings.temporal_depth_tolerance, 0.0f);
+			push.clamp_margin = MAX(p_settings.temporal_clamp_margin, 0.0f);
 
 			RID shader = temporal_shader.version_get_shader(temporal_shader_version, 0);
 			RD::Uniform u_packed(RD::UNIFORM_TYPE_TEXTURE, 0, packed);
-			RD::Uniform u_source(RD::UNIFORM_TYPE_TEXTURE, 1, filtered);
+			RD::Uniform u_source(RD::UNIFORM_TYPE_TEXTURE, 1, use_filter ? filtered : raw);
 			RD::Uniform u_history_prev(RD::UNIFORM_TYPE_TEXTURE, 2, history_prev);
 			RD::Uniform u_history_depth_prev(RD::UNIFORM_TYPE_TEXTURE, 3, history_depth_prev);
 			RD::Uniform u_sampler(RD::UNIFORM_TYPE_SAMPLER, 4, nearest_clamp_sampler);

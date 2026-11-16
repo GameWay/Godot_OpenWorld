@@ -767,7 +767,7 @@ float RendererEnvironmentStorage::environment_get_ssao_ao_channel_affect(RID p_e
 
 // OEngine: CORTAO
 
-void RendererEnvironmentStorage::environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion) {
+void RendererEnvironmentStorage::environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion, float p_mip_bias, float p_backface_threshold, float p_filter_depth_sensitivity, float p_filter_normal_sensitivity) {
 	Environment *env = environment_owner.get_or_null(p_env);
 	ERR_FAIL_NULL(env);
 	env->ssao_cortao_enabled = p_enable;
@@ -777,6 +777,10 @@ void RendererEnvironmentStorage::environment_set_ssao_cortao(RID p_env, bool p_e
 	env->ssao_cortao_backface_boost = p_backface_boost;
 	env->ssao_cortao_bent_normal_affect = p_bent_normal_affect;
 	env->ssao_cortao_specular_occlusion = p_specular_occlusion;
+	env->ssao_cortao_mip_bias = p_mip_bias;
+	env->ssao_cortao_backface_threshold = p_backface_threshold;
+	env->ssao_cortao_filter_depth_sensitivity = p_filter_depth_sensitivity;
+	env->ssao_cortao_filter_normal_sensitivity = p_filter_normal_sensitivity;
 }
 
 bool RendererEnvironmentStorage::environment_get_ssao_cortao_enabled(RID p_env) const {
@@ -819,6 +823,30 @@ float RendererEnvironmentStorage::environment_get_ssao_cortao_specular_occlusion
 	Environment *env = environment_owner.get_or_null(p_env);
 	ERR_FAIL_NULL_V(env, 1.0);
 	return env->ssao_cortao_specular_occlusion;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_mip_bias(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, -4.0);
+	return env->ssao_cortao_mip_bias;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_backface_threshold(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 0.5);
+	return env->ssao_cortao_backface_threshold;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_filter_depth_sensitivity(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 512.0);
+	return env->ssao_cortao_filter_depth_sensitivity;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_filter_normal_sensitivity(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 128.0);
+	return env->ssao_cortao_filter_normal_sensitivity;
 }
 
 // SSIL

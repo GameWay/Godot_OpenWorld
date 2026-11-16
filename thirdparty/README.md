@@ -147,16 +147,17 @@ Files extracted from upstream source:
 
 - `CORTAOBase.h`, `CORTAOPrepass.h`, `CORTAOMainPass.h` and `CORTAOFilterPass.h`
   from `src/shaders` into `shaders`
-- `CORTAOBentNormalLookupTable16Rays.h` from `tables/normal` into `tables`
+- `CORTAOBentNormalLookupTable8Rays.h` and `CORTAOBentNormalLookupTable16Rays.h`
+  from `tables/normal` into `tables`
 - `LICENSE` as `LICENSE.txt`
 
-`tables/CORTAOOccluderLookupTable16Rays.h` is generated from
-`tables/occluder/24x24x16x16_R16_UINT.bin` (raw texture data as a C array).
+`tables/CORTAOOccluderLookupTable{8,16,32}Rays.h` are generated from
+`tables/occluder/24x24x16x{8,16,32}_R{8,16,32}_UINT.bin` (raw texture data as C arrays).
 
 Patches (marked with `-- GODOT start --`):
 
 - `CORTAOPrepass.h`: `CORTAO_SKYBOX_DEPTH` define to set the skybox depth.
-- `CORTAOBentNormalLookupTable16Rays.h`: `#pragma once` and `static const` table.
+- `CORTAOBentNormalLookupTable{8,16}Rays.h`: `#pragma once` and `static const` table.
 
 
 ## cvtt

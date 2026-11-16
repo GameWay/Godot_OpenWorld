@@ -1,4 +1,4 @@
-// CORTAO occluder lookup table for 16 rays: 24x24x16 texels, R16 (UINT/UNORM bits).
+// CORTAO occluder lookup table for 16 rays: 24x24x16 texels, R16_UINT.
 // Generated from tables/occluder/24x24x16x16_R16_UINT.bin of the CORTAO repository
 // (https://github.com/theagentd/CORTAO, MIT License, see LICENSE.txt). X varies fastest, then Y, then Z.
 

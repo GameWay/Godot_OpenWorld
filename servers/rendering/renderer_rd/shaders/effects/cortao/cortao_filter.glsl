@@ -6,9 +6,14 @@
 
 // OEngine: CORTAO filter pass. A sparse depth and normal aware blur of occlusion and bent normals that
 // prepares the result for the temporal pass. See thirdparty/cortao/shaders/CORTAOFilterPass.h.
-// CORTAO_LARGE_FILTER comes from the variant defines.
+// CORTAO_LARGE_FILTER comes from the variant defines. CORTAO_FILTER_SYMMETRY, CORTAO_PACKED_NORMAL_BITS
+// and CORTAO_16_BIT come from the general defines.
 
 #extension GL_EXT_control_flow_attributes : enable
+
+#if CORTAO_16_BIT
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+#endif
 
 #define CORTAO_GLSL 1
 #define CORTAO_FILTER_BENT_NORMAL 1
@@ -34,22 +39,22 @@ vec2 inv_resolution;
 // The offsets are applied to the texture coordinates instead of using textureGatherOffset(),
 // as the offsets are not constant expressions. The coordinates are on texel corners, so the
 // gathered footprint is the same.
-uvec4 cortao_gatherPackedData(vec2 texCoords, ivec2 offset) {
+cortao_uint4 cortao_gatherPackedData(cortao_float2 texCoords, cortao_int2 offset) {
 	return floatBitsToUint(textureGather(sampler2D(packed_data, nearest_border_sampler), texCoords + vec2(offset) * inv_resolution, 0));
 }
 
-mat4 cortao_gatherSSAO(vec2 texCoords, ivec2 offset) {
+cortao_half4x4 cortao_gatherSSAO(cortao_float2 texCoords, cortao_int2 offset) {
 	vec2 uv = texCoords + vec2(offset) * inv_resolution;
 	vec4 r = textureGather(sampler2D(source_ssao, nearest_border_sampler), uv, 0);
 	vec4 g = textureGather(sampler2D(source_ssao, nearest_border_sampler), uv, 1);
 	vec4 b = textureGather(sampler2D(source_ssao, nearest_border_sampler), uv, 2);
 	vec4 a = textureGather(sampler2D(source_ssao, nearest_border_sampler), uv, 3);
 	// One column per gathered texel.
-	return transpose(mat4(r, g, b, a));
+	return cortao_half4x4(transpose(mat4(r, g, b, a)));
 }
 
-void cortao_writeFilterOutput(ivec2 pixelCoords, vec4 ssao) {
-	imageStore(dest, pixelCoords, ssao);
+void cortao_writeFilterOutput(cortao_int2 pixelCoords, cortao_half4 ssao) {
+	imageStore(dest, pixelCoords, vec4(ssao));
 }
 
 void main() {

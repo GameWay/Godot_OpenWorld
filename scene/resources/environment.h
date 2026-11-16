@@ -151,6 +151,10 @@ private:
 	float ssao_cortao_backface_boost = 0.0;
 	float ssao_cortao_bent_normal_affect = 1.0;
 	float ssao_cortao_specular_occlusion = 1.0;
+	float ssao_cortao_mip_bias = -4.0;
+	float ssao_cortao_backface_threshold = 0.5;
+	float ssao_cortao_filter_depth_sensitivity = 512.0;
+	float ssao_cortao_filter_normal_sensitivity = 128.0;
 	void _update_ssao();
 
 	// SSIL
@@ -337,6 +341,14 @@ public:
 	float get_ssao_cortao_bent_normal_affect() const;
 	void set_ssao_cortao_specular_occlusion(float p_amount);
 	float get_ssao_cortao_specular_occlusion() const;
+	void set_ssao_cortao_mip_bias(float p_value);
+	float get_ssao_cortao_mip_bias() const;
+	void set_ssao_cortao_backface_threshold(float p_value);
+	float get_ssao_cortao_backface_threshold() const;
+	void set_ssao_cortao_filter_depth_sensitivity(float p_value);
+	float get_ssao_cortao_filter_depth_sensitivity() const;
+	void set_ssao_cortao_filter_normal_sensitivity(float p_value);
+	float get_ssao_cortao_filter_normal_sensitivity() const;
 
 	// SSIL
 	void set_ssil_enabled(bool p_enabled);

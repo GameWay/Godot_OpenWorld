@@ -261,11 +261,23 @@
 		<member name="ssao_cortao_backface_boost" type="float" setter="set_ssao_cortao_backface_boost" getter="get_ssao_cortao_backface_boost" default="0.0">
 			Enlarges the occluders seen from their back side to reduce light leaking through thin surfaces. [code]0.0[/code] is the most accurate on average, [code]1.0[/code] gives the most contrast in complex geometry but can overshadow staircase-shaped geometry. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
 		</member>
+		<member name="ssao_cortao_backface_threshold" type="float" setter="set_ssao_cortao_backface_threshold" getter="get_ssao_cortao_backface_threshold" default="0.5">
+			Threshold of the heuristic that classifies occluders as back-facing. Lower values reduce light leaking through thin surfaces but cause more self-occlusion, higher values reduce self-occlusion but also the occlusion behind thin surfaces. Try [member ssao_cortao_backface_boost] first against light leaking. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
 		<member name="ssao_cortao_bent_normal_affect" type="float" setter="set_ssao_cortao_bent_normal_affect" getter="get_ssao_cortao_bent_normal_affect" default="1.0">
 			How much the bent normal computed by CORTAO (the mean unoccluded direction around each pixel) replaces the surface normal for diffuse ambient light: sky, reflection probes, SDFGI, VoxelGI, lightmap probes and directional (SH) lightmaps. Reflections keep the surface normal. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
 		</member>
+		<member name="ssao_cortao_filter_depth_sensitivity" type="float" setter="set_ssao_cortao_filter_depth_sensitivity" getter="get_ssao_cortao_filter_depth_sensitivity" default="512.0">
+			Depth sensitivity of the CORTAO filter pass. Higher values blur less across depth discontinuities. Flat scenes can use higher values for sharper results, organic or rounded geometry may need lower values to avoid noise. [code]0.0[/code] disables the depth test. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
+		<member name="ssao_cortao_filter_normal_sensitivity" type="float" setter="set_ssao_cortao_filter_normal_sensitivity" getter="get_ssao_cortao_filter_normal_sensitivity" default="128.0">
+			Normal sensitivity of the CORTAO filter pass. Higher values blur less between pixels with different normals. [code]0.0[/code] disables the normal test. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
 		<member name="ssao_cortao_intensity" type="float" setter="set_ssao_cortao_intensity" getter="get_ssao_cortao_intensity" default="1.0">
 			Exponent applied to the CORTAO occlusion. CORTAO is physically based, so [code]1.0[/code] is the physically correct value. Values below [code]1.0[/code] lighten the occlusion and values above darken it. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
+		<member name="ssao_cortao_mip_bias" type="float" setter="set_ssao_cortao_mip_bias" getter="get_ssao_cortao_mip_bias" default="-4.0">
+			Mip level bias used when CORTAO samples its depth buffer, a balance between quality and cache performance. Values below [code]-4.0[/code] can improve stability and accuracy but may become much slower, values closer to [code]0.0[/code] are faster but can flicker and in extreme cases self-occlude. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
 		</member>
 		<member name="ssao_cortao_screen_radius" type="float" setter="set_ssao_cortao_screen_radius" getter="get_ssao_cortao_screen_radius" default="0.2">
 			Largest sampling radius on screen as a fraction of the screen height. It limits [member ssao_radius] close to the camera, where a large world radius would mostly sample outside the screen. Recommended values are between [code]0.1[/code] and [code]0.25[/code]. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
@@ -500,7 +512,7 @@
 			Adaptive screen-space ambient occlusion (ASSAO), the default algorithm.
 		</constant>
 		<constant name="SSAO_MODE_CORTAO" value="1" enum="SSAOMode">
-			Circular Occluder Ray-Traced Ambient Occlusion (CORTAO). Physically based occlusion traced against circular occluders built from the depth buffer, with bent normals used for ambient light and specular occlusion. The noise is removed by a spatial filter and a temporal accumulation that reprojects the previous frames with the camera motion. The sample count follows [member ProjectSettings.rendering/environment/ssao/quality], [member ProjectSettings.rendering/environment/ssao/half_size] and the ASSAO-only settings are ignored. Only available when using the Forward+ renderer.
+			Circular Occluder Ray-Traced Ambient Occlusion (CORTAO). Physically based occlusion traced against circular occluders built from the depth buffer, with bent normals used for ambient light and specular occlusion. The noise is removed by a spatial filter and a temporal accumulation that reprojects the previous frames with the camera motion. The sample count follows [member ProjectSettings.rendering/environment/ssao/quality] unless [member ProjectSettings.rendering/environment/ssao/cortao/sample_count] overrides it, the other quality options are in [code]rendering/environment/ssao/cortao/*[/code]. [member ProjectSettings.rendering/environment/ssao/half_size] and the ASSAO-only settings are ignored. Only available when using the Forward+ renderer.
 		</constant>
 	</constants>
 </class>

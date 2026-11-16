@@ -1506,9 +1506,46 @@ void RenderForwardClustered::_process_cortao(RenderDataRD *p_render_data, const 
 
 	RENDER_TIMESTAMP("Process CORTAO");
 
-	if (cortao == nullptr) {
-		cortao = memnew(RendererRD::CORTAO);
-		cortao->set_quality(cortao_quality);
+	// Compile time options, from rendering/environment/ssao/quality and rendering/environment/ssao/cortao/*.
+	static const int quality_sample_counts[] = { 4, 8, 12, 16, 24 }; // RSE::EnvironmentSSAOQuality VERY_LOW to ULTRA.
+	static const int override_sample_counts[] = { 0, 4, 6, 8, 12, 16, 24, 32 }; // Index 0 = from quality.
+	static const int ray_counts[] = { 8, 16, 32 };
+
+	RendererRD::CORTAO::Config config;
+	const int sample_count_option = CLAMP(GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/sample_count"), 0, 7);
+	config.sample_count = sample_count_option > 0 ? override_sample_counts[sample_count_option] : quality_sample_counts[CLAMP(int(cortao_quality), 0, 4)];
+	config.ray_count = ray_counts[CLAMP(GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/ray_count"), 0, 2)];
+	switch (GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/filter")) {
+		case 0:
+			config.filter = RendererRD::CORTAO::FILTER_DISABLED;
+			break;
+		case 2:
+			config.filter = RendererRD::CORTAO::FILTER_5_TAPS;
+			break;
+		case 3:
+			config.filter = RendererRD::CORTAO::FILTER_13_TAPS;
+			break;
+		default:
+			// Auto: low sample counts are noisier and get the wider filter.
+			config.filter = config.sample_count >= 24 ? RendererRD::CORTAO::FILTER_5_TAPS : RendererRD::CORTAO::FILTER_13_TAPS;
+			break;
+	}
+	config.filter_symmetry = GLOBAL_GET_CACHED(bool, "rendering/environment/ssao/cortao/filter_symmetry");
+	config.packed_normal_bits = GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/packed_normal_bits");
+	config.filter_16_bit = GLOBAL_GET_CACHED(bool, "rendering/environment/ssao/cortao/filter_16_bit");
+	config.main_pass_16_bit = GLOBAL_GET_CACHED(bool, "rendering/environment/ssao/cortao/main_pass_16_bit");
+
+	if (cortao == nullptr || cortao_requested_config != config) {
+		// Created on first use and recreated when the options change. The old resources are freed once the GPU is done with them.
+		if (cortao) {
+			memdelete(cortao);
+		}
+		cortao = memnew(RendererRD::CORTAO(config));
+		cortao_requested_config = config;
+		// The history was made with other settings.
+		if (rb->has_texture(RB_SCOPE_CORTAO, SNAME("packed"))) {
+			rb->clear_context(RB_SCOPE_CORTAO);
+		}
 	}
 
 	RendererRD::CORTAO::Settings settings;
@@ -1517,6 +1554,13 @@ void RenderForwardClustered::_process_cortao(RenderDataRD *p_render_data, const 
 	settings.screen_radius = environment_get_ssao_cortao_screen_radius(environment);
 	settings.slope_compensation = environment_get_ssao_cortao_slope_compensation(environment);
 	settings.backface_boost = environment_get_ssao_cortao_backface_boost(environment);
+	settings.backface_threshold = environment_get_ssao_cortao_backface_threshold(environment);
+	settings.mip_bias = environment_get_ssao_cortao_mip_bias(environment);
+	settings.filter_depth_sensitivity = environment_get_ssao_cortao_filter_depth_sensitivity(environment);
+	settings.filter_normal_sensitivity = environment_get_ssao_cortao_filter_normal_sensitivity(environment);
+	settings.temporal_frames = GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/temporal_frames");
+	settings.temporal_depth_tolerance = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/cortao/temporal_depth_tolerance");
+	settings.temporal_clamp_margin = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/cortao/temporal_clamp_margin");
 
 	// The depth buffer was rendered with the TAA jitter, so the projections used by CORTAO include it.
 	const RenderSceneDataRD *scene_data = p_render_data->scene_data;
@@ -4319,10 +4363,7 @@ void RenderForwardClustered::environment_set_ssao_quality(RSE::EnvironmentSSAOQu
 	ERR_FAIL_COND(p_quality < RSE::EnvironmentSSAOQuality::ENV_SSAO_QUALITY_VERY_LOW || p_quality > RSE::EnvironmentSSAOQuality::ENV_SSAO_QUALITY_ULTRA);
 	ss_effects->ssao_set_quality(p_quality, p_half_size, p_adaptive_target, p_blur_passes, p_fadeout_from, p_fadeout_to);
 	// OEngine: the quality also selects the CORTAO sample count.
-	cortao_quality = p_quality;
-	if (cortao) {
-		cortao->set_quality(p_quality);
-	}
+	cortao_quality = p_quality; // Applied on the next CORTAO frame.
 }
 
 void RenderForwardClustered::environment_set_ssil_quality(RSE::EnvironmentSSILQuality p_quality, bool p_half_size, float p_adaptive_target, int p_blur_passes, float p_fadeout_from, float p_fadeout_to) {

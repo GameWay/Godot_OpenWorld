@@ -1496,6 +1496,10 @@
 			<param index="5" name="backface_boost" type="float" />
 			<param index="6" name="bent_normal_affect" type="float" />
 			<param index="7" name="specular_occlusion" type="float" />
+			<param index="8" name="mip_bias" type="float" />
+			<param index="9" name="backface_threshold" type="float" />
+			<param index="10" name="filter_depth_sensitivity" type="float" />
+			<param index="11" name="filter_normal_sensitivity" type="float" />
 			<description>
 				Uses CORTAO instead of ASSAO for the screen-space ambient occlusion of this environment and sets its parameters. The radius and the effect on direct light and the AO channel are set with [method environment_set_ssao]. Only supported by the Forward+ renderer. See [member Environment.ssao_mode] for more details.
 			</description>

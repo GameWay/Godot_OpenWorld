@@ -224,7 +224,7 @@ public:
 	float environment_get_ssao_direct_light_affect(RID p_env) const;
 	float environment_get_ssao_ao_channel_affect(RID p_env) const;
 	// OEngine: CORTAO.
-	void environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion);
+	void environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion, float p_mip_bias, float p_backface_threshold, float p_filter_depth_sensitivity, float p_filter_normal_sensitivity);
 	bool environment_get_ssao_cortao_enabled(RID p_env) const;
 	float environment_get_ssao_cortao_intensity(RID p_env) const;
 	float environment_get_ssao_cortao_screen_radius(RID p_env) const;
@@ -232,6 +232,10 @@ public:
 	float environment_get_ssao_cortao_backface_boost(RID p_env) const;
 	float environment_get_ssao_cortao_bent_normal_affect(RID p_env) const;
 	float environment_get_ssao_cortao_specular_occlusion(RID p_env) const;
+	float environment_get_ssao_cortao_mip_bias(RID p_env) const;
+	float environment_get_ssao_cortao_backface_threshold(RID p_env) const;
+	float environment_get_ssao_cortao_filter_depth_sensitivity(RID p_env) const;
+	float environment_get_ssao_cortao_filter_normal_sensitivity(RID p_env) const;
 
 	virtual void environment_set_ssao_quality(RSE::EnvironmentSSAOQuality p_quality, bool p_half_size, float p_adaptive_target, int p_blur_passes, float p_fadeout_from, float p_fadeout_to) = 0;
 

@@ -62,12 +62,44 @@ public:
 // The result goes to RB_SCOPE_SSAO / RB_FINAL as RGBA8: occlusion in R, view space bent normal in GBA (n * 0.5 + 0.5).
 class CORTAO {
 public:
+	enum Filter {
+		FILTER_DISABLED,
+		FILTER_5_TAPS,
+		FILTER_13_TAPS,
+	};
+
+	// Compile time options: changing them recompiles the shaders (a new CORTAO instance).
+	struct Config {
+		int sample_count = 12; // 1 to 64, the README recommends 4 to 32.
+		int ray_count = 16; // 8, 16 or 32.
+		Filter filter = FILTER_13_TAPS;
+		bool filter_symmetry = false;
+		int packed_normal_bits = 10; // Even, 4 to 20.
+		bool main_pass_16_bit = false;
+		bool filter_16_bit = false;
+
+		bool operator==(const Config &p_other) const {
+			return sample_count == p_other.sample_count && ray_count == p_other.ray_count && filter == p_other.filter && filter_symmetry == p_other.filter_symmetry && packed_normal_bits == p_other.packed_normal_bits && main_pass_16_bit == p_other.main_pass_16_bit && filter_16_bit == p_other.filter_16_bit;
+		}
+		bool operator!=(const Config &p_other) const { return !(*this == p_other); }
+	};
+
+	// Per frame settings.
 	struct Settings {
 		float radius = 1.0; // World space radius.
 		float intensity = 1.0; // Exponent applied to the occlusion, 1.0 is physically based.
 		float screen_radius = 0.2; // Largest radius as a fraction of the screen height.
 		float slope_compensation = 4.0;
 		float backface_boost = 0.0;
+		float backface_threshold = 0.5;
+		float mip_bias = -4.0;
+		float filter_depth_sensitivity = 512.0;
+		float filter_normal_sensitivity = 128.0;
+
+		// Temporal accumulation (ours).
+		int temporal_frames = 16; // 1 disables the accumulation.
+		float temporal_depth_tolerance = 0.05;
+		float temporal_clamp_margin = 0.05;
 	};
 
 	struct ViewData {
@@ -76,18 +108,14 @@ public:
 		Vector3 eye_offset;
 	};
 
-	CORTAO();
+	CORTAO(const Config &p_config);
 	~CORTAO();
 
-	void set_quality(RSE::EnvironmentSSAOQuality p_quality);
+	const Config &get_config() const { return config; }
 
 	void process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_normal_roughness_slices, const ViewData *p_views, const Transform3D &p_cam_transform, const Transform3D &p_prev_cam_transform, const Settings &p_settings);
 
 private:
-	enum {
-		SAMPLE_COUNT_MAX = 5, // One shader variant per RSE::EnvironmentSSAOQuality.
-	};
-
 	// Must match the structs in thirdparty/cortao/shaders.
 	struct PrepassParameters {
 		uint32_t packed_resolution;
@@ -144,7 +172,7 @@ private:
 		TEMPORAL_FLAG_HISTORY_VALID = 1 << 1,
 	};
 
-	RSE::EnvironmentSSAOQuality quality = RSE::ENV_SSAO_QUALITY_MEDIUM;
+	Config config;
 
 	CortaoPrepassShaderRD prepass_shader;
 	RID prepass_shader_version;
@@ -152,7 +180,7 @@ private:
 
 	CortaoMainShaderRD main_shader;
 	RID main_shader_version;
-	PipelineDeferredRD main_pipelines[SAMPLE_COUNT_MAX * 2];
+	PipelineDeferredRD main_pipelines[2]; // Perspective, orthographic.
 
 	CortaoFilterShaderRD filter_shader;
 	RID filter_shader_version;

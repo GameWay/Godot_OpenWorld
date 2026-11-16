@@ -785,6 +785,7 @@ private:
 	// OEngine: created on first use, so its shaders are only compiled when an environment enables it.
 	RendererRD::CORTAO *cortao = nullptr;
 	RSE::EnvironmentSSAOQuality cortao_quality = RSE::ENV_SSAO_QUALITY_MEDIUM;
+	RendererRD::CORTAO::Config cortao_requested_config; // Before clamping to what the device supports.
 
 #ifdef METAL_MFXTEMPORAL_ENABLED
 	RendererRD::MFXTemporalEffect *mfx_temporal_effect = nullptr;
