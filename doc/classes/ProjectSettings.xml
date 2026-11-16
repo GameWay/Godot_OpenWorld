@@ -3188,6 +3188,10 @@
 			Multiplier for the light that SDFGI probe rays receive from lit geometry (indirect bounces). Values above [code]1.0[/code] brighten areas lit mostly by nearby surfaces, such as pits and overhangs next to sunlit ground, without adding light to spaces where nothing is lit.
 			This setting is read every frame and can be changed at runtime.
 		</member>
+		<member name="rendering/global_illumination/sdfgi/ssao_occlusion" type="float" setter="" getter="" default="0.5">
+			Share of the screen-space ambient occlusion ([member Environment.ssao_enabled], ASSAO or CORTAO) applied to the ambient light of surfaces whose ambient light comes from SDFGI or [VoxelGI]. These already occlude ambient light, so the full SSAO darkens pits and undersides twice. [code]1.0[/code] keeps the full SSAO. The effect of SSAO on reflections (specular occlusion) and direct light ([member Environment.ssao_light_affect]) is not affected.
+			This setting is read every frame and can be changed at runtime.
+		</member>
 		<member name="rendering/global_illumination/sdfgi/ssil_occlusion" type="float" setter="" getter="" default="0.35">
 			Share of the screen-space indirect lighting occlusion ([member Environment.ssil_enabled]) kept on surfaces whose ambient light comes from SDFGI or [VoxelGI]. These already occlude ambient light, so the full SSIL occlusion darkens pits and undersides twice. [code]1.0[/code] keeps the full SSIL occlusion. The light SSIL adds is not affected.
 			This setting is read every frame and can be changed at runtime.

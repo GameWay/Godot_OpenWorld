@@ -3839,6 +3839,7 @@ void RenderingServer::init() {
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/global_illumination/sdfgi/ambient_lift_min", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.0);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/global_illumination/sdfgi/ambient_lift_threshold", PROPERTY_HINT_RANGE, "0.01,1,0.01"), 0.3);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/global_illumination/sdfgi/ssil_occlusion", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.35);
+	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/global_illumination/sdfgi/ssao_occlusion", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.5);
 
 	GLOBAL_DEF_RST("rendering/environment/fog/use_legacy_blending", false);
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/volumetric_fog/volume_size", PROPERTY_HINT_RANGE, "16,512,1"), 64);

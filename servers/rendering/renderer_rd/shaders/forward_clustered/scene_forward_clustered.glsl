@@ -2171,12 +2171,17 @@ void fragment_shader(in SceneData scene_data) {
 	}
 #endif // !USE_LIGHTMAP
 
+	// OEngine: occlusion applied to the ambient light. SDFGI and VoxelGI already occlude the ambient light they
+	// provide, so only part of the SSAO is kept where it comes from the GI buffers (ssao_gi_occlusion).
+	float ambient_ao = ao;
 	if (bool(implementation_data.ss_effects_flags & SCREEN_SPACE_EFFECTS_FLAGS_USE_SSAO)) {
 #ifdef USE_MULTIVIEW
 		float ssao = texture(sampler2DArray(ao_buffer, SAMPLER_LINEAR_CLAMP), vec3(screen_uv, ViewIndex)).r;
 #else
 		float ssao = texture(sampler2D(ao_buffer, SAMPLER_LINEAR_CLAMP), screen_uv).r;
 #endif
+		float gi_ssao = mix(1.0, ssao, implementation_data.ssao_gi_occlusion);
+		ambient_ao = min(ao, mix(ssao, gi_ssao, gi_buffer_coverage));
 		ao = min(ao, ssao);
 		ao_light_affect = mix(ao_light_affect, max(ao_light_affect, implementation_data.ssao_light_affect), implementation_data.ssao_ao_affect);
 	}
@@ -2291,12 +2296,12 @@ void fragment_shader(in SceneData scene_data) {
 			vec3 a = vec3(2.0404) * albedo - vec3(0.3324);
 			vec3 b = vec3(-4.7951) * albedo + vec3(0.6417);
 			vec3 c = vec3(2.7552) * albedo + vec3(0.6903);
-			vec3 x = vec3(ao);
+			vec3 x = vec3(ambient_ao); // OEngine: ambient_ao, see above.
 			vec3 bounce_occlusion = max(x, ((x * a + b) * x + c) * x);
 			ambient_light *= bounce_occlusion;
 		}
 #else // MULTI_BOUNCE_OCCLUSION_ENABLED
-		ambient_light *= ao;
+		ambient_light *= ambient_ao; // OEngine: ambient_ao, see above.
 #endif // MULTI_BOUNCE_OCCLUSION_ENABLED
 #ifndef SPECULAR_OCCLUSION_DISABLED
 #ifdef BENT_NORMAL_MAP_USED

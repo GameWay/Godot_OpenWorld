@@ -332,7 +332,7 @@ private:
 			uint32_t volumetric_fog_enabled;
 			float volumetric_fog_inv_length;
 			float volumetric_fog_detail_spread;
-			uint32_t volumetric_fog_pad;
+			float ssao_gi_occlusion; // OEngine: share of SSAO kept on the ambient light of pixels covered by GI buffers.
 
 			float gi_ambient_lift_min;
 			float gi_ambient_lift_threshold;
