@@ -1337,6 +1337,7 @@ public:
 	PASS1RC(float, environment_get_ssao_sharpness, RID)
 	PASS1RC(float, environment_get_ssao_direct_light_affect, RID)
 	PASS1RC(float, environment_get_ssao_ao_channel_affect, RID)
+	PASS8(environment_set_ssao_cortao, RID, bool, float, float, float, float, float, float)
 
 	PASS6(environment_set_ssao_quality, RSE::EnvironmentSSAOQuality, bool, float, int, float, float)
 

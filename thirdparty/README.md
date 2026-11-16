@@ -137,6 +137,28 @@ Patches:
 - `0002-llvm-21-header.patch` ([GH-113857](https://github.com/godotengine/godot/pull/113857))
 
 
+## cortao
+
+- Upstream: https://github.com/theagentd/CORTAO
+- Version: 1.0.3 (420b168d88dd6f9276077ba62f3711cac9d7b46c, 2026)
+- License: MIT
+
+Files extracted from upstream source:
+
+- `CORTAOBase.h`, `CORTAOPrepass.h`, `CORTAOMainPass.h` and `CORTAOFilterPass.h`
+  from `src/shaders` into `shaders`
+- `CORTAOBentNormalLookupTable16Rays.h` from `tables/normal` into `tables`
+- `LICENSE` as `LICENSE.txt`
+
+`tables/CORTAOOccluderLookupTable16Rays.h` is generated from
+`tables/occluder/24x24x16x16_R16_UINT.bin` (raw texture data as a C array).
+
+Patches (marked with `-- GODOT start --`):
+
+- `CORTAOPrepass.h`: `CORTAO_SKYBOX_DEPTH` define to set the skybox depth.
+- `CORTAOBentNormalLookupTable16Rays.h`: `#pragma once` and `static const` table.
+
+
 ## cvtt
 
 - Upstream: https://github.com/elasota/ConvectionKernels

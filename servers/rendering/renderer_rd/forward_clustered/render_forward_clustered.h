@@ -34,6 +34,7 @@
 #include "servers/rendering/multi_uma_buffer.h"
 #include "servers/rendering/renderer_rd/cluster_builder_rd.h"
 #ifdef TOOLS_ENABLED
+#include "servers/rendering/renderer_rd/effects/cortao.h"
 #include "servers/rendering/renderer_rd/effects/editor_selection_outline.h"
 #endif
 #include "servers/rendering/renderer_rd/effects/fsr2.h"
@@ -304,6 +305,7 @@ private:
 		SCREEN_SPACE_EFFECTS_FLAGS_USE_SSR = (1 << 2),
 		SCREEN_SPACE_EFFECTS_FLAGS_RESOLVE_SSR = (1 << 3),
 		SCREEN_SPACE_EFFECTS_FLAGS_USE_SSCS = (1 << 4),
+		SCREEN_SPACE_EFFECTS_FLAGS_USE_SSAO_BENT_NORMAL = (1 << 5), // OEngine: CORTAO bent normals in the SSAO texture.
 	};
 
 	struct SceneState {
@@ -334,8 +336,8 @@ private:
 
 			float gi_ambient_lift_min;
 			float gi_ambient_lift_threshold;
-			uint32_t gi_ambient_pad0;
-			uint32_t gi_ambient_pad1;
+			float ssao_bent_normal_affect; // OEngine: CORTAO bent normal for ambient light.
+			float ssao_specular_occlusion; // OEngine: CORTAO cone based specular occlusion.
 		};
 
 		struct PushConstantUbershader {
@@ -780,6 +782,9 @@ private:
 	void _render_editor_selection_outline(RenderDataRD *p_render_data, bool p_reverse_cull);
 #endif
 	RendererRD::SSEffects *ss_effects = nullptr;
+	// OEngine: created on first use, so its shaders are only compiled when an environment enables it.
+	RendererRD::CORTAO *cortao = nullptr;
+	RSE::EnvironmentSSAOQuality cortao_quality = RSE::ENV_SSAO_QUALITY_MEDIUM;
 
 #ifdef METAL_MFXTEMPORAL_ENABLED
 	RendererRD::MFXTemporalEffect *mfx_temporal_effect = nullptr;
@@ -809,6 +814,7 @@ private:
 
 	/* Render Scene */
 	void _process_ssao(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_environment, const RID *p_normal_buffers, const Projection *p_projections);
+	void _process_cortao(RenderDataRD *p_render_data, const RID *p_normal_buffers);
 	void _process_ssil(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_environment, const RID *p_normal_buffers, const Projection *p_projections, const Transform3D &p_transform);
 	void _process_ssr(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_environment, const RID *p_normal_slices, const Projection *p_projections, const Vector3 *p_eye_offsets, const Transform3D &p_transform);
 	void _process_sscs(Ref<RenderSceneBuffersRD> p_render_buffers, const Projection *p_projections, const Transform3D &p_transform, const LocalVector<int> &p_contact_shadows, const RenderShadowData *p_render_shadows, float p_taa_frame_count);

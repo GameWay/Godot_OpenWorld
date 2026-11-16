@@ -512,6 +512,40 @@ float RendererSceneRender::environment_get_ssao_ao_channel_affect(RID p_env) con
 	return environment_storage.environment_get_ssao_ao_channel_affect(p_env);
 }
 
+// OEngine: CORTAO
+
+void RendererSceneRender::environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion) {
+	environment_storage.environment_set_ssao_cortao(p_env, p_enable, p_intensity, p_screen_radius, p_slope_compensation, p_backface_boost, p_bent_normal_affect, p_specular_occlusion);
+}
+
+bool RendererSceneRender::environment_get_ssao_cortao_enabled(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_enabled(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_intensity(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_intensity(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_screen_radius(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_screen_radius(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_slope_compensation(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_slope_compensation(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_backface_boost(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_backface_boost(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_bent_normal_affect(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_bent_normal_affect(p_env);
+}
+
+float RendererSceneRender::environment_get_ssao_cortao_specular_occlusion(RID p_env) const {
+	return environment_storage.environment_get_ssao_cortao_specular_occlusion(p_env);
+}
+
 // SSIL
 
 void RendererSceneRender::environment_set_ssil(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_sharpness, float p_normal_rejection) {

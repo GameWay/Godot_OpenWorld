@@ -89,6 +89,12 @@ public:
 		GLOW_BLEND_MODE_MIX,
 	};
 
+	// OEngine: SSAO algorithm, CORTAO is only available in Forward+.
+	enum SSAOMode {
+		SSAO_MODE_ASSAO,
+		SSAO_MODE_CORTAO,
+	};
+
 private:
 	RID environment;
 
@@ -138,6 +144,13 @@ private:
 	float ssao_sharpness = 0.98;
 	float ssao_direct_light_affect = 0.0;
 	float ssao_ao_channel_affect = 0.0;
+	SSAOMode ssao_mode = SSAO_MODE_ASSAO;
+	float ssao_cortao_intensity = 1.0;
+	float ssao_cortao_screen_radius = 0.2;
+	float ssao_cortao_slope_compensation = 4.0;
+	float ssao_cortao_backface_boost = 0.0;
+	float ssao_cortao_bent_normal_affect = 1.0;
+	float ssao_cortao_specular_occlusion = 1.0;
 	void _update_ssao();
 
 	// SSIL
@@ -310,6 +323,20 @@ public:
 	float get_ssao_direct_light_affect() const;
 	void set_ssao_ao_channel_affect(float p_ao_channel_affect);
 	float get_ssao_ao_channel_affect() const;
+	void set_ssao_mode(SSAOMode p_mode);
+	SSAOMode get_ssao_mode() const;
+	void set_ssao_cortao_intensity(float p_intensity);
+	float get_ssao_cortao_intensity() const;
+	void set_ssao_cortao_screen_radius(float p_screen_radius);
+	float get_ssao_cortao_screen_radius() const;
+	void set_ssao_cortao_slope_compensation(float p_slope_compensation);
+	float get_ssao_cortao_slope_compensation() const;
+	void set_ssao_cortao_backface_boost(float p_backface_boost);
+	float get_ssao_cortao_backface_boost() const;
+	void set_ssao_cortao_bent_normal_affect(float p_amount);
+	float get_ssao_cortao_bent_normal_affect() const;
+	void set_ssao_cortao_specular_occlusion(float p_amount);
+	float get_ssao_cortao_specular_occlusion() const;
 
 	// SSIL
 	void set_ssil_enabled(bool p_enabled);
@@ -460,3 +487,4 @@ VARIANT_ENUM_CAST(Environment::ToneMapper)
 VARIANT_ENUM_CAST(Environment::SDFGIYScale)
 VARIANT_ENUM_CAST(Environment::GlowBlendMode)
 VARIANT_ENUM_CAST(Environment::FogMode)
+VARIANT_ENUM_CAST(Environment::SSAOMode)

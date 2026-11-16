@@ -122,6 +122,7 @@ void RenderForwardClustered::RenderBufferDataForwardClustered::free_data() {
 		render_buffers->clear_context(RB_SCOPE_SSDS);
 		render_buffers->clear_context(RB_SCOPE_SSIL);
 		render_buffers->clear_context(RB_SCOPE_SSAO);
+		render_buffers->clear_context(RB_SCOPE_CORTAO);
 		render_buffers->clear_context(RB_SCOPE_SSR);
 		render_buffers->clear_context(RB_SCOPE_SSCS);
 	}
@@ -765,8 +766,8 @@ uint32_t RenderForwardClustered::_setup_environment(const RenderDataRD *p_render
 	scene_state.ubo.gi_ambient_lift = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/ambient_lift"), 0.0f, 0.9f);
 	scene_state.ubo.gi_ambient_lift_min = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/ambient_lift_min"), 0.0f, 1.0f);
 	scene_state.ubo.gi_ambient_lift_threshold = CLAMP(GLOBAL_GET_CACHED(float, "rendering/global_illumination/sdfgi/ambient_lift_threshold"), 0.01f, 1.0f);
-	scene_state.ubo.gi_ambient_pad0 = 0;
-	scene_state.ubo.gi_ambient_pad1 = 0;
+	scene_state.ubo.ssao_bent_normal_affect = 0.0;
+	scene_state.ubo.ssao_specular_occlusion = 0.0;
 
 	if (get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_UNSHADED) {
 		scene_state.ubo.ss_effects_flags = 0;
@@ -776,6 +777,14 @@ uint32_t RenderForwardClustered::_setup_environment(const RenderDataRD *p_render
 		uint32_t ss_flags = 0;
 		if (p_opaque_render_buffers) {
 			ss_flags |= environment_get_ssao_enabled(p_render_data->environment) ? SCREEN_SPACE_EFFECTS_FLAGS_USE_SSAO : 0;
+			if (environment_get_ssao_enabled(p_render_data->environment) && environment_get_ssao_cortao_enabled(p_render_data->environment)) {
+				// OEngine: the CORTAO output carries bent normals next to the occlusion.
+				scene_state.ubo.ssao_bent_normal_affect = CLAMP(environment_get_ssao_cortao_bent_normal_affect(p_render_data->environment), 0.0f, 1.0f);
+				scene_state.ubo.ssao_specular_occlusion = CLAMP(environment_get_ssao_cortao_specular_occlusion(p_render_data->environment), 0.0f, 1.0f);
+				if (scene_state.ubo.ssao_bent_normal_affect > 0.0 || scene_state.ubo.ssao_specular_occlusion > 0.0) {
+					ss_flags |= SCREEN_SPACE_EFFECTS_FLAGS_USE_SSAO_BENT_NORMAL;
+				}
+			}
 			ss_flags |= environment_get_ssil_enabled(p_render_data->environment) ? SCREEN_SPACE_EFFECTS_FLAGS_USE_SSIL : 0;
 			ss_flags |= environment_get_ssr_enabled(p_render_data->environment) ? SCREEN_SPACE_EFFECTS_FLAGS_USE_SSR : 0;
 			ss_flags |= bool(GLOBAL_GET_CACHED(bool, "rendering/lights_and_shadows/contact_shadow/enabled")) ? SCREEN_SPACE_EFFECTS_FLAGS_USE_SSCS : 0;
@@ -1465,6 +1474,14 @@ void RenderForwardClustered::_process_ssao(Ref<RenderSceneBuffersRD> p_render_bu
 
 	RENDER_TIMESTAMP("Process SSAO");
 
+	// OEngine: CORTAO leaves an RGBA8 texture in RB_FINAL, ASSAO writes R8.
+	if (p_render_buffers->has_texture(RB_SCOPE_SSAO, RB_FINAL) && RD::get_singleton()->texture_get_format(p_render_buffers->get_texture(RB_SCOPE_SSAO, RB_FINAL)).format != RD::DATA_FORMAT_R8_UNORM) {
+		p_render_buffers->clear_context(RB_SCOPE_SSAO);
+	}
+	if (p_render_buffers->has_texture(RB_SCOPE_CORTAO, SNAME("packed"))) {
+		p_render_buffers->clear_context(RB_SCOPE_CORTAO);
+	}
+
 	RendererRD::SSEffects::SSAOSettings settings;
 	settings.radius = environment_get_ssao_radius(p_environment);
 	settings.intensity = environment_get_ssao_intensity(p_environment);
@@ -1479,6 +1496,43 @@ void RenderForwardClustered::_process_ssao(Ref<RenderSceneBuffersRD> p_render_bu
 	for (uint32_t v = 0; v < p_render_buffers->get_view_count(); v++) {
 		ss_effects->generate_ssao(p_render_buffers, rb_data->ss_effects_data.ssao, v, p_normal_buffers[v], p_projections[v], settings);
 	}
+}
+
+void RenderForwardClustered::_process_cortao(RenderDataRD *p_render_data, const RID *p_normal_buffers) {
+	Ref<RenderSceneBuffersRD> rb = p_render_data->render_buffers;
+	ERR_FAIL_COND(rb.is_null());
+	RID environment = p_render_data->environment;
+	ERR_FAIL_COND(environment.is_null());
+
+	RENDER_TIMESTAMP("Process CORTAO");
+
+	if (cortao == nullptr) {
+		cortao = memnew(RendererRD::CORTAO);
+		cortao->set_quality(cortao_quality);
+	}
+
+	RendererRD::CORTAO::Settings settings;
+	settings.radius = environment_get_ssao_radius(environment);
+	settings.intensity = environment_get_ssao_cortao_intensity(environment);
+	settings.screen_radius = environment_get_ssao_cortao_screen_radius(environment);
+	settings.slope_compensation = environment_get_ssao_cortao_slope_compensation(environment);
+	settings.backface_boost = environment_get_ssao_cortao_backface_boost(environment);
+
+	// The depth buffer was rendered with the TAA jitter, so the projections used by CORTAO include it.
+	const RenderSceneDataRD *scene_data = p_render_data->scene_data;
+	Projection jitter;
+	jitter.add_jitter_offset(scene_data->taa_jitter);
+	Projection prev_jitter;
+	prev_jitter.add_jitter_offset(scene_data->prev_taa_jitter);
+
+	RendererRD::CORTAO::ViewData views[RendererSceneRender::MAX_RENDER_VIEWS];
+	for (uint32_t v = 0; v < rb->get_view_count(); v++) {
+		views[v].projection = jitter * scene_data->view_projection[v];
+		views[v].prev_projection = prev_jitter * scene_data->prev_view_projection[v];
+		views[v].eye_offset = scene_data->view_eye_offset[v];
+	}
+
+	cortao->process(rb, p_normal_buffers, views, scene_data->cam_transform, scene_data->prev_cam_transform, settings);
 }
 
 void RenderForwardClustered::_process_ssil(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_environment, const RID *p_normal_buffers, const Projection *p_projections, const Transform3D &p_transform) {
@@ -1702,14 +1756,20 @@ void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, boo
 			ss_effects->allocate_last_frame_buffer(rb, p_use_ssil, p_use_ssr);
 		}
 
-		if (p_use_ssao || p_use_ssil) {
+		// OEngine: CORTAO builds its own depth buffer, it does not need the downsampled depth.
+		const bool use_cortao = p_use_ssao && environment_get_ssao_cortao_enabled(p_render_data->environment);
+		if (use_cortao) {
+			_process_cortao(p_render_data, p_normal_roughness_slices);
+		}
+
+		if ((p_use_ssao && !use_cortao) || p_use_ssil) {
 			RENDER_TIMESTAMP("Prepare Depth for SSAO/SSIL");
 			// Convert our depth buffer data to linear data in
 			for (uint32_t v = 0; v < rb->get_view_count(); v++) {
 				ss_effects->downsample_depth(rb, v, p_render_data->scene_data->view_projection[v]);
 			}
 
-			if (p_use_ssao) {
+			if (p_use_ssao && !use_cortao) {
 				_process_ssao(rb, p_render_data->environment, p_normal_roughness_slices, p_render_data->scene_data->view_projection);
 			}
 
@@ -4240,6 +4300,11 @@ void RenderForwardClustered::environment_set_ssao_quality(RSE::EnvironmentSSAOQu
 	ERR_FAIL_NULL(ss_effects);
 	ERR_FAIL_COND(p_quality < RSE::EnvironmentSSAOQuality::ENV_SSAO_QUALITY_VERY_LOW || p_quality > RSE::EnvironmentSSAOQuality::ENV_SSAO_QUALITY_ULTRA);
 	ss_effects->ssao_set_quality(p_quality, p_half_size, p_adaptive_target, p_blur_passes, p_fadeout_from, p_fadeout_to);
+	// OEngine: the quality also selects the CORTAO sample count.
+	cortao_quality = p_quality;
+	if (cortao) {
+		cortao->set_quality(p_quality);
+	}
 }
 
 void RenderForwardClustered::environment_set_ssil_quality(RSE::EnvironmentSSILQuality p_quality, bool p_half_size, float p_adaptive_target, int p_blur_passes, float p_fadeout_from, float p_fadeout_to) {
@@ -5523,6 +5588,11 @@ RenderForwardClustered::~RenderForwardClustered() {
 	if (ss_effects != nullptr) {
 		memdelete(ss_effects);
 		ss_effects = nullptr;
+	}
+
+	if (cortao != nullptr) {
+		memdelete(cortao);
+		cortao = nullptr;
 	}
 
 	if (taa != nullptr) {

@@ -152,6 +152,14 @@ private:
 		float ssao_sharpness = 0.98;
 		float ssao_direct_light_affect = 0.0;
 		float ssao_ao_channel_affect = 0.0;
+		// OEngine: CORTAO instead of ASSAO (Forward+ only).
+		bool ssao_cortao_enabled = false;
+		float ssao_cortao_intensity = 1.0;
+		float ssao_cortao_screen_radius = 0.2;
+		float ssao_cortao_slope_compensation = 4.0;
+		float ssao_cortao_backface_boost = 0.0;
+		float ssao_cortao_bent_normal_affect = 1.0;
+		float ssao_cortao_specular_occlusion = 1.0;
 
 		// SSIL
 		bool ssil_enabled = false;
@@ -302,6 +310,15 @@ public:
 	float environment_get_ssao_sharpness(RID p_env) const;
 	float environment_get_ssao_direct_light_affect(RID p_env) const;
 	float environment_get_ssao_ao_channel_affect(RID p_env) const;
+	// OEngine: CORTAO.
+	void environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion);
+	bool environment_get_ssao_cortao_enabled(RID p_env) const;
+	float environment_get_ssao_cortao_intensity(RID p_env) const;
+	float environment_get_ssao_cortao_screen_radius(RID p_env) const;
+	float environment_get_ssao_cortao_slope_compensation(RID p_env) const;
+	float environment_get_ssao_cortao_backface_boost(RID p_env) const;
+	float environment_get_ssao_cortao_bent_normal_affect(RID p_env) const;
+	float environment_get_ssao_cortao_specular_occlusion(RID p_env) const;
 
 	// SSIL
 	void environment_set_ssil(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_sharpness, float p_normal_rejection);

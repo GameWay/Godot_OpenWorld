@@ -1486,6 +1486,20 @@
 				Sets the variables to be used with the screen-space ambient occlusion (SSAO) post-process effect. See [Environment] for more details.
 			</description>
 		</method>
+		<method name="environment_set_ssao_cortao">
+			<return type="void" />
+			<param index="0" name="env" type="RID" />
+			<param index="1" name="enable" type="bool" />
+			<param index="2" name="intensity" type="float" />
+			<param index="3" name="screen_radius" type="float" />
+			<param index="4" name="slope_compensation" type="float" />
+			<param index="5" name="backface_boost" type="float" />
+			<param index="6" name="bent_normal_affect" type="float" />
+			<param index="7" name="specular_occlusion" type="float" />
+			<description>
+				Uses CORTAO instead of ASSAO for the screen-space ambient occlusion of this environment and sets its parameters. The radius and the effect on direct light and the AO channel are set with [method environment_set_ssao]. Only supported by the Forward+ renderer. See [member Environment.ssao_mode] for more details.
+			</description>
+		</method>
 		<method name="environment_set_ssao_quality">
 			<return type="void" />
 			<param index="0" name="quality" type="int" enum="RenderingServer.EnvironmentSSAOQuality" />

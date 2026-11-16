@@ -398,6 +398,70 @@ float Environment::get_ssao_ao_channel_affect() const {
 	return ssao_ao_channel_affect;
 }
 
+void Environment::set_ssao_mode(SSAOMode p_mode) {
+	ssao_mode = p_mode;
+	_update_ssao();
+	notify_property_list_changed();
+}
+
+Environment::SSAOMode Environment::get_ssao_mode() const {
+	return ssao_mode;
+}
+
+void Environment::set_ssao_cortao_intensity(float p_intensity) {
+	ssao_cortao_intensity = p_intensity;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_intensity() const {
+	return ssao_cortao_intensity;
+}
+
+void Environment::set_ssao_cortao_screen_radius(float p_screen_radius) {
+	ssao_cortao_screen_radius = p_screen_radius;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_screen_radius() const {
+	return ssao_cortao_screen_radius;
+}
+
+void Environment::set_ssao_cortao_slope_compensation(float p_slope_compensation) {
+	ssao_cortao_slope_compensation = p_slope_compensation;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_slope_compensation() const {
+	return ssao_cortao_slope_compensation;
+}
+
+void Environment::set_ssao_cortao_backface_boost(float p_backface_boost) {
+	ssao_cortao_backface_boost = p_backface_boost;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_backface_boost() const {
+	return ssao_cortao_backface_boost;
+}
+
+void Environment::set_ssao_cortao_bent_normal_affect(float p_amount) {
+	ssao_cortao_bent_normal_affect = p_amount;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_bent_normal_affect() const {
+	return ssao_cortao_bent_normal_affect;
+}
+
+void Environment::set_ssao_cortao_specular_occlusion(float p_amount) {
+	ssao_cortao_specular_occlusion = p_amount;
+	_update_ssao();
+}
+
+float Environment::get_ssao_cortao_specular_occlusion() const {
+	return ssao_cortao_specular_occlusion;
+}
+
 void Environment::_update_ssao() {
 	RS::get_singleton()->environment_set_ssao(
 			environment,
@@ -410,6 +474,15 @@ void Environment::_update_ssao() {
 			ssao_sharpness,
 			ssao_direct_light_affect,
 			ssao_ao_channel_affect);
+	RS::get_singleton()->environment_set_ssao_cortao(
+			environment,
+			ssao_mode == SSAO_MODE_CORTAO,
+			ssao_cortao_intensity,
+			ssao_cortao_screen_radius,
+			ssao_cortao_slope_compensation,
+			ssao_cortao_backface_boost,
+			ssao_cortao_bent_normal_affect,
+			ssao_cortao_specular_occlusion);
 }
 
 // SSIL
@@ -1192,6 +1265,14 @@ void Environment::_validate_property(PropertyInfo &p_property) const {
 			}
 			return;
 		}
+	} else if (p_property.name.begins_with("ssao_")) {
+		// OEngine: show the settings of the selected SSAO algorithm.
+		const bool cortao_property = p_property.name.begins_with("ssao_cortao_");
+		const bool assao_property = p_property.name == "ssao_intensity" || p_property.name == "ssao_power" || p_property.name == "ssao_detail" || p_property.name == "ssao_horizon" || p_property.name == "ssao_sharpness";
+		if ((cortao_property && ssao_mode != SSAO_MODE_CORTAO) || (assao_property && ssao_mode == SSAO_MODE_CORTAO)) {
+			p_property.usage = PROPERTY_USAGE_NO_EDITOR;
+		}
+		return;
 	}
 
 	if (p_property.name == "background_color") {
@@ -1356,9 +1437,24 @@ void Environment::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_ssao_direct_light_affect"), &Environment::get_ssao_direct_light_affect);
 	ClassDB::bind_method(D_METHOD("set_ssao_ao_channel_affect", "amount"), &Environment::set_ssao_ao_channel_affect);
 	ClassDB::bind_method(D_METHOD("get_ssao_ao_channel_affect"), &Environment::get_ssao_ao_channel_affect);
+	ClassDB::bind_method(D_METHOD("set_ssao_mode", "mode"), &Environment::set_ssao_mode);
+	ClassDB::bind_method(D_METHOD("get_ssao_mode"), &Environment::get_ssao_mode);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_intensity", "intensity"), &Environment::set_ssao_cortao_intensity);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_intensity"), &Environment::get_ssao_cortao_intensity);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_screen_radius", "screen_radius"), &Environment::set_ssao_cortao_screen_radius);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_screen_radius"), &Environment::get_ssao_cortao_screen_radius);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_slope_compensation", "slope_compensation"), &Environment::set_ssao_cortao_slope_compensation);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_slope_compensation"), &Environment::get_ssao_cortao_slope_compensation);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_backface_boost", "backface_boost"), &Environment::set_ssao_cortao_backface_boost);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_backface_boost"), &Environment::get_ssao_cortao_backface_boost);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_bent_normal_affect", "amount"), &Environment::set_ssao_cortao_bent_normal_affect);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_bent_normal_affect"), &Environment::get_ssao_cortao_bent_normal_affect);
+	ClassDB::bind_method(D_METHOD("set_ssao_cortao_specular_occlusion", "amount"), &Environment::set_ssao_cortao_specular_occlusion);
+	ClassDB::bind_method(D_METHOD("get_ssao_cortao_specular_occlusion"), &Environment::get_ssao_cortao_specular_occlusion);
 
 	ADD_GROUP("SSAO", "ssao_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "ssao_enabled", PROPERTY_HINT_GROUP_ENABLE), "set_ssao_enabled", "is_ssao_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "ssao_mode", PROPERTY_HINT_ENUM, "ASSAO,CORTAO"), "set_ssao_mode", "get_ssao_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_radius", PROPERTY_HINT_RANGE, "0.01,16,0.01,or_greater"), "set_ssao_radius", "get_ssao_radius");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_intensity", PROPERTY_HINT_RANGE, "0,16,0.01,or_greater"), "set_ssao_intensity", "get_ssao_intensity");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_power", PROPERTY_HINT_EXP_EASING, "positive_only"), "set_ssao_power", "get_ssao_power");
@@ -1367,6 +1463,13 @@ void Environment::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_sharpness", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_sharpness", "get_ssao_sharpness");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_light_affect", PROPERTY_HINT_RANGE, "0.00,1,0.01"), "set_ssao_direct_light_affect", "get_ssao_direct_light_affect");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_ao_channel_affect", PROPERTY_HINT_RANGE, "0.00,1,0.01"), "set_ssao_ao_channel_affect", "get_ssao_ao_channel_affect");
+	ADD_SUBGROUP("CORTAO", "ssao_cortao_");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_intensity", PROPERTY_HINT_RANGE, "0,4,0.01,or_greater"), "set_ssao_cortao_intensity", "get_ssao_cortao_intensity");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_screen_radius", PROPERTY_HINT_RANGE, "0.01,0.5,0.01"), "set_ssao_cortao_screen_radius", "get_ssao_cortao_screen_radius");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_slope_compensation", PROPERTY_HINT_RANGE, "1,8,0.1"), "set_ssao_cortao_slope_compensation", "get_ssao_cortao_slope_compensation");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_backface_boost", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_cortao_backface_boost", "get_ssao_cortao_backface_boost");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_bent_normal_affect", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_cortao_bent_normal_affect", "get_ssao_cortao_bent_normal_affect");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "ssao_cortao_specular_occlusion", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ssao_cortao_specular_occlusion", "get_ssao_cortao_specular_occlusion");
 
 	// SSIL
 	ClassDB::bind_method(D_METHOD("set_ssil_enabled", "enabled"), &Environment::set_ssil_enabled);
@@ -1632,6 +1735,9 @@ void Environment::_bind_methods() {
 	BIND_ENUM_CONSTANT(SDFGI_Y_SCALE_50_PERCENT);
 	BIND_ENUM_CONSTANT(SDFGI_Y_SCALE_75_PERCENT);
 	BIND_ENUM_CONSTANT(SDFGI_Y_SCALE_100_PERCENT);
+
+	BIND_ENUM_CONSTANT(SSAO_MODE_ASSAO);
+	BIND_ENUM_CONSTANT(SSAO_MODE_CORTAO);
 }
 
 Environment::Environment() {

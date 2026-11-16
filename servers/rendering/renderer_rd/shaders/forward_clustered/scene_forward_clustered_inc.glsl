@@ -202,6 +202,7 @@ layout(set = 0, binding = 2) uniform sampler shadow_sampler;
 #define SCREEN_SPACE_EFFECTS_FLAGS_USE_SSR (1 << 2)
 #define SCREEN_SPACE_EFFECTS_FLAGS_RESOLVE_SSR (1 << 3)
 #define SCREEN_SPACE_EFFECTS_FLAGS_USE_SSCS (1 << 4)
+#define SCREEN_SPACE_EFFECTS_FLAGS_USE_SSAO_BENT_NORMAL (1 << 5) // OEngine: CORTAO, ao_buffer.gba holds a view space bent normal.
 
 layout(set = 0, binding = 3, std430) restrict readonly buffer OmniLights {
 	LightData data[];
@@ -356,8 +357,8 @@ struct ImplementationData {
 	// OEngine: see rendering/global_illumination/sdfgi/ambient_lift_min and ambient_lift_threshold.
 	float gi_ambient_lift_min;
 	float gi_ambient_lift_threshold;
-	uint gi_ambient_pad0;
-	uint gi_ambient_pad1;
+	float ssao_bent_normal_affect; // OEngine: CORTAO bent normal for ambient light.
+	float ssao_specular_occlusion; // OEngine: CORTAO cone based specular occlusion.
 };
 
 layout(set = 1, binding = 1, std140) uniform ImplementationDataBlock {

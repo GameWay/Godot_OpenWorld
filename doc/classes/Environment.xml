@@ -258,6 +258,24 @@
 		<member name="ssao_ao_channel_affect" type="float" setter="set_ssao_ao_channel_affect" getter="get_ssao_ao_channel_affect" default="0.0">
 			The screen-space ambient occlusion intensity on materials that have an AO texture defined. Values higher than [code]0[/code] will make the SSAO effect visible in areas darkened by AO textures.
 		</member>
+		<member name="ssao_cortao_backface_boost" type="float" setter="set_ssao_cortao_backface_boost" getter="get_ssao_cortao_backface_boost" default="0.0">
+			Enlarges the occluders seen from their back side to reduce light leaking through thin surfaces. [code]0.0[/code] is the most accurate on average, [code]1.0[/code] gives the most contrast in complex geometry but can overshadow staircase-shaped geometry. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
+		<member name="ssao_cortao_bent_normal_affect" type="float" setter="set_ssao_cortao_bent_normal_affect" getter="get_ssao_cortao_bent_normal_affect" default="1.0">
+			How much the bent normal computed by CORTAO (the mean unoccluded direction around each pixel) replaces the surface normal when sampling ambient light from the sky and reflection probes. Lighting from SDFGI, VoxelGI and lightmaps is not affected. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
+		<member name="ssao_cortao_intensity" type="float" setter="set_ssao_cortao_intensity" getter="get_ssao_cortao_intensity" default="1.0">
+			Exponent applied to the CORTAO occlusion. CORTAO is physically based, so [code]1.0[/code] is the physically correct value. Values below [code]1.0[/code] lighten the occlusion and values above darken it. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
+		<member name="ssao_cortao_screen_radius" type="float" setter="set_ssao_cortao_screen_radius" getter="get_ssao_cortao_screen_radius" default="0.2">
+			Largest sampling radius on screen as a fraction of the screen height. It limits [member ssao_radius] close to the camera, where a large world radius would mostly sample outside the screen. Recommended values are between [code]0.1[/code] and [code]0.25[/code]. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
+		<member name="ssao_cortao_slope_compensation" type="float" setter="set_ssao_cortao_slope_compensation" getter="get_ssao_cortao_slope_compensation" default="4.0">
+			How much CORTAO enlarges the occluders of surfaces seen at a grazing angle, which cover less of the screen. [code]1.0[/code] disables the compensation. Higher values keep the occlusion of slopes more consistent while the camera moves, but can cause popping when surfaces approach a 90 degree angle. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
+		<member name="ssao_cortao_specular_occlusion" type="float" setter="set_ssao_cortao_specular_occlusion" getter="get_ssao_cortao_specular_occlusion" default="1.0">
+			How much the specular occlusion of indirect reflections is computed from the intersection of the reflection cone with the visibility cone given by the CORTAO bent normal and occlusion, instead of the default estimate from the ambient light. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+		</member>
 		<member name="ssao_detail" type="float" setter="set_ssao_detail" getter="get_ssao_detail" default="0.5">
 			Sets the strength of the additional level of detail for the screen-space ambient occlusion effect. A high value makes the detail pass more prominent, but it may contribute to aliasing in your final image.
 		</member>
@@ -273,6 +291,9 @@
 		</member>
 		<member name="ssao_light_affect" type="float" setter="set_ssao_direct_light_affect" getter="get_ssao_direct_light_affect" default="0.0">
 			The screen-space ambient occlusion intensity in direct light. In real life, ambient occlusion only applies to indirect light, which means its effects can't be seen in direct light. Values higher than [code]0[/code] will make the SSAO effect visible in direct light.
+		</member>
+		<member name="ssao_mode" type="int" setter="set_ssao_mode" getter="get_ssao_mode" enum="Environment.SSAOMode" default="0">
+			The screen-space ambient occlusion algorithm. [constant SSAO_MODE_CORTAO] is only available when using the Forward+ renderer, other renderers use [constant SSAO_MODE_ASSAO].
 		</member>
 		<member name="ssao_power" type="float" setter="set_ssao_power" getter="get_ssao_power" default="1.5">
 			The distribution of occlusion. A higher value results in darker occlusion, similar to [member ssao_intensity], but with a sharper falloff.
@@ -474,6 +495,12 @@
 		</constant>
 		<constant name="SDFGI_Y_SCALE_100_PERCENT" value="2" enum="SDFGIYScale">
 			Use 100% scale for SDFGI on the Y (vertical) axis. SDFGI cells will be as tall as they are wide. This is usually the best choice for highly vertical scenes. The downside is that light leaking may become more noticeable with thin floors and ceilings.
+		</constant>
+		<constant name="SSAO_MODE_ASSAO" value="0" enum="SSAOMode">
+			Adaptive screen-space ambient occlusion (ASSAO), the default algorithm.
+		</constant>
+		<constant name="SSAO_MODE_CORTAO" value="1" enum="SSAOMode">
+			Circular Occluder Ray-Traced Ambient Occlusion (CORTAO). Physically based occlusion traced against circular occluders built from the depth buffer, with bent normals used for ambient light and specular occlusion. The noise is removed by a spatial filter and a temporal accumulation that reprojects the previous frames with the camera motion. The sample count follows [member ProjectSettings.rendering/environment/ssao/quality], [member ProjectSettings.rendering/environment/ssao/half_size] and the ASSAO-only settings are ignored. Only available when using the Forward+ renderer.
 		</constant>
 	</constants>
 </class>

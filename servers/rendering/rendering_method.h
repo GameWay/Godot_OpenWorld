@@ -286,6 +286,8 @@ public:
 	virtual float environment_get_ssao_sharpness(RID p_env) const = 0;
 	virtual float environment_get_ssao_direct_light_affect(RID p_env) const = 0;
 	virtual float environment_get_ssao_ao_channel_affect(RID p_env) const = 0;
+	// OEngine: CORTAO.
+	virtual void environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion) = 0;
 
 	virtual void environment_set_ssao_quality(RSE::EnvironmentSSAOQuality p_quality, bool p_half_size, float p_adaptive_target, int p_blur_passes, float p_fadeout_from, float p_fadeout_to) = 0;
 

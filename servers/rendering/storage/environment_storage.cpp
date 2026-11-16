@@ -765,6 +765,62 @@ float RendererEnvironmentStorage::environment_get_ssao_ao_channel_affect(RID p_e
 	return env->ssao_ao_channel_affect;
 }
 
+// OEngine: CORTAO
+
+void RendererEnvironmentStorage::environment_set_ssao_cortao(RID p_env, bool p_enable, float p_intensity, float p_screen_radius, float p_slope_compensation, float p_backface_boost, float p_bent_normal_affect, float p_specular_occlusion) {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL(env);
+	env->ssao_cortao_enabled = p_enable;
+	env->ssao_cortao_intensity = p_intensity;
+	env->ssao_cortao_screen_radius = p_screen_radius;
+	env->ssao_cortao_slope_compensation = p_slope_compensation;
+	env->ssao_cortao_backface_boost = p_backface_boost;
+	env->ssao_cortao_bent_normal_affect = p_bent_normal_affect;
+	env->ssao_cortao_specular_occlusion = p_specular_occlusion;
+}
+
+bool RendererEnvironmentStorage::environment_get_ssao_cortao_enabled(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, false);
+	return env->ssao_cortao_enabled;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_intensity(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 1.0);
+	return env->ssao_cortao_intensity;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_screen_radius(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 0.2);
+	return env->ssao_cortao_screen_radius;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_slope_compensation(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 4.0);
+	return env->ssao_cortao_slope_compensation;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_backface_boost(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 0.0);
+	return env->ssao_cortao_backface_boost;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_bent_normal_affect(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 1.0);
+	return env->ssao_cortao_bent_normal_affect;
+}
+
+float RendererEnvironmentStorage::environment_get_ssao_cortao_specular_occlusion(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 1.0);
+	return env->ssao_cortao_specular_occlusion;
+}
+
 // SSIL
 
 void RendererEnvironmentStorage::environment_set_ssil(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_sharpness, float p_normal_rejection) {
