@@ -471,6 +471,7 @@ public:
 		bool using_half_size_gi = false;
 
 		RID uniform_set[RendererSceneRender::MAX_RENDER_VIEWS];
+		RID uniform_set_bent_normal[RendererSceneRender::MAX_RENDER_VIEWS]; // OEngine: bent normal texture the uniform set was built with.
 		RID scene_data_ubo;
 
 		RID get_voxel_gi_buffer();
@@ -812,7 +813,7 @@ public:
 
 		float z_near;
 		float z_far;
-		float pad2;
+		float bent_normal_affect; // OEngine: CORTAO bent normal for the diffuse GI.
 		float pad3;
 	};
 
@@ -855,7 +856,8 @@ public:
 	Ref<SDFGI> create_sdfgi(RID p_env, const Vector3 &p_world_position, uint32_t p_requested_history_size);
 
 	void setup_voxel_gi_instances(RenderDataRD *p_render_data, Ref<RenderSceneBuffersRD> p_render_buffers, const Transform3D &p_transform, const PagedArray<RID> &p_voxel_gi_instances, uint32_t &r_voxel_gi_instances_used);
-	void process_gi(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_normal_roughness_slices, const RID *p_voxel_gi_buffer_slices, RID p_environment, uint32_t p_view_count, const Projection *p_projections, const Vector3 *p_eye_offsets, const Transform3D &p_cam_transform, const PagedArray<RID> &p_voxel_gi_instances);
+	// OEngine: p_bent_normal_slices (one per view, may be null) holds the CORTAO output, used for the diffuse GI when p_bent_normal_affect > 0.
+	void process_gi(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_normal_roughness_slices, const RID *p_voxel_gi_buffer_slices, RID p_environment, uint32_t p_view_count, const Projection *p_projections, const Vector3 *p_eye_offsets, const Transform3D &p_cam_transform, const PagedArray<RID> &p_voxel_gi_instances, const RID *p_bent_normal_slices = nullptr, float p_bent_normal_affect = 0.0);
 
 	RID voxel_gi_instance_create(RID p_base);
 	void voxel_gi_instance_set_transform_to_data(RID p_probe, const Transform3D &p_xform);

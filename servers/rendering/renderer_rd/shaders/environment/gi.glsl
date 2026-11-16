@@ -119,6 +119,9 @@ scene_data;
 layout(r8ui, set = 0, binding = 19) uniform restrict readonly uimage2D vrs_buffer;
 #endif
 
+// OEngine: CORTAO output, view space bent normal in GBA (n * 0.5 + 0.5). Only read when params.bent_normal_affect > 0.
+layout(set = 0, binding = 20) uniform texture2D ssao_bent_normal_buffer;
+
 layout(push_constant, std430) uniform Params {
 	uint max_voxel_gi_instances;
 	bool high_quality_vct;
@@ -129,7 +132,7 @@ layout(push_constant, std430) uniform Params {
 
 	float z_near;
 	float z_far;
-	float pad2;
+	float bent_normal_affect; // OEngine: CORTAO bent normal for the diffuse GI.
 	float pad3;
 }
 params;
@@ -389,7 +392,6 @@ void sdfgi_process(vec3 vertex, vec3 normal, vec3 reflection, float roughness, o
 			const float occlusion_softness = 1.0;
 			const uint max_rough_steps = 256u;
 			uint steps = 0u;
-
 
 			float radius_sizes[SDFGI_MAX_CASCADES];
 			cascade = 0xFFFF;
@@ -658,11 +660,24 @@ void process_gi(ivec2 pos, vec3 vertex, inout vec4 ambient_light, inout vec4 ref
 		roughness /= (127.0 / 255.0);
 		vec3 view = -normalize(mat3(scene_data.cam_transform) * (vertex - scene_data.eye_offset[gl_GlobalInvocationID.z].xyz));
 		vertex = mat3(scene_data.cam_transform) * vertex;
+
+		// OEngine: the diffuse GI is gathered around the CORTAO bent normal (the mean unoccluded direction),
+		// reflections keep the surface normal.
+		vec3 diffuse_normal = normal;
+		if (params.bent_normal_affect > 0.0) {
+			vec3 bent_normal = texelFetch(sampler2D(ssao_bent_normal_buffer, linear_sampler), pos, 0).gba * 2.0 - 1.0;
+			float bent_normal_length = length(bent_normal);
+			if (bent_normal_length > 0.1) {
+				diffuse_normal = normalize(normal + (bent_normal / bent_normal_length - normal) * params.bent_normal_affect);
+			}
+		}
+		diffuse_normal = normalize(mat3(scene_data.cam_transform) * diffuse_normal);
+
 		normal = normalize(mat3(scene_data.cam_transform) * normal);
 		vec3 reflection = normalize(reflect(-view, normal));
 
 #ifdef USE_SDFGI
-		sdfgi_process(vertex, normal, reflection, roughness, ambient_light, reflection_light);
+		sdfgi_process(vertex, diffuse_normal, reflection, roughness, ambient_light, reflection_light);
 #endif
 
 #ifdef USE_VOXEL_GI_INSTANCES
@@ -674,10 +689,11 @@ void process_gi(ivec2 pos, vec3 vertex, inout vec4 ambient_light, inout vec4 ref
 #endif
 			roughness *= roughness;
 			//find arbitrary tangent and bitangent, then build a matrix
-			vec3 v0 = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
-			vec3 tangent = normalize(cross(v0, normal));
-			vec3 bitangent = normalize(cross(tangent, normal));
-			mat3 normal_mat = mat3(tangent, bitangent, normal);
+			// OEngine: the diffuse cones follow the CORTAO bent normal.
+			vec3 v0 = abs(diffuse_normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+			vec3 tangent = normalize(cross(v0, diffuse_normal));
+			vec3 bitangent = normalize(cross(tangent, diffuse_normal));
+			mat3 normal_mat = mat3(tangent, bitangent, diffuse_normal);
 
 			vec4 amb_accum = vec4(0.0);
 			vec4 spec_accum = vec4(0.0);
@@ -685,7 +701,7 @@ void process_gi(ivec2 pos, vec3 vertex, inout vec4 ambient_light, inout vec4 ref
 
 			for (uint i = 0; i < params.max_voxel_gi_instances; i++) {
 				if (any(equal(uvec2(i), voxel_gi_tex))) {
-					voxel_gi_compute(i, vertex, normal, reflection, normal_mat, roughness, spec_accum, amb_accum, blend_accum);
+					voxel_gi_compute(i, vertex, diffuse_normal, reflection, normal_mat, roughness, spec_accum, amb_accum, blend_accum);
 				}
 			}
 			if (blend_accum > 0.0) {

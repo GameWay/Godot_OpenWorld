@@ -1710,6 +1710,13 @@ void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, boo
 		}
 	}
 
+	// OEngine: CORTAO runs before GI, so SDFGI and VoxelGI can gather their diffuse light around its bent normals.
+	// It only needs the depth and normal roughness buffers from the depth prepass.
+	const bool use_cortao = rb_data.is_valid() && ss_effects && p_use_ssao && environment_get_ssao_cortao_enabled(p_render_data->environment);
+	if (use_cortao) {
+		_process_cortao(p_render_data, p_normal_roughness_slices);
+	}
+
 	// Render GI
 
 	bool render_shadows = p_render_data->directional_shadows.size() || p_render_data->shadows.size();
@@ -1740,7 +1747,16 @@ void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, boo
 	}
 
 	if (render_gi) {
-		gi.process_gi(rb, p_normal_roughness_slices, p_voxel_gi_buffer_slices, p_render_data->environment, p_render_data->scene_data->view_count, p_render_data->scene_data->view_projection, p_render_data->scene_data->view_eye_offset, p_render_data->scene_data->cam_transform, *p_render_data->voxel_gi_instances);
+		// OEngine: CORTAO bent normals for the diffuse GI.
+		RID bent_normal_slices[RendererSceneRender::MAX_RENDER_VIEWS];
+		float bent_normal_affect = 0.0;
+		if (use_cortao && rb->has_texture(RB_SCOPE_SSAO, RB_FINAL)) {
+			bent_normal_affect = CLAMP(environment_get_ssao_cortao_bent_normal_affect(p_render_data->environment), 0.0f, 1.0f);
+			for (uint32_t v = 0; v < rb->get_view_count(); v++) {
+				bent_normal_slices[v] = rb->get_texture_slice(RB_SCOPE_SSAO, RB_FINAL, v, 0);
+			}
+		}
+		gi.process_gi(rb, p_normal_roughness_slices, p_voxel_gi_buffer_slices, p_render_data->environment, p_render_data->scene_data->view_count, p_render_data->scene_data->view_projection, p_render_data->scene_data->view_eye_offset, p_render_data->scene_data->cam_transform, *p_render_data->voxel_gi_instances, bent_normal_affect > 0.0 ? bent_normal_slices : nullptr, bent_normal_affect);
 	}
 
 	if (render_shadows) {
@@ -1756,12 +1772,7 @@ void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, boo
 			ss_effects->allocate_last_frame_buffer(rb, p_use_ssil, p_use_ssr);
 		}
 
-		// OEngine: CORTAO builds its own depth buffer, it does not need the downsampled depth.
-		const bool use_cortao = p_use_ssao && environment_get_ssao_cortao_enabled(p_render_data->environment);
-		if (use_cortao) {
-			_process_cortao(p_render_data, p_normal_roughness_slices);
-		}
-
+		// OEngine: CORTAO was processed before GI and does not need the downsampled depth.
 		if ((p_use_ssao && !use_cortao) || p_use_ssil) {
 			RENDER_TIMESTAMP("Prepare Depth for SSAO/SSIL");
 			// Convert our depth buffer data to linear data in

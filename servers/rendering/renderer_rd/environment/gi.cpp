@@ -4033,7 +4033,7 @@ void GI::RenderBuffersGI::free_data() {
 	}
 }
 
-void GI::process_gi(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_normal_roughness_slices, const RID *p_voxel_gi_buffer_slices, RID p_environment, uint32_t p_view_count, const Projection *p_projections, const Vector3 *p_eye_offsets, const Transform3D &p_cam_transform, const PagedArray<RID> &p_voxel_gi_instances) {
+void GI::process_gi(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_normal_roughness_slices, const RID *p_voxel_gi_buffer_slices, RID p_environment, uint32_t p_view_count, const Projection *p_projections, const Vector3 *p_eye_offsets, const Transform3D &p_cam_transform, const PagedArray<RID> &p_voxel_gi_instances, const RID *p_bent_normal_slices, float p_bent_normal_affect) {
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 	RendererRD::MaterialStorage *material_storage = RendererRD::MaterialStorage::get_singleton();
 
@@ -4114,6 +4114,8 @@ void GI::process_gi(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_nor
 	push_constant.orthogonal = p_projections[0].is_orthogonal();
 	push_constant.z_near = p_projections[0].get_z_near();
 	push_constant.z_far = p_projections[0].get_z_far();
+	push_constant.bent_normal_affect = p_bent_normal_slices ? p_bent_normal_affect : 0.0f;
+	push_constant.pad3 = 0.0f;
 
 	// these are only used if we have 1 view, else we use the projections in our scene data
 	push_constant.proj_info[0] = -2.0f / (internal_size.x * p_projections[0].columns[0][0]);
@@ -4153,6 +4155,15 @@ void GI::process_gi(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_nor
 
 	for (uint32_t v = 0; v < p_view_count; v++) {
 		push_constant.view_index = v;
+
+		// OEngine: rebuild the uniform set when the bent normal texture changes.
+		RID bent_normal_texture = (p_bent_normal_slices && p_bent_normal_slices[v].is_valid()) ? p_bent_normal_slices[v] : texture_storage->texture_rd_get_default(RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_WHITE);
+		if (rbgi->uniform_set[v].is_valid() && rbgi->uniform_set_bent_normal[v] != bent_normal_texture) {
+			if (RD::get_singleton()->uniform_set_is_valid(rbgi->uniform_set[v])) {
+				RD::get_singleton()->free_rid(rbgi->uniform_set[v]);
+			}
+			rbgi->uniform_set[v] = RID();
+		}
 
 		// setup our uniform set
 		if (rbgi->uniform_set[v].is_null() || !RD::get_singleton()->uniform_set_is_valid(rbgi->uniform_set[v])) {
@@ -4321,6 +4332,14 @@ void GI::process_gi(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_nor
 				u.append_id(buffer);
 				uniforms.push_back(u);
 			}
+			{
+				RD::Uniform u;
+				u.uniform_type = RD::UNIFORM_TYPE_TEXTURE;
+				u.binding = 20;
+				u.append_id(bent_normal_texture);
+				uniforms.push_back(u);
+			}
+			rbgi->uniform_set_bent_normal[v] = bent_normal_texture;
 
 			bool vrs_supported = RendererSceneRenderRD::get_singleton()->is_vrs_supported();
 			int variant_base = vrs_supported ? MODE_MAX : 0;

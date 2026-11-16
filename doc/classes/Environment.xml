@@ -262,7 +262,7 @@
 			Enlarges the occluders seen from their back side to reduce light leaking through thin surfaces. [code]0.0[/code] is the most accurate on average, [code]1.0[/code] gives the most contrast in complex geometry but can overshadow staircase-shaped geometry. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
 		</member>
 		<member name="ssao_cortao_bent_normal_affect" type="float" setter="set_ssao_cortao_bent_normal_affect" getter="get_ssao_cortao_bent_normal_affect" default="1.0">
-			How much the bent normal computed by CORTAO (the mean unoccluded direction around each pixel) replaces the surface normal when sampling ambient light from the sky and reflection probes. Lighting from SDFGI, VoxelGI and lightmaps is not affected. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
+			How much the bent normal computed by CORTAO (the mean unoccluded direction around each pixel) replaces the surface normal for diffuse ambient light: sky, reflection probes, SDFGI, VoxelGI, lightmap probes and directional (SH) lightmaps. Reflections keep the surface normal. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
 		</member>
 		<member name="ssao_cortao_intensity" type="float" setter="set_ssao_cortao_intensity" getter="get_ssao_cortao_intensity" default="1.0">
 			Exponent applied to the CORTAO occlusion. CORTAO is physically based, so [code]1.0[/code] is the physically correct value. Values below [code]1.0[/code] lighten the occlusion and values above darken it. Only used when [member ssao_mode] is [constant SSAO_MODE_CORTAO].
