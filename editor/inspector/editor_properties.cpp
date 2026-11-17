@@ -59,7 +59,10 @@
 #include "scene/3d/fog_volume.h"
 #include "scene/3d/gpu_particles_3d.h"
 #include "scene/gui/color_picker.h"
+#include "scene/gui/check_box.h"
 #include "scene/gui/grid_container.h"
+#include "scene/gui/line_edit.h"
+#include "scene/gui/popup.h"
 #include "scene/gui/text_edit.h"
 #include "scene/gui/texture_button.h"
 #include "scene/main/scene_tree.h"
@@ -1042,398 +1045,505 @@ EditorPropertyEnum::EditorPropertyEnum() {
 	options->connect(SceneStringName(item_selected), callable_mp(this, &EditorPropertyEnum::_option_selected));
 }
 
+///////////////////// FLAGS FIELD /////////////////////////
+
+Ref<StyleBox> EditorFlagsField::_get_style() const {
+	return get_theme_stylebox(read_only ? SNAME("read_only") : SNAME("normal"), SNAME("LineEdit"));
+}
+
+Color EditorFlagsField::_get_text_color() const {
+	return get_theme_color(read_only ? SNAME("font_uneditable_color") : SceneStringName(font_color), SNAME("LineEdit"));
+}
+
+int EditorFlagsField::_get_line_height() const {
+	Ref<Font> font = get_theme_font(SceneStringName(font), SNAME("LineEdit"));
+	int font_size = get_theme_font_size(SceneStringName(font_size), SNAME("LineEdit"));
+	Ref<Texture2D> check = get_theme_icon(SNAME("checked"), SNAME("CheckBox"));
+	const real_t content_height = MAX(font->get_height(font_size), check.is_valid() ? check->get_height() : 0);
+	return Math::ceil(content_height) + Math::round(2 * EDSCALE);
+}
+
+bool EditorFlagsField::_is_flag_enabled(int p_index) const {
+	const uint32_t mask = flags[p_index].mask;
+	return mask != 0 && (value & mask) == mask;
+}
+
+int EditorFlagsField::_get_enabled_count() const {
+	int count = 0;
+	for (int i = 0; i < flags.size(); i++) {
+		if (_is_flag_enabled(i)) {
+			count++;
+		}
+	}
+	return count;
+}
+
+bool EditorFlagsField::_flag_matches(const Flag &p_flag, const String &p_filter) {
+	const String f = p_filter.strip_edges();
+	if (f.is_empty() || p_flag.name.containsn(f)) {
+		return true;
+	}
+
+	int64_t number = -1;
+	if (f.is_valid_int()) {
+		number = f.to_int();
+	} else if (f.is_valid_hex_number(true)) {
+		number = f.hex_to_int();
+	}
+	if (number < 0) {
+		return false;
+	}
+
+	// Bit index.
+	if (p_flag.bit >= 0 && number == p_flag.bit) {
+		return true;
+	}
+	// Flag value, or a combined value that contains this flag.
+	return number > 0 && p_flag.mask != 0 && (uint64_t(number) & p_flag.mask) == p_flag.mask;
+}
+
+void EditorFlagsField::set_flags(const Vector<Flag> &p_flags) {
+	flags = p_flags;
+	list_dirty = true;
+	if (popup->is_visible()) {
+		_rebuild_list();
+		_apply_filter();
+	}
+	update_minimum_size();
+	queue_redraw();
+}
+
+void EditorFlagsField::set_value(uint32_t p_value) {
+	if (value == p_value) {
+		return;
+	}
+	value = p_value;
+	_sync_checks();
+	update_minimum_size();
+	queue_redraw();
+}
+
+void EditorFlagsField::set_read_only(bool p_read_only) {
+	read_only = p_read_only;
+	set_default_cursor_shape(read_only ? CURSOR_ARROW : CURSOR_POINTING_HAND);
+	if (read_only) {
+		popup->hide();
+	}
+	queue_redraw();
+}
+
+void EditorFlagsField::set_corner_control(Control *p_control) {
+	corner_control = p_control;
+	if (corner_control) {
+		add_child(corner_control);
+		_update_corner_control();
+	}
+	update_minimum_size();
+}
+
+void EditorFlagsField::_update_corner_control() {
+	if (!corner_control || !is_inside_tree()) {
+		return;
+	}
+	Ref<StyleBox> sb = _get_style();
+	const Size2 cs = corner_control->get_combined_minimum_size();
+	const real_t top = sb->get_margin(SIDE_TOP) + (_get_line_height() - cs.y) * 0.5;
+	corner_control->set_position(Point2(get_size().x - sb->get_margin(SIDE_RIGHT) - cs.x, MAX(0.0, top)));
+	corner_control->set_size(cs);
+}
+
+Size2 EditorFlagsField::get_minimum_size() const {
+	Ref<StyleBox> sb = _get_style();
+	Size2 ms = sb->get_minimum_size();
+	ms.y += MAX(1, _get_enabled_count()) * _get_line_height();
+	if (corner_control) {
+		const Size2 cs = corner_control->get_combined_minimum_size();
+		ms.x += cs.x;
+		ms.y = MAX(ms.y, cs.y);
+	}
+	return ms;
+}
+
+String EditorFlagsField::get_tooltip(const Point2 &p_pos) const {
+	for (int i = 0; i < line_rects.size(); i++) {
+		if (line_rects[i].has_point(p_pos)) {
+			return flags[line_flags[i]].tooltip;
+		}
+	}
+	return Control::get_tooltip(p_pos);
+}
+
+void EditorFlagsField::gui_input(const Ref<InputEvent> &p_event) {
+	if (read_only) {
+		return;
+	}
+
+	const Ref<InputEventMouseButton> mb = p_event;
+	if (mb.is_valid() && mb->is_pressed()) {
+		if (mb->get_button_index() == MouseButton::LEFT) {
+			// Clicking a line's checkbox clears that flag; anywhere else opens the list.
+			for (int i = 0; i < line_check_rects.size(); i++) {
+				if (line_check_rects[i].has_point(mb->get_position())) {
+					value &= ~flags[line_flags[i]].mask;
+					_sync_checks();
+					update_minimum_size();
+					queue_redraw();
+					emit_signal(SNAME("value_changed"), value);
+					accept_event();
+					return;
+				}
+			}
+			_open_popup();
+			accept_event();
+		} else if (mb->get_button_index() == MouseButton::RIGHT) {
+			for (int i = 0; i < line_rects.size(); i++) {
+				if (line_rects[i].has_point(mb->get_position())) {
+					emit_signal(SNAME("flag_context_menu"), line_flags[i], get_screen_position() + mb->get_position());
+					accept_event();
+					break;
+				}
+			}
+		}
+		return;
+	}
+
+	if (p_event->is_action_pressed(SNAME("ui_accept"), false, true)) {
+		_open_popup();
+		accept_event();
+	}
+}
+
+void EditorFlagsField::_rebuild_list() {
+	for (CheckBox *cb : checks) {
+		list->remove_child(cb);
+		cb->queue_free();
+	}
+	checks.clear();
+
+	const Color text_color = get_theme_color(SceneStringName(font_color), SNAME("LineEdit"));
+	for (int i = 0; i < flags.size(); i++) {
+		CheckBox *cb = memnew(CheckBox);
+		cb->set_text(flags[i].name);
+		cb->set_tooltip_text(flags[i].tooltip);
+		cb->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
+		cb->set_h_size_flags(SIZE_EXPAND_FILL);
+		cb->set_pressed_no_signal(_is_flag_enabled(i));
+		cb->add_theme_color_override(SceneStringName(font_color), text_color);
+		cb->add_theme_color_override(SNAME("font_hover_color"), text_color);
+		cb->add_theme_color_override(SNAME("font_pressed_color"), text_color);
+		cb->add_theme_color_override(SNAME("font_hover_pressed_color"), text_color);
+		cb->add_theme_color_override(SNAME("font_focus_color"), text_color);
+		cb->connect(SceneStringName(toggled), callable_mp(this, &EditorFlagsField::_check_toggled).bind(i));
+		cb->connect(SceneStringName(gui_input), callable_mp(this, &EditorFlagsField::_check_gui_input).bind(i));
+		list->add_child(cb);
+		checks.push_back(cb);
+	}
+	list->move_child(no_match_label, -1);
+	list_dirty = false;
+}
+
+void EditorFlagsField::_sync_checks() {
+	for (int i = 0; i < checks.size() && i < flags.size(); i++) {
+		checks[i]->set_pressed_no_signal(_is_flag_enabled(i));
+	}
+}
+
+void EditorFlagsField::_apply_filter() {
+	const String text = filter->get_text();
+	bool any_visible = false;
+	for (int i = 0; i < checks.size(); i++) {
+		const bool vis = _flag_matches(flags[i], text);
+		checks[i]->set_visible(vis);
+		any_visible = any_visible || vis;
+	}
+	no_match_label->set_visible(!any_visible);
+	_update_popup_size();
+}
+
+void EditorFlagsField::_update_popup_size() {
+	const real_t max_height = 360 * EDSCALE;
+	scroll->set_custom_minimum_size(Size2(0, MIN(list->get_combined_minimum_size().y, max_height)));
+	if (popup->is_visible()) {
+		const int width = popup->get_size().x;
+		popup->reset_size();
+		popup->set_size(Size2i(MAX(width, popup->get_size().x), popup->get_size().y));
+	}
+}
+
+void EditorFlagsField::_open_popup() {
+	if (read_only || flags.is_empty()) {
+		return;
+	}
+	if (list_dirty) {
+		_rebuild_list();
+	} else {
+		_sync_checks();
+	}
+	filter->clear();
+	_apply_filter();
+
+	const int width = MAX(int(get_size().x), int(220 * EDSCALE));
+	const Point2 pos = get_screen_position() + Vector2(0, get_size().y);
+	popup->popup(Rect2i(pos, Size2i(width, 0)));
+	scroll->set_v_scroll(0);
+	filter->grab_focus();
+}
+
+void EditorFlagsField::_filter_changed(const String &p_text) {
+	_apply_filter();
+	scroll->set_v_scroll(0);
+}
+
+void EditorFlagsField::_filter_gui_input(const Ref<InputEvent> &p_event) {
+	const Ref<InputEventKey> k = p_event;
+	if (k.is_null() || !k->is_pressed()) {
+		return;
+	}
+	if (k->get_keycode() == Key::DOWN) {
+		for (CheckBox *cb : checks) {
+			if (cb->is_visible()) {
+				cb->grab_focus();
+				filter->accept_event();
+				break;
+			}
+		}
+	} else if (k->get_keycode() == Key::ENTER || k->get_keycode() == Key::KP_ENTER) {
+		// Toggle the flag when the filter leaves exactly one of them.
+		CheckBox *single = nullptr;
+		for (CheckBox *cb : checks) {
+			if (cb->is_visible()) {
+				if (single) {
+					return;
+				}
+				single = cb;
+			}
+		}
+		if (single) {
+			single->set_pressed(!single->is_pressed());
+			filter->accept_event();
+		}
+	}
+}
+
+void EditorFlagsField::_check_toggled(bool p_pressed, int p_index) {
+	ERR_FAIL_INDEX(p_index, flags.size());
+	if (p_pressed) {
+		value |= flags[p_index].mask;
+	} else {
+		value &= ~flags[p_index].mask;
+	}
+	_sync_checks();
+	update_minimum_size();
+	queue_redraw();
+	emit_signal(SNAME("value_changed"), value);
+}
+
+void EditorFlagsField::_check_gui_input(const Ref<InputEvent> &p_event, int p_index) {
+	const Ref<InputEventMouseButton> mb = p_event;
+	if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::RIGHT) {
+		const Vector2 screen_pos = checks[p_index]->get_screen_position() + mb->get_position();
+		popup->hide();
+		emit_signal(SNAME("flag_context_menu"), p_index, screen_pos);
+	}
+}
+
+void EditorFlagsField::_notification(int p_what) {
+	switch (p_what) {
+		case NOTIFICATION_THEME_CHANGED: {
+			filter->set_right_icon(get_editor_theme_icon(SNAME("Search")));
+			list_dirty = true;
+			update_minimum_size();
+			_update_corner_control();
+		} break;
+
+		case NOTIFICATION_RESIZED: {
+			_update_corner_control();
+		} break;
+
+		case NOTIFICATION_FOCUS_ENTER:
+		case NOTIFICATION_FOCUS_EXIT: {
+			queue_redraw();
+		} break;
+
+		case NOTIFICATION_DRAW: {
+			line_rects.clear();
+			line_check_rects.clear();
+			line_flags.clear();
+
+			Ref<StyleBox> sb = _get_style();
+			draw_style_box(sb, Rect2(Point2(), get_size()));
+			if (has_focus(true)) {
+				draw_style_box(get_theme_stylebox(SNAME("focus"), SNAME("LineEdit")), Rect2(Point2(), get_size()));
+			}
+
+			Ref<Font> font = get_theme_font(SceneStringName(font), SNAME("LineEdit"));
+			const int font_size = get_theme_font_size(SceneStringName(font_size), SNAME("LineEdit"));
+			const int line_height = _get_line_height();
+			const real_t left = sb->get_margin(SIDE_LEFT);
+			real_t right = get_size().x - sb->get_margin(SIDE_RIGHT);
+			if (corner_control) {
+				right -= corner_control->get_combined_minimum_size().x + 2 * EDSCALE;
+			}
+			const real_t width = MAX(0.0, right - left);
+			const real_t ascent_ofs = (line_height - font->get_height(font_size)) * 0.5 + font->get_ascent(font_size);
+
+			Ref<Texture2D> check = get_theme_icon(read_only ? SNAME("checked_disabled") : SNAME("checked"), SNAME("CheckBox"));
+			const Size2 check_size = check.is_valid() ? check->get_size() : Size2();
+			const real_t text_ofs = check.is_valid() ? check_size.x + get_theme_constant(SNAME("h_separation"), SNAME("CheckBox")) : 0;
+
+			Point2 pos(left, sb->get_margin(SIDE_TOP));
+			const Color text_color = _get_text_color();
+			for (int i = 0; i < flags.size(); i++) {
+				if (!_is_flag_enabled(i)) {
+					continue;
+				}
+				if (check.is_valid()) {
+					const Rect2 check_rect(pos + Vector2(0, Math::round((line_height - check_size.y) * 0.5)), check_size);
+					draw_texture(check, check_rect.position);
+					// Generous hit area: the whole line height, a bit wider than the icon.
+					line_check_rects.push_back(Rect2(Point2(0, pos.y), Size2(left + check_size.x + text_ofs * 0.25, line_height)));
+				} else {
+					line_check_rects.push_back(Rect2());
+				}
+				draw_string(font, pos + Vector2(text_ofs, ascent_ofs), flags[i].name, HORIZONTAL_ALIGNMENT_LEFT, MAX(0.0, width - text_ofs), font_size, text_color);
+				line_rects.push_back(Rect2(Point2(0, pos.y), Size2(get_size().x, line_height)));
+				line_flags.push_back(i);
+				pos.y += line_height;
+			}
+
+			if (line_rects.is_empty()) {
+				const Color empty_color = get_theme_color(SNAME("font_placeholder_color"), SNAME("LineEdit"));
+				draw_string(font, pos + Vector2(0, ascent_ofs), TTR("None"), HORIZONTAL_ALIGNMENT_LEFT, width, font_size, empty_color);
+			}
+		} break;
+	}
+}
+
+void EditorFlagsField::_bind_methods() {
+	ADD_SIGNAL(MethodInfo("value_changed", PropertyInfo(Variant::INT, "value")));
+	ADD_SIGNAL(MethodInfo("flag_context_menu", PropertyInfo(Variant::INT, "index"), PropertyInfo(Variant::VECTOR2, "screen_position")));
+}
+
+EditorFlagsField::EditorFlagsField() {
+	// Don't take focus on click: the inspector follows focus and would scroll a tall field under the cursor.
+	set_focus_mode(FOCUS_ACCESSIBILITY);
+	set_default_cursor_shape(CURSOR_POINTING_HAND);
+	set_clip_contents(true);
+
+	popup = memnew(PopupPanel);
+	add_child(popup);
+
+	VBoxContainer *vb = memnew(VBoxContainer);
+	popup->add_child(vb);
+
+	filter = memnew(LineEdit);
+	filter->set_placeholder(TTR("Filter by name, bit or value"));
+	filter->set_clear_button_enabled(true);
+	filter->set_accessibility_name(TTRC("Filter Flags"));
+	filter->connect(SceneStringName(text_changed), callable_mp(this, &EditorFlagsField::_filter_changed));
+	filter->connect(SceneStringName(gui_input), callable_mp(this, &EditorFlagsField::_filter_gui_input));
+	vb->add_child(filter);
+
+	scroll = memnew(ScrollContainer);
+	scroll->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
+	scroll->set_v_size_flags(SIZE_EXPAND_FILL);
+	vb->add_child(scroll);
+
+	list = memnew(VBoxContainer);
+	list->set_h_size_flags(SIZE_EXPAND_FILL);
+	list->add_theme_constant_override(SNAME("separation"), 0);
+	scroll->add_child(list);
+
+	no_match_label = memnew(Label);
+	no_match_label->set_text(TTR("No matching flags."));
+	no_match_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
+	no_match_label->hide();
+	list->add_child(no_match_label);
+}
+
 ///////////////////// FLAGS /////////////////////////
 
 void EditorPropertyFlags::_set_read_only(bool p_read_only) {
-	for (CheckBox *check : flags) {
-		check->set_disabled(p_read_only);
-	}
+	field->set_read_only(p_read_only);
 }
 
-void EditorPropertyFlags::_flag_toggled(int p_index) {
-	uint32_t value = get_edited_property_value();
-	if (flags[p_index]->is_pressed()) {
-		value |= flag_values[p_index];
-	} else {
-		value &= ~flag_values[p_index];
-	}
-
-	emit_changed(get_edited_property(), value);
+void EditorPropertyFlags::_field_changed(uint32_t p_value) {
+	emit_changed(get_edited_property(), p_value);
 }
 
 void EditorPropertyFlags::update_property() {
-	uint32_t value = get_edited_property_value();
-
-	for (int i = 0; i < flags.size(); i++) {
-		flags[i]->set_pressed((value & flag_values[i]) == flag_values[i]);
-	}
+	field->set_value(uint32_t(get_edited_property_value()));
 }
 
 void EditorPropertyFlags::setup(const Vector<String> &p_options) {
-	ERR_FAIL_COND(flags.size());
-
-	bool first = true;
-	uint32_t current_val;
+	Vector<EditorFlagsField::Flag> flags;
 	for (int i = 0; i < p_options.size(); i++) {
 		// An empty option is not considered a "flag".
 		String option = p_options[i].strip_edges();
 		if (option.is_empty()) {
 			continue;
 		}
-		const int flag_index = flags.size(); // Index of the next element (added by the code below).
 
+		EditorFlagsField::Flag flag;
 		// Value for a flag can be explicitly overridden.
 		Vector<String> text_split = option.split(":");
 		if (text_split.size() != 1) {
-			current_val = text_split[1].to_int();
+			flag.mask = text_split[1].to_int();
 			// Skip entries like "None:0" (it's not an actual flag).
-			if (current_val == 0) {
+			if (flag.mask == 0) {
 				continue;
 			}
 		} else {
-			current_val = 1u << i;
+			flag.mask = 1u << i;
 		}
-		flag_values.push_back(current_val);
-
-		// Create a CheckBox for the current flag.
-		CheckBox *cb = memnew(CheckBox);
-		cb->set_text(text_split[0]);
-		cb->set_clip_text(true);
-		cb->connect(SceneStringName(pressed), callable_mp(this, &EditorPropertyFlags::_flag_toggled).bind(flag_index));
-		add_focusable(cb);
-		vbox->add_child(cb);
-		flags.push_back(cb);
-
-		// Can't use `i == 0` because we want to find the first none-empty option.
-		if (first) {
-			set_label_reference(cb);
-			first = false;
+		flag.name = text_split[0];
+		if ((flag.mask & (flag.mask - 1)) == 0) {
+			flag.bit = 0;
+			while (!(flag.mask & (1u << flag.bit))) {
+				flag.bit++;
+			}
+			flag.tooltip = flag.name + "\n" + vformat(TTR("Bit %d, value %d"), flag.bit, flag.mask);
+		} else {
+			flag.tooltip = flag.name + "\n" + vformat(TTR("Value %d"), flag.mask);
 		}
+		flags.push_back(flag);
 	}
+	field->set_flags(flags);
 }
 
 EditorPropertyFlags::EditorPropertyFlags() {
-	vbox = memnew(VBoxContainer);
-	vbox->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
-	add_child(vbox);
+	field = memnew(EditorFlagsField);
+	field->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
+	field->set_h_size_flags(SIZE_EXPAND_FILL);
+	field->connect("value_changed", callable_mp(this, &EditorPropertyFlags::_field_changed));
+	add_child(field);
+	add_focusable(field);
 }
 
 ///////////////////// LAYERS /////////////////////////
 
-void EditorPropertyLayersGrid::_rename_pressed(int p_menu) {
-	// Show rename popup for active layer.
-	ERR_FAIL_INDEX(renamed_layer_index, names.size());
-	String name = names[renamed_layer_index];
-	rename_dialog->set_title(vformat(TTR("Renaming Layer %d:"), renamed_layer_index + 1));
+void EditorPropertyLayers::_flag_context_menu(int p_index, const Vector2 &p_screen_position) {
+	// Rename the right-clicked layer.
+	ERR_FAIL_INDEX(p_index, int(layer_count));
+	renamed_layer_index = p_index;
+	const String name = field->get_flags()[p_index].name;
+	rename_dialog->set_title(vformat(TTR("Renaming Layer %d:"), p_index + 1));
 	rename_dialog_text->set_text(name);
 	// Indicate that leaving it blank reverts back to "Layer [Number]".
-	rename_dialog_text->set_placeholder(vformat(TTR("Layer %d"), renamed_layer_index + 1));
+	rename_dialog_text->set_placeholder(vformat(TTR("Layer %d"), p_index + 1));
 	rename_dialog_text->select(0, name.length());
 	rename_dialog->popup_centered(Size2(300, 80) * EDSCALE);
 	rename_dialog_text->grab_focus();
 }
 
-void EditorPropertyLayersGrid::_rename_operation_confirm() {
+void EditorPropertyLayers::_rename_operation_confirm() {
 	String new_name = rename_dialog_text->get_text().strip_edges();
 	if (new_name.contains_char('/') || new_name.contains_char('\\') || new_name.contains_char(':')) {
 		EditorNode::get_singleton()->show_warning(TTR("Name contains invalid characters."));
 		return;
 	}
-
-	names.set(renamed_layer_index, new_name);
-	tooltips.set(renamed_layer_index, new_name + "\n" + vformat(TTR("Bit %d, Value %d"), renamed_layer_index, 1u << renamed_layer_index));
-	emit_signal(SNAME("rename_confirmed"), renamed_layer_index, new_name);
-}
-
-EditorPropertyLayersGrid::EditorPropertyLayersGrid() {
-	rename_dialog = memnew(ConfirmationDialog);
-	VBoxContainer *rename_dialog_vb = memnew(VBoxContainer);
-	rename_dialog->add_child(rename_dialog_vb);
-	rename_dialog_text = memnew(LineEdit);
-	rename_dialog_vb->add_margin_child(TTR("Name:"), rename_dialog_text);
-	rename_dialog->set_ok_button_text(TTR("Rename"));
-	add_child(rename_dialog);
-	rename_dialog->register_text_enter(rename_dialog_text);
-	rename_dialog->connect(SceneStringName(confirmed), callable_mp(this, &EditorPropertyLayersGrid::_rename_operation_confirm));
-	layer_rename = memnew(PopupMenu);
-	layer_rename->add_item(TTR("Rename Layer"), 0);
-	add_child(layer_rename);
-	layer_rename->connect(SceneStringName(id_pressed), callable_mp(this, &EditorPropertyLayersGrid::_rename_pressed));
-}
-
-Size2 EditorPropertyLayersGrid::get_grid_size() const {
-	Ref<Font> font = get_theme_font(SceneStringName(font), SNAME("Label"));
-	int font_size = get_theme_font_size(SceneStringName(font_size), SNAME("Label"));
-	return Vector2(0, font->get_height(font_size) * 3);
-}
-
-void EditorPropertyLayersGrid::set_read_only(bool p_read_only) {
-	read_only = p_read_only;
-}
-
-Size2 EditorPropertyLayersGrid::get_minimum_size() const {
-	Size2 min_size = get_grid_size();
-
-	// Add extra rows when expanded.
-	if (expanded) {
-		const int bsize = (min_size.height * 80 / 100) / 2;
-		for (int i = 0; i < expansion_rows; ++i) {
-			min_size.y += 2 * (bsize + 1) + 3;
-		}
-	}
-
-	return min_size;
-}
-
-String EditorPropertyLayersGrid::get_tooltip(const Point2 &p_pos) const {
-	for (int i = 0; i < flag_rects.size(); i++) {
-		if (i < tooltips.size() && flag_rects[i].has_point(p_pos)) {
-			return tooltips[i];
-		}
-	}
-	return String();
-}
-
-void EditorPropertyLayersGrid::_update_hovered(const Vector2 &p_position) {
-	bool expand_was_hovered = expand_hovered;
-	expand_hovered = expand_rect.has_point(p_position);
-	if (expand_hovered != expand_was_hovered) {
-		queue_redraw();
-	}
-
-	if (!expand_hovered) {
-		for (int i = 0; i < flag_rects.size(); i++) {
-			if (flag_rects[i].has_point(p_position)) {
-				// Used to highlight the hovered flag in the layers grid.
-				hovered_index = i;
-				queue_redraw();
-				return;
-			}
-		}
-	}
-
-	// Remove highlight when no square is hovered.
-	if (hovered_index != HOVERED_INDEX_NONE) {
-		hovered_index = HOVERED_INDEX_NONE;
-		queue_redraw();
-	}
-}
-
-void EditorPropertyLayersGrid::_on_hover_exit() {
-	if (expand_hovered) {
-		expand_hovered = false;
-		queue_redraw();
-	}
-	if (hovered_index != HOVERED_INDEX_NONE) {
-		hovered_index = HOVERED_INDEX_NONE;
-		queue_redraw();
-	}
-	if (dragging) {
-		dragging = false;
-	}
-}
-
-void EditorPropertyLayersGrid::_update_flag(bool p_replace) {
-	if (hovered_index != HOVERED_INDEX_NONE) {
-		// Toggle the flag.
-		// We base our choice on the hovered flag, so that it always matches the hovered flag.
-		if (p_replace) {
-			// Replace all flags with the hovered flag ("solo mode"),
-			// instead of toggling the hovered flags while preserving other flags' state.
-			if (value == 1u << hovered_index) {
-				// If the flag is already enabled, enable all other items and disable the current flag.
-				// This allows for quicker toggling.
-				value = ~value;
-			} else {
-				value = 1u << hovered_index;
-			}
-		} else {
-			value ^= 1u << hovered_index;
-		}
-
-		emit_signal(SNAME("flag_changed"), value);
-		queue_redraw();
-	} else if (expand_hovered) {
-		expanded = !expanded;
-		update_minimum_size();
-		queue_redraw();
-	}
-}
-
-void EditorPropertyLayersGrid::gui_input(const Ref<InputEvent> &p_ev) {
-	if (read_only) {
-		return;
-	}
-	const Ref<InputEventMouseMotion> mm = p_ev;
-	if (mm.is_valid()) {
-		_update_hovered(mm->get_position());
-		if (dragging && hovered_index != HOVERED_INDEX_NONE && dragging_value_to_set != bool(value & (1u << hovered_index))) {
-			value ^= 1u << hovered_index;
-			emit_signal(SNAME("flag_changed"), value);
-			queue_redraw();
-		}
-		return;
-	}
-
-	const Ref<InputEventMouseButton> mb = p_ev;
-	if (mb.is_valid() && mb->get_button_index() == MouseButton::LEFT && mb->is_pressed()) {
-		_update_hovered(mb->get_position());
-		bool replace_mode = mb->is_command_or_control_pressed();
-		_update_flag(replace_mode);
-		if (!replace_mode && hovered_index != HOVERED_INDEX_NONE) {
-			dragging = true;
-			dragging_value_to_set = bool(value & (1u << hovered_index));
-		}
-	}
-	if (mb.is_valid() && mb->get_button_index() == MouseButton::LEFT && !mb->is_pressed()) {
-		dragging = false;
-	}
-	if (mb.is_valid() && mb->get_button_index() == MouseButton::RIGHT && mb->is_pressed()) {
-		if (hovered_index != HOVERED_INDEX_NONE) {
-			renamed_layer_index = hovered_index;
-			layer_rename->set_position(get_screen_position() + mb->get_position());
-			layer_rename->reset_size();
-			layer_rename->popup();
-		}
-	}
-}
-
-void EditorPropertyLayersGrid::_notification(int p_what) {
-	switch (p_what) {
-		case NOTIFICATION_DRAW: {
-			Size2 grid_size = get_grid_size();
-			grid_size.x = get_size().x;
-
-			flag_rects.clear();
-
-			int prev_expansion_rows = expansion_rows;
-			expansion_rows = 0;
-
-			const int bsize = (grid_size.height * 80 / 100) / 2;
-			const int h = bsize * 2 + 1;
-
-			Color color = get_theme_color(read_only ? SNAME("highlight_disabled_color") : SNAME("highlight_color"), EditorStringName(Editor));
-
-			Color text_color = get_theme_color(read_only ? SNAME("font_disabled_color") : SceneStringName(font_color), EditorStringName(Editor));
-			text_color.a *= 0.5;
-
-			Color text_color_on = get_theme_color(read_only ? SNAME("font_disabled_color") : SNAME("font_hover_color"), EditorStringName(Editor));
-			text_color_on.a *= 0.7;
-
-			const int vofs = (grid_size.height - h) / 2;
-
-			uint32_t layer_index = 0;
-
-			Point2 arrow_pos;
-
-			Point2 block_ofs(4, vofs);
-
-			while (true) {
-				Point2 ofs = block_ofs;
-
-				for (int i = 0; i < 2; i++) {
-					for (int j = 0; j < layer_group_size; j++) {
-						const bool on = value & (1u << layer_index);
-						Rect2 rect2 = Rect2(ofs, Size2(bsize, bsize));
-
-						color.a = on ? 0.6 : 0.2;
-						if (layer_index == hovered_index) {
-							// Add visual feedback when hovering a flag.
-							color.a += 0.15;
-						}
-
-						draw_rect(rect2, color);
-						flag_rects.push_back(rect2);
-
-						Ref<Font> font = get_theme_font(SceneStringName(font), SNAME("Label"));
-						int font_size = get_theme_font_size(SceneStringName(font_size), SNAME("Label"));
-						Vector2 offset;
-						offset.y = rect2.size.y * 0.75;
-
-						draw_string(font, rect2.position + offset, itos(layer_index + 1), HORIZONTAL_ALIGNMENT_CENTER, rect2.size.x, font_size, on ? text_color_on : text_color);
-
-						ofs.x += bsize + 1;
-
-						++layer_index;
-					}
-
-					ofs.x = block_ofs.x;
-					ofs.y += bsize + 1;
-				}
-
-				if (layer_index >= layer_count) {
-					if (!flag_rects.is_empty() && (expansion_rows == 0)) {
-						const Rect2 &last_rect = flag_rects[flag_rects.size() - 1];
-						arrow_pos = last_rect.get_end();
-					}
-					break;
-				}
-
-				int block_size_x = layer_group_size * (bsize + 1);
-				block_ofs.x += block_size_x + 3;
-
-				if (block_ofs.x + block_size_x + 12 > grid_size.width) {
-					// Keep last valid cell position for the expansion icon.
-					if (!flag_rects.is_empty() && (expansion_rows == 0)) {
-						const Rect2 &last_rect = flag_rects[flag_rects.size() - 1];
-						arrow_pos = last_rect.get_end();
-					}
-					++expansion_rows;
-
-					if (expanded) {
-						// Expand grid to next line.
-						block_ofs.x = 4;
-						block_ofs.y += 2 * (bsize + 1) + 3;
-					} else {
-						// Skip remaining blocks.
-						break;
-					}
-				}
-			}
-
-			if ((expansion_rows != prev_expansion_rows) && expanded) {
-				update_minimum_size();
-			}
-
-			if ((expansion_rows == 0) && (layer_index == layer_count)) {
-				// Whole grid was drawn, no need for expansion icon.
-				break;
-			}
-
-			Ref<Texture2D> arrow = get_theme_icon(SNAME("arrow"), SNAME("Tree"));
-			ERR_FAIL_COND(arrow.is_null());
-
-			Color arrow_color = get_theme_color(SNAME("highlight_color"), EditorStringName(Editor));
-			arrow_color.a = expand_hovered ? 1.0 : 0.6;
-
-			arrow_pos.x += 2.0;
-			arrow_pos.y -= arrow->get_height();
-
-			Rect2 arrow_draw_rect(arrow_pos, arrow->get_size());
-			expand_rect = arrow_draw_rect;
-			if (expanded) {
-				arrow_draw_rect.size.y *= -1.0; // Flip arrow vertically when expanded.
-			}
-
-			RID ci = get_canvas_item();
-			arrow->draw_rect(ci, arrow_draw_rect, false, arrow_color);
-
-		} break;
-
-		case NOTIFICATION_MOUSE_EXIT: {
-			_on_hover_exit();
-		} break;
-	}
-}
-
-void EditorPropertyLayersGrid::set_flag(uint32_t p_flag) {
-	value = p_flag;
-	queue_redraw();
-}
-
-void EditorPropertyLayersGrid::_bind_methods() {
-	ADD_SIGNAL(MethodInfo("flag_changed", PropertyInfo(Variant::INT, "flag")));
-	ADD_SIGNAL(MethodInfo("rename_confirmed", PropertyInfo(Variant::INT, "layer_id"), PropertyInfo(Variant::STRING, "new_name")));
+	set_layer_name(renamed_layer_index, new_name);
+	_refresh_names();
 }
 
 void EditorPropertyLayers::_notification(int p_what) {
@@ -1448,70 +1558,58 @@ void EditorPropertyLayers::_notification(int p_what) {
 
 void EditorPropertyLayers::_set_read_only(bool p_read_only) {
 	button->set_disabled(p_read_only);
-	grid->set_read_only(p_read_only);
+	field->set_read_only(p_read_only);
 }
 
-void EditorPropertyLayers::_grid_changed(uint32_t p_grid) {
-	emit_changed(get_edited_property(), p_grid);
+void EditorPropertyLayers::_field_changed(uint32_t p_value) {
+	emit_changed(get_edited_property(), p_value);
 }
 
 void EditorPropertyLayers::update_property() {
-	uint32_t value = get_edited_property_value();
-
-	grid->set_flag(value);
+	field->set_value(uint32_t(get_edited_property_value()));
 }
 
 void EditorPropertyLayers::setup(LayerType p_layer_type) {
 	layer_type = p_layer_type;
-	int layer_group_size = 0;
-	int layer_count = 0;
 	switch (p_layer_type) {
 		case LAYER_RENDER_2D: {
 			basename = "layer_names/2d_render";
-			layer_group_size = 5;
 			layer_count = 20;
 		} break;
 
 		case LAYER_PHYSICS_2D: {
 			basename = "layer_names/2d_physics";
-			layer_group_size = 4;
 			layer_count = 32;
 		} break;
 
 		case LAYER_NAVIGATION_2D: {
 			basename = "layer_names/2d_navigation";
-			layer_group_size = 4;
 			layer_count = 32;
 		} break;
 
 		case LAYER_RENDER_3D: {
 			basename = "layer_names/3d_render";
-			layer_group_size = 5;
 			layer_count = 20;
 		} break;
 
 		case LAYER_PHYSICS_3D: {
 			basename = "layer_names/3d_physics";
-			layer_group_size = 4;
 			layer_count = 32;
 		} break;
 
 		case LAYER_NAVIGATION_3D: {
 			basename = "layer_names/3d_navigation";
-			layer_group_size = 4;
 			layer_count = 32;
 		} break;
 
 		case LAYER_AVOIDANCE: {
 			basename = "layer_names/avoidance";
-			layer_group_size = 4;
 			layer_count = 32;
 		} break;
 	}
 
-	Vector<String> names;
-	Vector<String> tooltips;
-	for (int i = 0; i < layer_count; i++) {
+	Vector<EditorFlagsField::Flag> flags;
+	for (uint32_t i = 0; i < layer_count; i++) {
 		String name;
 
 		if (ProjectSettings::get_singleton()->has_setting(basename + vformat("/layer_%d", i + 1))) {
@@ -1522,14 +1620,14 @@ void EditorPropertyLayers::setup(LayerType p_layer_type) {
 			name = vformat(TTR("Layer %d"), i + 1);
 		}
 
-		names.push_back(name);
-		tooltips.push_back(name + "\n" + vformat(TTR("Bit %d, value %d"), i, 1u << i));
+		EditorFlagsField::Flag flag;
+		flag.name = name;
+		flag.tooltip = name + "\n" + vformat(TTR("Bit %d, value %d"), i, 1u << i);
+		flag.mask = 1u << i;
+		flag.bit = i;
+		flags.push_back(flag);
 	}
-
-	grid->names = names;
-	grid->tooltips = tooltips;
-	grid->layer_group_size = layer_group_size;
-	grid->layer_count = layer_count;
+	field->set_flags(flags);
 }
 
 void EditorPropertyLayers::set_layer_name(int p_index, const String &p_name) {
@@ -1549,16 +1647,16 @@ String EditorPropertyLayers::get_layer_name(int p_index) const {
 }
 
 void EditorPropertyLayers::_button_pressed() {
-	int layer_count = grid->layer_count;
+	const uint32_t value = field->get_value();
 	layers->clear();
-	for (int i = 0; i < layer_count; i++) {
+	for (uint32_t i = 0; i < layer_count; i++) {
 		const String name = get_layer_name(i);
 		if (name.is_empty()) {
 			continue;
 		}
 		layers->add_check_item(name, i);
 		int idx = layers->get_item_index(i);
-		layers->set_item_checked(idx, grid->value & (1u << i));
+		layers->set_item_checked(idx, value & (1u << i));
 	}
 
 	if (layers->get_item_count() == 0) {
@@ -1566,7 +1664,9 @@ void EditorPropertyLayers::_button_pressed() {
 		layers->set_item_disabled(0, true);
 	}
 	layers->add_separator();
-	layers->add_icon_item(get_editor_theme_icon("Edit"), TTR("Edit Layer Names"), grid->layer_count);
+	layers->add_icon_item(get_editor_theme_icon(SNAME("Clear")), TTR("Clear All"), layer_count + 1);
+	layers->set_item_disabled(layers->get_item_index(layer_count + 1), value == 0);
+	layers->add_icon_item(get_editor_theme_icon("Edit"), TTR("Edit Layer Names"), layer_count);
 
 	Rect2 gp = button->get_screen_rect();
 	layers->reset_size();
@@ -1576,14 +1676,18 @@ void EditorPropertyLayers::_button_pressed() {
 }
 
 void EditorPropertyLayers::_menu_pressed(int p_menu) {
-	if (uint32_t(p_menu) == grid->layer_count) {
+	if (uint32_t(p_menu) == layer_count) {
 		ProjectSettingsEditor::get_singleton()->popup_project_settings(true);
 		ProjectSettingsEditor::get_singleton()->set_general_page(basename);
+	} else if (uint32_t(p_menu) == layer_count + 1) {
+		layers->hide();
+		field->set_value(0);
+		_field_changed(0);
 	} else {
-		grid->value ^= 1u << p_menu;
-		grid->queue_redraw();
-		layers->set_item_checked(layers->get_item_index(p_menu), grid->value & (1u << p_menu));
-		_grid_changed(grid->value);
+		const uint32_t value = field->get_value() ^ (1u << p_menu);
+		field->set_value(value);
+		layers->set_item_checked(layers->get_item_index(p_menu), value & (1u << p_menu));
+		_field_changed(value);
 	}
 }
 
@@ -1592,23 +1696,22 @@ void EditorPropertyLayers::_refresh_names() {
 }
 
 EditorPropertyLayers::EditorPropertyLayers() {
-	HBoxContainer *hb = memnew(HBoxContainer);
-	hb->set_clip_contents(true);
-	add_child(hb);
-	grid = memnew(EditorPropertyLayersGrid);
-	grid->connect("flag_changed", callable_mp(this, &EditorPropertyLayers::_grid_changed));
-	grid->connect("rename_confirmed", callable_mp(this, &EditorPropertyLayers::set_layer_name));
-	grid->set_h_size_flags(SIZE_EXPAND_FILL);
-	hb->add_child(grid);
+	field = memnew(EditorFlagsField);
+	field->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
+	field->connect("value_changed", callable_mp(this, &EditorPropertyLayers::_field_changed));
+	field->connect("flag_context_menu", callable_mp(this, &EditorPropertyLayers::_flag_context_menu));
 
 	button = memnew(TextureButton);
 	button->set_accessibility_name(TTRC("Layers"));
 	button->set_stretch_mode(TextureButton::STRETCH_KEEP_CENTERED);
 	button->set_toggle_mode(true);
+	button->set_default_cursor_shape(CURSOR_ARROW);
 	button->connect(SceneStringName(pressed), callable_mp(this, &EditorPropertyLayers::_button_pressed));
-	hb->add_child(button);
+	field->set_corner_control(button);
 
-	set_bottom_editor(hb);
+	add_child(field);
+	set_bottom_editor(field);
+	add_focusable(field);
 
 	layers = memnew(PopupMenu);
 	add_child(layers);
@@ -1616,6 +1719,17 @@ EditorPropertyLayers::EditorPropertyLayers() {
 	layers->set_hide_on_checkable_item_selection(false);
 	layers->connect(SceneStringName(id_pressed), callable_mp(this, &EditorPropertyLayers::_menu_pressed));
 	layers->connect("popup_hide", callable_mp((BaseButton *)button, &BaseButton::set_pressed).bind(false));
+
+	rename_dialog = memnew(ConfirmationDialog);
+	VBoxContainer *rename_dialog_vb = memnew(VBoxContainer);
+	rename_dialog->add_child(rename_dialog_vb);
+	rename_dialog_text = memnew(LineEdit);
+	rename_dialog_vb->add_margin_child(TTR("Name:"), rename_dialog_text);
+	rename_dialog->set_ok_button_text(TTR("Rename"));
+	add_child(rename_dialog);
+	rename_dialog->register_text_enter(rename_dialog_text);
+	rename_dialog->connect(SceneStringName(confirmed), callable_mp(this, &EditorPropertyLayers::_rename_operation_confirm));
+
 	ProjectSettings::get_singleton()->connect("settings_changed", callable_mp(this, &EditorPropertyLayers::_refresh_names));
 }
 

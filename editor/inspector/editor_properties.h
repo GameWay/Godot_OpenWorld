@@ -41,6 +41,7 @@ class EditorLocaleDialog;
 class EditorResourcePicker;
 class EditorSpinSlider;
 class EditorVariantTypePopupMenu;
+class PopupPanel;
 class SceneTreeDialog;
 class TextEdit;
 class TextureButton;
@@ -294,13 +295,77 @@ public:
 	EditorPropertyEnum();
 };
 
+// Compact flags editor: shows the enabled flags as a list and edits them in a filterable popup.
+class EditorFlagsField : public Control {
+	GDCLASS(EditorFlagsField, Control);
+
+public:
+	struct Flag {
+		String name;
+		String tooltip;
+		uint32_t mask = 0;
+		int bit = -1; // Bit index for single-bit flags, -1 otherwise.
+	};
+
+private:
+	Vector<Flag> flags;
+	uint32_t value = 0;
+	bool read_only = false;
+	bool list_dirty = true;
+
+	Control *corner_control = nullptr;
+	Vector<Rect2> line_rects;
+	Vector<Rect2> line_check_rects;
+	Vector<int> line_flags;
+
+	PopupPanel *popup = nullptr;
+	LineEdit *filter = nullptr;
+	ScrollContainer *scroll = nullptr;
+	VBoxContainer *list = nullptr;
+	Label *no_match_label = nullptr;
+	Vector<CheckBox *> checks;
+
+	Ref<StyleBox> _get_style() const;
+	Color _get_text_color() const;
+	int _get_line_height() const;
+	int _get_enabled_count() const;
+	bool _is_flag_enabled(int p_index) const;
+	void _update_corner_control();
+	void _open_popup();
+	void _rebuild_list();
+	void _sync_checks();
+	void _apply_filter();
+	void _update_popup_size();
+	void _filter_changed(const String &p_text);
+	void _filter_gui_input(const Ref<InputEvent> &p_event);
+	void _check_toggled(bool p_pressed, int p_index);
+	void _check_gui_input(const Ref<InputEvent> &p_event, int p_index);
+	static bool _flag_matches(const Flag &p_flag, const String &p_filter);
+
+protected:
+	void _notification(int p_what);
+	static void _bind_methods();
+
+public:
+	void set_flags(const Vector<Flag> &p_flags);
+	const Vector<Flag> &get_flags() const { return flags; }
+	void set_value(uint32_t p_value);
+	uint32_t get_value() const { return value; }
+	void set_read_only(bool p_read_only);
+	void set_corner_control(Control *p_control);
+
+	virtual Size2 get_minimum_size() const override;
+	virtual String get_tooltip(const Point2 &p_pos) const override;
+	virtual void gui_input(const Ref<InputEvent> &p_event) override;
+
+	EditorFlagsField();
+};
+
 class EditorPropertyFlags : public EditorProperty {
 	GDCLASS(EditorPropertyFlags, EditorProperty);
-	VBoxContainer *vbox = nullptr;
-	Vector<CheckBox *> flags;
-	Vector<uint32_t> flag_values;
+	EditorFlagsField *field = nullptr;
 
-	void _flag_toggled(int p_index);
+	void _field_changed(uint32_t p_value);
 
 protected:
 	virtual void _set_read_only(bool p_read_only) override;
@@ -312,51 +377,6 @@ public:
 };
 
 ///////////////////// LAYERS /////////////////////////
-
-class EditorPropertyLayersGrid : public Control {
-	GDCLASS(EditorPropertyLayersGrid, Control);
-
-private:
-	Vector<Rect2> flag_rects;
-	Rect2 expand_rect;
-	bool expand_hovered = false;
-	bool expanded = false;
-	int expansion_rows = 0;
-	const uint32_t HOVERED_INDEX_NONE = UINT32_MAX;
-	uint32_t hovered_index = HOVERED_INDEX_NONE;
-	bool dragging = false;
-	bool dragging_value_to_set = false;
-	bool read_only = false;
-	int renamed_layer_index = -1;
-	PopupMenu *layer_rename = nullptr;
-	ConfirmationDialog *rename_dialog = nullptr;
-	LineEdit *rename_dialog_text = nullptr;
-
-	void _rename_pressed(int p_menu);
-	void _rename_operation_confirm();
-	void _update_hovered(const Vector2 &p_position);
-	void _on_hover_exit();
-	void _update_flag(bool p_replace);
-	Size2 get_grid_size() const;
-
-protected:
-	void _notification(int p_what);
-	static void _bind_methods();
-
-public:
-	uint32_t value = 0;
-	int layer_group_size = 0;
-	uint32_t layer_count = 0;
-	Vector<String> names;
-	Vector<String> tooltips;
-
-	void set_read_only(bool p_read_only);
-	virtual Size2 get_minimum_size() const override;
-	virtual String get_tooltip(const Point2 &p_pos) const override;
-	void gui_input(const Ref<InputEvent> &p_ev) override;
-	void set_flag(uint32_t p_flag);
-	EditorPropertyLayersGrid();
-};
 
 class EditorPropertyLayers : public EditorProperty {
 	GDCLASS(EditorPropertyLayers, EditorProperty);
@@ -373,13 +393,20 @@ public:
 	};
 
 private:
-	EditorPropertyLayersGrid *grid = nullptr;
-	void _grid_changed(uint32_t p_grid);
+	EditorFlagsField *field = nullptr;
 	String basename;
 	LayerType layer_type;
+	uint32_t layer_count = 0;
 	PopupMenu *layers = nullptr;
 	TextureButton *button = nullptr;
 
+	int renamed_layer_index = -1;
+	ConfirmationDialog *rename_dialog = nullptr;
+	LineEdit *rename_dialog_text = nullptr;
+
+	void _field_changed(uint32_t p_value);
+	void _flag_context_menu(int p_index, const Vector2 &p_screen_position);
+	void _rename_operation_confirm();
 	void _button_pressed();
 	void _menu_pressed(int p_menu);
 	void _refresh_names();
