@@ -35,6 +35,7 @@
 #include "scene/gui/margin_container.h"
 #include "scene/resources/texture.h"
 
+class AcceptDialog;
 class AspectRatioContainer;
 class ColorRect;
 class TextureRect;
@@ -65,10 +66,28 @@ private:
 
 	ColorChannelSelector *channel_selector = nullptr;
 	SpinBox *mipmap_spinbox = nullptr;
+	VBoxContainer *top_right_box = nullptr;
+
+	// Opens the texture in a large dialog (inspector preview only).
+	Button *open_big_preview = nullptr;
+	AcceptDialog *big_preview_dialog = nullptr;
+
+	// Zoomable mode (used by the large dialog).
+	Control *zoom_view = nullptr;
+	Button *zoom_button = nullptr;
+	bool zoom_fit = true;
+	real_t zoom = 1.0;
+	Vector2 zoom_offset;
+	bool panning = false;
 
 	void _draw_outline();
 	void _update_metadata_label_text();
 	void _toggle_metadata_label();
+	void _open_big_preview();
+	void _update_zoom_layout();
+	void _set_zoom(real_t p_zoom, const Vector2 &p_pivot);
+	void _zoom_reset();
+	void _zoom_view_gui_input(const Ref<InputEvent> &p_event);
 
 protected:
 	void _notification(int p_what);
@@ -81,7 +100,7 @@ public:
 	static void finish_shaders();
 
 	TextureRect *get_texture_display();
-	TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata);
+	TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata, bool p_zoomable = false);
 };
 
 class EditorInspectorPluginTexture : public EditorInspectorPlugin {

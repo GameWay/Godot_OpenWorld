@@ -37,6 +37,7 @@
 #include "scene/gui/aspect_ratio_container.h"
 #include "scene/gui/button.h"
 #include "scene/gui/color_rect.h"
+#include "scene/gui/dialogs.h"
 #include "scene/gui/label.h"
 #include "scene/gui/spin_box.h"
 #include "scene/gui/texture_rect.h"
@@ -118,6 +119,10 @@ void TexturePreview::_notification(int p_what) {
 
 			if (metadata_toggle) {
 				metadata_toggle->set_button_icon(get_editor_theme_icon(SNAME("Info")));
+			}
+
+			if (open_big_preview) {
+				open_big_preview->set_button_icon(get_editor_theme_icon(SNAME("DistractionFree")));
 			}
 
 			bg_rect->set_color(get_theme_color(SNAME("dark_color_2"), EditorStringName(Editor)));
@@ -256,6 +261,139 @@ void TexturePreview::_toggle_metadata_label() {
 	metadata_toggle->set_modulate(Color(1, 1, 1, metadata_label->is_visible() ? 0.8 : 0.4));
 }
 
+void TexturePreview::_open_big_preview() {
+	const Ref<Texture2D> texture = texture_display->get_texture();
+	ERR_FAIL_COND(texture.is_null());
+
+	if (!big_preview_dialog) {
+		big_preview_dialog = memnew(AcceptDialog);
+		String title = texture->get_path().get_file();
+		if (title.is_empty()) {
+			title = texture->get_name();
+		}
+		big_preview_dialog->set_title(title.is_empty() ? TTR("Texture Preview") : vformat(TTR("Texture Preview: %s"), title));
+		TexturePreview *big_preview = memnew(TexturePreview(texture, true, true));
+		big_preview_dialog->add_child(big_preview);
+		add_child(big_preview_dialog);
+	}
+	big_preview_dialog->popup_centered_clamped(Size2(1000, 900) * EDSCALE, 0.8);
+}
+
+void TexturePreview::_update_zoom_layout() {
+	if (!zoom_view) {
+		return;
+	}
+	const Ref<Texture2D> texture = texture_display->get_texture();
+	const Size2 view_size = zoom_view->get_size();
+	if (texture.is_null() || texture->get_width() <= 0 || texture->get_height() <= 0 || view_size.x <= 0 || view_size.y <= 0) {
+		return;
+	}
+
+	const Size2 tex_size = texture->get_size();
+	if (zoom_fit) {
+		zoom = MIN(view_size.x / tex_size.x, view_size.y / tex_size.y);
+	}
+
+	const Size2 display_size = tex_size * zoom;
+	for (int axis = 0; axis < 2; axis++) {
+		if (display_size[axis] <= view_size[axis]) {
+			// Center when the texture fits along this axis.
+			zoom_offset[axis] = (view_size[axis] - display_size[axis]) * 0.5;
+		} else {
+			zoom_offset[axis] = CLAMP(zoom_offset[axis], view_size[axis] - display_size[axis], 0.0);
+		}
+	}
+
+	centering_container->set_position(zoom_offset.round());
+	centering_container->set_size(display_size.round());
+	zoom_button->set_text(itos(Math::round(zoom * 100.0)) + "%");
+}
+
+void TexturePreview::_set_zoom(real_t p_zoom, const Vector2 &p_pivot) {
+	const real_t new_zoom = CLAMP(p_zoom, 0.01, 64.0);
+	// Keep the texture point under the pivot in place.
+	zoom_offset = p_pivot - (p_pivot - zoom_offset) * (new_zoom / zoom);
+	zoom = new_zoom;
+	zoom_fit = false;
+	_update_zoom_layout();
+}
+
+void TexturePreview::_zoom_reset() {
+	zoom_fit = true;
+	_update_zoom_layout();
+}
+
+void TexturePreview::_zoom_view_gui_input(const Ref<InputEvent> &p_event) {
+	const Ref<InputEventMouseButton> mb = p_event;
+	if (mb.is_valid()) {
+		if (mb->is_pressed() && mb->is_command_or_control_pressed() && (mb->get_button_index() == MouseButton::WHEEL_UP || mb->get_button_index() == MouseButton::WHEEL_DOWN)) {
+			const real_t step = mb->get_factor() > 0 ? 1.0 + 0.15 * mb->get_factor() : 1.15;
+			_set_zoom(mb->get_button_index() == MouseButton::WHEEL_UP ? zoom * step : zoom / step, mb->get_position());
+			zoom_view->accept_event();
+			return;
+		}
+
+		if (mb->is_pressed() && !mb->is_command_or_control_pressed()) {
+			// Plain wheel scrolls the zoomed texture (Shift scrolls horizontally).
+			Vector2 scroll;
+			const real_t amount = 40 * EDSCALE * (mb->get_factor() > 0 ? mb->get_factor() : 1.0);
+			switch (mb->get_button_index()) {
+				case MouseButton::WHEEL_UP:
+					scroll = mb->is_shift_pressed() ? Vector2(amount, 0) : Vector2(0, amount);
+					break;
+				case MouseButton::WHEEL_DOWN:
+					scroll = mb->is_shift_pressed() ? Vector2(-amount, 0) : Vector2(0, -amount);
+					break;
+				case MouseButton::WHEEL_LEFT:
+					scroll = Vector2(amount, 0);
+					break;
+				case MouseButton::WHEEL_RIGHT:
+					scroll = Vector2(-amount, 0);
+					break;
+				default:
+					break;
+			}
+			if (scroll != Vector2()) {
+				zoom_offset += scroll;
+				_update_zoom_layout();
+				zoom_view->accept_event();
+				return;
+			}
+		}
+
+		if (mb->get_button_index() == MouseButton::LEFT || mb->get_button_index() == MouseButton::MIDDLE) {
+			panning = mb->is_pressed();
+			if (mb->is_pressed() && mb->is_double_click()) {
+				_zoom_reset();
+			}
+			zoom_view->accept_event();
+		}
+		return;
+	}
+
+	const Ref<InputEventMouseMotion> mm = p_event;
+	if (mm.is_valid() && panning) {
+		zoom_offset += mm->get_relative();
+		_update_zoom_layout();
+		zoom_view->accept_event();
+		return;
+	}
+
+	const Ref<InputEventMagnifyGesture> mg = p_event;
+	if (mg.is_valid()) {
+		_set_zoom(zoom * mg->get_factor(), mg->get_position());
+		zoom_view->accept_event();
+		return;
+	}
+
+	const Ref<InputEventPanGesture> pg = p_event;
+	if (pg.is_valid()) {
+		zoom_offset -= pg->get_delta() * 20 * EDSCALE;
+		_update_zoom_layout();
+		zoom_view->accept_event();
+	}
+}
+
 void TexturePreview::on_selected_channels_changed() {
 	texture_display->set_instance_shader_parameter("u_channel_factors", channel_selector->get_selected_channel_factors());
 }
@@ -264,7 +402,7 @@ void TexturePreview::on_selected_mipmap_changed(double p_value) {
 	texture_display->set_instance_shader_parameter("lod", mipmap_spinbox->get_value());
 }
 
-TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata) {
+TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata, bool p_zoomable) {
 	const float outline_width = Math::round(EDSCALE);
 
 	set_custom_minimum_size(Size2(0.0, 256 * EDSCALE) + Size2(outline_width, outline_width) * 2);
@@ -280,7 +418,19 @@ TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata) {
 	add_child(margin_container);
 
 	centering_container = memnew(AspectRatioContainer);
-	margin_container->add_child(centering_container);
+	if (p_zoomable) {
+		// The texture is positioned and scaled manually inside a clipping view.
+		zoom_view = memnew(Control);
+		zoom_view->set_clip_contents(true);
+		zoom_view->set_mouse_filter(MOUSE_FILTER_STOP);
+		zoom_view->connect(SceneStringName(gui_input), callable_mp(this, &TexturePreview::_zoom_view_gui_input));
+		zoom_view->connect(SceneStringName(resized), callable_mp(this, &TexturePreview::_update_zoom_layout));
+		margin_container->add_child(zoom_view);
+		centering_container->set_mouse_filter(MOUSE_FILTER_IGNORE);
+		zoom_view->add_child(centering_container);
+	} else {
+		margin_container->add_child(centering_container);
+	}
 
 	checkerboard = memnew(TextureRect);
 	checkerboard->set_expand_mode(TextureRect::EXPAND_IGNORE_SIZE);
@@ -305,11 +455,21 @@ TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata) {
 	if (p_texture.is_valid()) {
 		_update_texture_display_ratio();
 		p_texture->connect_changed(callable_mp(this, &TexturePreview::_update_texture_display_ratio));
+		if (p_zoomable) {
+			p_texture->connect_changed(callable_mp(this, &TexturePreview::_update_zoom_layout));
+		}
 	}
 
 	// Null can be passed by `Camera3DPreview` (which immediately after sets a texture anyways).
 	const Image::Format format = p_texture.is_valid() ? get_texture_2d_format(p_texture.ptr()) : Image::FORMAT_MAX;
 	const uint32_t components_mask = format != Image::FORMAT_MAX ? Image::get_format_component_mask(format) : 0xf;
+
+	// Top-right column: mipmap selector, then the big preview / zoom buttons.
+	top_right_box = memnew(VBoxContainer);
+	top_right_box->set_h_size_flags(Control::SIZE_SHRINK_END);
+	top_right_box->set_v_size_flags(Control::SIZE_SHRINK_BEGIN);
+	top_right_box->set_mouse_filter(MOUSE_FILTER_IGNORE);
+	add_child(top_right_box);
 
 	// Setup Mipmap selector.
 	const int mipmaps = get_texture_mipmaps_count(p_texture);
@@ -318,12 +478,33 @@ TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata) {
 		mipmap_spinbox->set_tooltip_text(TTRC("Mipmap level index selector."));
 		mipmap_spinbox->set_max(mipmaps);
 		mipmap_spinbox->set_modulate(Color(1, 1, 1, 0.8));
-		mipmap_spinbox->set_h_grow_direction(GROW_DIRECTION_BEGIN);
 		mipmap_spinbox->set_h_size_flags(Control::SIZE_SHRINK_END);
-		mipmap_spinbox->set_v_size_flags(Control::SIZE_SHRINK_BEGIN);
-		mipmap_spinbox->set_anchors_preset(Control::PRESET_TOP_RIGHT);
 		mipmap_spinbox->connect(SceneStringName(value_changed), callable_mp(this, &TexturePreview::on_selected_mipmap_changed));
-		add_child(mipmap_spinbox);
+		top_right_box->add_child(mipmap_spinbox);
+	}
+
+	if (p_show_metadata && !p_zoomable && p_texture.is_valid()) {
+		open_big_preview = memnew(Button);
+		open_big_preview->set_flat(true);
+		open_big_preview->set_tooltip_text(TTRC("Open the texture in a large preview window."));
+		open_big_preview->set_accessibility_name(TTRC("Open Texture Preview Dialog"));
+		open_big_preview->set_theme_type_variation("PreviewLightButton");
+		open_big_preview->set_modulate(Color(1, 1, 1, 0.8));
+		open_big_preview->set_h_size_flags(Control::SIZE_SHRINK_END);
+		open_big_preview->connect(SceneStringName(pressed), callable_mp(this, &TexturePreview::_open_big_preview));
+		top_right_box->add_child(open_big_preview);
+	}
+
+	if (p_zoomable) {
+		zoom_button = memnew(Button);
+		zoom_button->set_flat(true);
+		zoom_button->set_text("100%");
+		zoom_button->set_tooltip_text(TTRC("Zoom level. Ctrl+Mouse Wheel to zoom, drag or Mouse Wheel to pan.\nClick (or double-click the texture) to fit."));
+		zoom_button->set_theme_type_variation("PreviewLightButton");
+		zoom_button->set_modulate(Color(1, 1, 1, 0.8));
+		zoom_button->set_h_size_flags(Control::SIZE_SHRINK_END);
+		zoom_button->connect(SceneStringName(pressed), callable_mp(this, &TexturePreview::_zoom_reset));
+		top_right_box->add_child(zoom_button);
 	}
 
 	// Add color channel selector at the bottom left if more than 1 channel is available.
