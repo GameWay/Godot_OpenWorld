@@ -5512,6 +5512,38 @@ void EditorInspector::update_tree() {
 		}
 	}
 
+	{
+		// Hide automatic (class) categories that ended up without any properties, e.g. RefCounted.
+		// Content of a class category runs until the next class category, like for folding below.
+		EditorInspectorCategory *class_category = nullptr;
+		bool class_has_content = false;
+		auto finish_category = [&]() {
+			if (class_category && !class_has_content) {
+				class_category->hide();
+			}
+		};
+		for (int i = 0; i < main_vbox->get_child_count(); i++) {
+			Control *child = Object::cast_to<Control>(main_vbox->get_child(i));
+			if (!child) {
+				continue;
+			}
+			EditorInspectorCategory *cat = Object::cast_to<EditorInspectorCategory>(child);
+			if (cat) {
+				if (!cat->info.hint_string.is_empty()) {
+					finish_category();
+					class_category = cat;
+					class_has_content = false;
+				}
+				continue;
+			}
+			if (!child->is_visible() || (Object::cast_to<Container>(child) && child->get_child_count() == 0)) {
+				continue;
+			}
+			class_has_content = true;
+		}
+		finish_category();
+	}
+
 	if (use_folding) {
 		// Make class categories foldable. Content of a class category runs until the next class category;
 		// custom (script `@export_category`) categories nest inside it and run until the next category of any kind.
