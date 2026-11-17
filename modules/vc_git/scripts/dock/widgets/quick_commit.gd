@@ -19,6 +19,8 @@ var _amend: CheckBox
 var _push_button: Button
 ## For what's staged, while the message is empty; Tab takes it.
 var _suggestion := ""
+## Whether anything was staged at the last _fill(); typing reuses it instead of running `git status`.
+var _any_staged := false
 
 
 func _init(panel: Control) -> void:
@@ -52,7 +54,7 @@ func _init(panel: Control) -> void:
 	_message.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_message.text_changed.connect(func() -> void:
 		_panel._commit_message.text = _message.text # one draft, also when the dock is opened later
-		_update_buttons()
+		_update_buttons(_any_staged)
 	)
 	_message.gui_input.connect(_on_message_gui_input)
 	layout.add_child(_message)
@@ -134,6 +136,7 @@ func set_staged(path: String, staged: bool) -> void:
 func _update_buttons(any_staged: Variant = null) -> void:
 	if any_staged == null:
 		any_staged = _panel._repo.get_status().any(func(e: Dictionary) -> bool: return GitStatusFlags.is_staged(e["status"]))
+	_any_staged = any_staged
 	var can_commit: bool = not _message.text.strip_edges().is_empty() and (any_staged or _amend.button_pressed)
 	get_ok_button().disabled = not can_commit
 	_push_button.disabled = not can_commit

@@ -156,6 +156,8 @@ var _diff_side := "unstaged"
 
 ## Signature of the last-seen `git status`, so a poll only rebuilds the tree (losing scroll and selection) when something changed.
 var _last_status_signature := ""
+## Whether anything was staged at the last status read; typing in the message box reuses it.
+var _any_staged := false
 ## Changed files' mtimes at the last check: a re-saved file keeps its status, so only this reveals that its diff is stale.
 var _last_content_signature := ""
 ## path -> status at the last refresh, so auto-stage/auto-add only touch changes that just appeared (never undoing a manual uncheck).
@@ -1996,7 +1998,8 @@ func _on_amend_check_toggled(pressed: bool) -> void:
 
 
 func _on_commit_message_text_changed() -> void:
-	_update_commit_buttons_enabled()
+	# Per keystroke: reuse the last known staged state instead of running `git status` (it stalled typing).
+	_update_commit_buttons_enabled(_any_staged)
 
 
 func _update_commit_buttons_enabled(any_staged: Variant = null) -> void:
@@ -2008,6 +2011,7 @@ func _update_commit_buttons_enabled(any_staged: Variant = null) -> void:
 			if GitStatusFlags.is_staged(entry["status"]):
 				any_staged = true
 				break
+	_any_staged = any_staged
 
 	var has_message := not _commit_message.text.strip_edges().is_empty()
 	var can_commit: bool = has_message and (any_staged or _amend_check.button_pressed)
