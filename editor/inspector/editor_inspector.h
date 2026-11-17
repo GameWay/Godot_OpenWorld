@@ -784,6 +784,18 @@ public:
 class EditorInspector : public ScrollContainer {
 	GDCLASS(EditorInspector, ScrollContainer);
 
+public:
+	// Category headers to skip in update_tree(); a bitmask.
+	enum HiddenCategories {
+		HIDE_CATEGORIES_NONE = 0,
+		// Native class categories (Resource, RefCounted...) together with their properties.
+		HIDE_CATEGORIES_NATIVE_CLASSES = 1 << 0,
+		// Headers of script categories without class_name; their properties stay.
+		HIDE_CATEGORIES_UNNAMED_SCRIPTS = 1 << 1,
+	};
+
+private:
+
 	friend class EditorPropertyResource;
 
 public:
@@ -846,6 +858,7 @@ private:
 	int category_color_level = -1;
 	bool hide_script = true;
 	bool hide_metadata = true;
+	BitField<HiddenCategories> hidden_categories = HIDE_CATEGORIES_NONE;
 	bool use_doc_hints = false;
 	EditorPropertyNameProcessor::Style property_name_style = EditorPropertyNameProcessor::STYLE_CAPITALIZED;
 	bool use_settings_name_style = true;
@@ -994,7 +1007,11 @@ public:
 	void set_category_color_level(int p_color_level);
 	void set_use_doc_hints(bool p_enable);
 	void set_hide_script(bool p_hide);
+	bool is_hiding_script() const;
 	void set_hide_metadata(bool p_hide);
+	bool is_hiding_metadata() const;
+	void set_hidden_categories(BitField<HiddenCategories> p_flags);
+	BitField<HiddenCategories> get_hidden_categories() const;
 
 	void set_use_filter(bool p_use);
 	void register_text_enter(Node *p_line_edit);
@@ -1031,3 +1048,5 @@ public:
 
 	EditorInspector();
 };
+
+VARIANT_BITFIELD_CAST(EditorInspector::HiddenCategories);

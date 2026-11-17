@@ -90,6 +90,15 @@
 		<member name="draw_focus_border" type="bool" setter="set_draw_focus_border" getter="get_draw_focus_border" overrides="ScrollContainer" default="true" />
 		<member name="focus_mode" type="int" setter="set_focus_mode" getter="get_focus_mode" overrides="Control" enum="Control.FocusMode" default="2" />
 		<member name="follow_focus" type="bool" setter="set_follow_focus" getter="is_following_focus" overrides="ScrollContainer" default="true" />
+		<member name="hidden_categories" type="int" setter="set_hidden_categories" getter="get_hidden_categories" enum="EditorInspector.HiddenCategories" is_bitfield="true" default="0">
+			Category headers the inspector skips. With [constant HIDE_CATEGORIES_NATIVE_CLASSES], native class categories are hidden together with their properties; with [constant HIDE_CATEGORIES_UNNAMED_SCRIPTS], only the headers of script categories without [code]class_name[/code] are hidden.
+		</member>
+		<member name="hide_metadata" type="bool" setter="set_hide_metadata" getter="is_hiding_metadata" default="true">
+			If [code]true[/code], metadata properties and the "Add Metadata" button are hidden.
+		</member>
+		<member name="hide_script" type="bool" setter="set_hide_script" getter="is_hiding_script" default="true">
+			If [code]true[/code], the [code]script[/code] property is hidden.
+		</member>
 		<member name="horizontal_scroll_mode" type="int" setter="set_horizontal_scroll_mode" getter="get_horizontal_scroll_mode" overrides="ScrollContainer" enum="ScrollContainer.ScrollMode" default="0" />
 	</members>
 	<signals>
@@ -151,4 +160,15 @@
 			</description>
 		</signal>
 	</signals>
+	<constants>
+		<constant name="HIDE_CATEGORIES_NONE" value="0" enum="HiddenCategories" is_bitfield="true">
+			All categories are shown.
+		</constant>
+		<constant name="HIDE_CATEGORIES_NATIVE_CLASSES" value="1" enum="HiddenCategories" is_bitfield="true">
+			Hides native class categories (e.g. [Resource], [RefCounted]) together with their properties.
+		</constant>
+		<constant name="HIDE_CATEGORIES_UNNAMED_SCRIPTS" value="2" enum="HiddenCategories" is_bitfield="true">
+			Hides the headers of script categories without [code]class_name[/code]. Their properties are still shown.
+		</constant>
+	</constants>
 </class>

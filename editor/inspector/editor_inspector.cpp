@@ -4623,6 +4623,8 @@ void EditorInspector::update_tree() {
 	int section_depth = 0;
 	bool disable_favorite = false;
 	VBoxContainer *category_vbox = nullptr;
+	// Set while inside a native class category hidden by HIDE_CATEGORIES_NATIVE_CLASSES.
+	bool skip_category_content = false;
 
 	List<PropertyInfo> plist;
 	object->get_property_list(&plist, true);
@@ -4652,6 +4654,12 @@ void EditorInspector::update_tree() {
 	// Get the lists of editors for properties.
 	for (List<PropertyInfo>::Element *E_property = plist.front(); E_property; E_property = E_property->next()) {
 		PropertyInfo &p = E_property->get();
+
+		if (p.usage & PROPERTY_USAGE_CATEGORY) {
+			skip_category_content = false;
+		} else if (skip_category_content) {
+			continue;
+		}
 
 		if (p.usage & PROPERTY_USAGE_SUBGROUP) {
 			// Setup a property sub-group.
@@ -4748,6 +4756,18 @@ void EditorInspector::update_tree() {
 					// `|` separators used in `EditorHelpBit`.
 					category_tooltip = "class|" + doc_name + "|";
 				}
+			}
+
+			if (!is_custom_category && hidden_categories.has_flag(HIDE_CATEGORIES_NATIVE_CLASSES) && ClassDB::class_exists(p.name)) {
+				// Hide the category together with its properties.
+				skip_category_content = true;
+				continue;
+			}
+
+			if (!is_custom_category && hidden_categories.has_flag(HIDE_CATEGORIES_UNNAMED_SCRIPTS) && !ClassDB::class_exists(p.name) &&
+					EditorNode::get_editor_data().script_class_get_name(p.hint_string) == StringName()) {
+				// Hide only the header: the script's properties join the previous category.
+				continue;
 			}
 
 			if ((is_custom_category && !show_custom_categories) || (!is_custom_category && !show_standard_categories)) {
@@ -5758,9 +5778,29 @@ void EditorInspector::set_hide_script(bool p_hide) {
 	update_tree();
 }
 
+bool EditorInspector::is_hiding_script() const {
+	return hide_script;
+}
+
 void EditorInspector::set_hide_metadata(bool p_hide) {
 	hide_metadata = p_hide;
 	update_tree();
+}
+
+bool EditorInspector::is_hiding_metadata() const {
+	return hide_metadata;
+}
+
+void EditorInspector::set_hidden_categories(BitField<HiddenCategories> p_flags) {
+	if (hidden_categories == p_flags) {
+		return;
+	}
+	hidden_categories = p_flags;
+	update_tree();
+}
+
+BitField<EditorInspector::HiddenCategories> EditorInspector::get_hidden_categories() const {
+	return hidden_categories;
 }
 
 void EditorInspector::set_use_filter(bool p_use) {
@@ -6671,6 +6711,21 @@ void EditorInspector::_bind_methods() {
 	ClassDB::bind_method("collapse_all_folding", &EditorInspector::collapse_all_folding);
 	ClassDB::bind_method("expand_all_folding", &EditorInspector::expand_all_folding);
 	ClassDB::bind_method("expand_revertable", &EditorInspector::expand_revertable);
+
+	ClassDB::bind_method(D_METHOD("set_hide_script", "hide"), &EditorInspector::set_hide_script);
+	ClassDB::bind_method(D_METHOD("is_hiding_script"), &EditorInspector::is_hiding_script);
+	ClassDB::bind_method(D_METHOD("set_hide_metadata", "hide"), &EditorInspector::set_hide_metadata);
+	ClassDB::bind_method(D_METHOD("is_hiding_metadata"), &EditorInspector::is_hiding_metadata);
+	ClassDB::bind_method(D_METHOD("set_hidden_categories", "flags"), &EditorInspector::set_hidden_categories);
+	ClassDB::bind_method(D_METHOD("get_hidden_categories"), &EditorInspector::get_hidden_categories);
+
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "hide_script"), "set_hide_script", "is_hiding_script");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "hide_metadata"), "set_hide_metadata", "is_hiding_metadata");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "hidden_categories", PROPERTY_HINT_FLAGS, "Native Classes,Unnamed Scripts"), "set_hidden_categories", "get_hidden_categories");
+
+	BIND_BITFIELD_FLAG(HIDE_CATEGORIES_NONE);
+	BIND_BITFIELD_FLAG(HIDE_CATEGORIES_NATIVE_CLASSES);
+	BIND_BITFIELD_FLAG(HIDE_CATEGORIES_UNNAMED_SCRIPTS);
 
 	ClassDB::bind_static_method("EditorInspector", D_METHOD("instantiate_property_editor", "object", "type", "path", "hint", "hint_text", "usage", "wide"), &EditorInspector::instantiate_property_editor, DEFVAL(false));
 	ClassDB::bind_static_method("EditorInspector", D_METHOD("create_default_inspector", "filter_line_edit"), &EditorInspector::create_default_inspector, DEFVAL(Variant()));
