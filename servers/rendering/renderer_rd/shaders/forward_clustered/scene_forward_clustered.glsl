@@ -3300,6 +3300,15 @@ void fragment_shader(in SceneData scene_data) {
 	specular_buffer.rgb = specular_buffer.rgb * fog.a;
 #endif //!FOG_DISABLED
 
+	// OEngine: material channel debug views. The value is converted from sRGB so that
+	// the displayed brightness equals it after the output conversion.
+	if (bool(scene_data.flags & (SCENE_DATA_FLAGS_DEBUG_ROUGHNESS | SCENE_DATA_FLAGS_DEBUG_SPECULAR))) {
+		float debug_value = clamp(bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_ROUGHNESS) ? float(roughness) : float(specular), 0.0, 1.0);
+		debug_value = debug_value <= 0.04045 ? debug_value * (1.0 / 12.92) : pow((debug_value + 0.055) * (1.0 / 1.055), 2.4);
+		diffuse_buffer = vec4(vec3(debug_value), 0.0);
+		specular_buffer = vec4(0.0);
+	}
+
 #else //MODE_SEPARATE_SPECULAR
 
 	alpha *= scene_data.pass_alpha_multiplier;
@@ -3318,6 +3327,14 @@ void fragment_shader(in SceneData scene_data) {
 #if defined(PREMUL_ALPHA_USED) && !defined(MODE_RENDER_DEPTH)
 	frag_color.rgb *= premul_alpha;
 #endif //PREMUL_ALPHA_USED
+
+	// OEngine: material channel debug views. The value is converted from sRGB so that
+	// the displayed brightness equals it after the output conversion.
+	if (bool(scene_data.flags & (SCENE_DATA_FLAGS_DEBUG_ROUGHNESS | SCENE_DATA_FLAGS_DEBUG_SPECULAR))) {
+		float debug_value = clamp(bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_ROUGHNESS) ? float(roughness) : float(specular), 0.0, 1.0);
+		debug_value = debug_value <= 0.04045 ? debug_value * (1.0 / 12.92) : pow((debug_value + 0.055) * (1.0 / 1.055), 2.4);
+		frag_color.rgb = vec3(debug_value);
+	}
 
 #endif //MODE_SEPARATE_SPECULAR
 

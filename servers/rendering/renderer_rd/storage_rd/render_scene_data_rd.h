@@ -112,6 +112,8 @@ private:
 		SCENE_DATA_FLAGS_USE_UV2_MATERIAL = 1 << 6,
 		SCENE_DATA_FLAGS_USE_PANCAKE_SHADOWS = 1 << 7,
 		SCENE_DATA_FLAGS_IN_SHADOW_PASS = 1 << 8, // Only used by Forward+ renderer.
+		SCENE_DATA_FLAGS_DEBUG_ROUGHNESS = 1 << 9, // OEngine: Forward+ only, outputs material roughness.
+		SCENE_DATA_FLAGS_DEBUG_SPECULAR = 1 << 10, // OEngine: Forward+ only, outputs material specular.
 		SCENE_DATA_FLAGS_MAX
 	};
 

@@ -771,6 +771,14 @@
 			Draws the view space bent normals (the mean unoccluded directions) computed by CORTAO, encoded as [code]n * 0.5 + 0.5[/code]. Requires [member Environment.ssao_enabled] with [member Environment.ssao_mode] set to [constant Environment.SSAO_MODE_CORTAO].
 			[b]Note:[/b] Only supported when using the Forward+ rendering method.
 		</constant>
+		<constant name="DEBUG_DRAW_ROUGHNESS" value="30" enum="DebugDraw">
+			Draws the material roughness as unlit grayscale, without post-processing. The displayed brightness equals the value.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
+		</constant>
+		<constant name="DEBUG_DRAW_SPECULAR" value="31" enum="DebugDraw">
+			Draws the material specular parameter as unlit grayscale, without post-processing. The displayed brightness equals the value.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
+		</constant>
 		<constant name="DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST" value="0" enum="DefaultCanvasItemTextureFilter">
 			The texture filter reads from the nearest pixel only. This makes the texture look pixelated from up close, and grainy from a distance (due to mipmaps not being sampled).
 		</constant>

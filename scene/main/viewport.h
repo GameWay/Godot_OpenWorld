@@ -190,6 +190,8 @@ public:
 		DEBUG_DRAW_CLUSTER_AREA_LIGHTS,
 		DEBUG_DRAW_AREA_LIGHT_ATLAS,
 		DEBUG_DRAW_SSAO_BENT_NORMAL, // OEngine: CORTAO bent normals.
+		DEBUG_DRAW_ROUGHNESS, // OEngine: material roughness.
+		DEBUG_DRAW_SPECULAR, // OEngine: material specular.
 	};
 
 	enum DefaultCanvasItemTextureFilter {

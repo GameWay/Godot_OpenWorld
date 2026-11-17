@@ -1018,6 +1018,8 @@ bool RendererSceneRenderRD::_debug_draw_can_use_effects(RSE::ViewportDebugDraw p
 		case RSE::VIEWPORT_DEBUG_DRAW_CLUSTER_DECALS:
 		case RSE::VIEWPORT_DEBUG_DRAW_CLUSTER_REFLECTION_PROBES:
 		case RSE::VIEWPORT_DEBUG_DRAW_INTERNAL_BUFFER:
+		case RSE::VIEWPORT_DEBUG_DRAW_ROUGHNESS:
+		case RSE::VIEWPORT_DEBUG_DRAW_SPECULAR:
 			can_use_effects = false;
 			break;
 		// Modes that draws information over part of the viewport needs camera effects because we see partially the normal draw mode.

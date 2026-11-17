@@ -605,6 +605,8 @@ enum ViewportDebugDraw {
 	VIEWPORT_DEBUG_DRAW_CLUSTER_AREA_LIGHTS,
 	VIEWPORT_DEBUG_DRAW_AREA_LIGHT_ATLAS,
 	VIEWPORT_DEBUG_DRAW_SSAO_BENT_NORMAL, // OEngine: CORTAO bent normals.
+	VIEWPORT_DEBUG_DRAW_ROUGHNESS, // OEngine: material roughness, unlit grayscale.
+	VIEWPORT_DEBUG_DRAW_SPECULAR, // OEngine: material specular, unlit grayscale.
 };
 
 enum ViewportVRSMode {
