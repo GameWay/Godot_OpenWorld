@@ -44,7 +44,9 @@
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
 #include "editor/themes/editor_theme_manager.h"
+#include "core/io/file_access.h"
 #include "scene/gui/box_container.h"
+#include "scene/gui/margin_container.h"
 
 class ImportDockParameters : public Object {
 	GDCLASS(ImportDockParameters, Object);
@@ -100,9 +102,7 @@ public:
 	}
 };
 
-ImportDock *ImportDock::singleton = nullptr;
-
-void ImportDock::set_edit_path(const String &p_path) {
+void ImportSettingsEditor::set_edit_path(const String &p_path) {
 	Ref<ConfigFile> config;
 	config.instantiate();
 	Error err = config->load(p_path + ".import");
@@ -155,13 +155,12 @@ void ImportDock::set_edit_path(const String &p_path) {
 	_set_dirty(false);
 	import_as->set_disabled(false);
 	preset->set_disabled(false);
-	content->show();
-	select_a_resource->hide();
+	editing = true;
 
 	imported->set_text(p_path.get_file());
 }
 
-void ImportDock::_add_keep_import_option(const String &p_importer_name) {
+void ImportSettingsEditor::_add_keep_import_option(const String &p_importer_name) {
 	import_as->add_separator();
 	import_as->add_item(TTRC("Keep File (exported as is)"));
 	import_as->set_item_metadata(-1, "keep");
@@ -174,13 +173,15 @@ void ImportDock::_add_keep_import_option(const String &p_importer_name) {
 	}
 }
 
-void ImportDock::_update_options(const String &p_path, const Ref<ConfigFile> &p_config) {
+void ImportSettingsEditor::_update_options(const String &p_path, const Ref<ConfigFile> &p_config) {
 	// Set the importer class to fetch the correct class in the XML class reference.
 	// This allows tooltips to display when hovering properties.
 	if (params->importer.is_valid()) {
 		// Null check to avoid crashing if the "Keep File (exported as is)" mode is selected.
 		import_opts->set_object_class(params->importer->get_class_name());
 	}
+
+	_store_section_folding();
 
 	List<ResourceImporter::ImportOption> options;
 
@@ -214,6 +215,7 @@ void ImportDock::_update_options(const String &p_path, const Ref<ConfigFile> &p_
 		}
 	}
 
+	_restore_section_folding();
 	params->update();
 	_update_preset_menu();
 
@@ -227,7 +229,7 @@ void ImportDock::_update_options(const String &p_path, const Ref<ConfigFile> &p_
 	}
 }
 
-void ImportDock::set_edit_multiple_paths(const Vector<String> &p_paths) {
+void ImportSettingsEditor::set_edit_multiple_paths(const Vector<String> &p_paths) {
 	clear();
 
 	// Use the value that is repeated the most.
@@ -300,6 +302,7 @@ void ImportDock::set_edit_multiple_paths(const Vector<String> &p_paths) {
 	List<ResourceImporter::ImportOption> options;
 	params->importer->get_import_options(base_path, &options);
 
+	_store_section_folding();
 	params->properties.clear();
 	params->values.clear();
 	params->checking = true;
@@ -327,6 +330,7 @@ void ImportDock::set_edit_multiple_paths(const Vector<String> &p_paths) {
 		}
 	}
 
+	_restore_section_folding();
 	params->update();
 
 	List<Ref<ResourceImporter>> importers;
@@ -358,8 +362,7 @@ void ImportDock::set_edit_multiple_paths(const Vector<String> &p_paths) {
 	_set_dirty(false);
 	import_as->set_disabled(false);
 	preset->set_disabled(false);
-	content->show();
-	select_a_resource->hide();
+	editing = true;
 
 	imported->set_text(vformat(TTR("%d Files"), p_paths.size()));
 
@@ -372,7 +375,7 @@ void ImportDock::set_edit_multiple_paths(const Vector<String> &p_paths) {
 	}
 }
 
-void ImportDock::reimport_resources(const Vector<String> &p_paths) {
+void ImportSettingsEditor::reimport_resources(const Vector<String> &p_paths) {
 	switch (p_paths.size()) {
 		case 0:
 			ERR_FAIL_MSG("You need to select files to reimport them.");
@@ -387,7 +390,7 @@ void ImportDock::reimport_resources(const Vector<String> &p_paths) {
 	_reimport_attempt();
 }
 
-void ImportDock::_update_preset_menu() {
+void ImportSettingsEditor::_update_preset_menu() {
 	preset->get_popup()->clear();
 
 	if (params->importer.is_null()) {
@@ -414,7 +417,7 @@ void ImportDock::_update_preset_menu() {
 	}
 }
 
-void ImportDock::_importer_selected(int i_idx) {
+void ImportSettingsEditor::_importer_selected(int i_idx) {
 	String name = import_as->get_selected_metadata();
 	if (name == "keep") {
 		params->importer.unref();
@@ -445,7 +448,7 @@ void ImportDock::_importer_selected(int i_idx) {
 	_set_dirty(true);
 }
 
-void ImportDock::_preset_selected(int p_idx) {
+void ImportSettingsEditor::_preset_selected(int p_idx) {
 	int item_id = preset->get_popup()->get_item_id(p_idx);
 	String setting_name = "importer_defaults/" + params->importer->get_importer_name();
 
@@ -510,7 +513,7 @@ void ImportDock::_preset_selected(int p_idx) {
 	_set_dirty(true);
 }
 
-void ImportDock::clear() {
+void ImportSettingsEditor::clear() {
 	imported->set_text("");
 	import->set_disabled(true);
 	import_as->clear();
@@ -520,8 +523,7 @@ void ImportDock::clear() {
 	params->properties.clear();
 	params->update();
 	preset->get_popup()->clear();
-	content->hide();
-	select_a_resource->show();
+	editing = false;
 }
 
 static bool _find_owners(EditorFileSystemDirectory *efsd, const String &p_path) {
@@ -545,7 +547,7 @@ static bool _find_owners(EditorFileSystemDirectory *efsd, const String &p_path) 
 	return false;
 }
 
-void ImportDock::_reimport_pressed() {
+void ImportSettingsEditor::_reimport_pressed() {
 	_reimport_attempt();
 
 	if (params->importer.is_valid() && params->paths.size() == 1 && params->importer->has_advanced_options()) {
@@ -557,7 +559,7 @@ void ImportDock::_reimport_pressed() {
 	}
 }
 
-void ImportDock::_reimport_attempt() {
+void ImportSettingsEditor::_reimport_attempt() {
 	bool used_in_resources = false;
 
 	String importer_name;
@@ -598,7 +600,7 @@ void ImportDock::_reimport_attempt() {
 	_reimport();
 }
 
-void ImportDock::_reimport_and_cleanup() {
+void ImportSettingsEditor::_reimport_and_cleanup() {
 	HashMap<String, Ref<Resource>> old_resources;
 
 	for (const String &path : need_cleanup) {
@@ -644,13 +646,13 @@ void ImportDock::_reimport_and_cleanup() {
 	need_cleanup.clear();
 }
 
-void ImportDock::_advanced_options() {
+void ImportSettingsEditor::_advanced_options() {
 	if (params->paths.size() == 1 && params->importer.is_valid()) {
 		params->importer->show_advanced_options(params->paths[0]);
 	}
 }
 
-void ImportDock::_reimport() {
+void ImportSettingsEditor::_reimport() {
 	for (int i = 0; i < params->paths.size(); i++) {
 		Ref<ConfigFile> config;
 		config.instantiate();
@@ -711,7 +713,7 @@ void ImportDock::_reimport() {
 	_set_dirty(false);
 }
 
-void ImportDock::_notification(int p_what) {
+void ImportSettingsEditor::_notification(int p_what) {
 	switch (p_what) {
 		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
 			if (EditorThemeManager::is_generated_theme_outdated()) {
@@ -727,11 +729,11 @@ void ImportDock::_notification(int p_what) {
 	}
 }
 
-void ImportDock::_property_edited(const StringName &p_prop) {
+void ImportSettingsEditor::_property_edited(const StringName &p_prop) {
 	_set_dirty(true);
 }
 
-void ImportDock::_set_dirty(bool p_dirty) {
+void ImportSettingsEditor::_set_dirty(bool p_dirty) {
 	dirty = p_dirty;
 	if (p_dirty) {
 		// Add a dirty marker to notify the user that they should reimport the selected resource to see changes.
@@ -746,7 +748,7 @@ void ImportDock::_set_dirty(bool p_dirty) {
 	}
 }
 
-void ImportDock::_property_toggled(const StringName &p_prop, bool p_checked) {
+void ImportSettingsEditor::_property_toggled(const StringName &p_prop, bool p_checked) {
 	if (p_checked) {
 		params->checked.insert(p_prop);
 	} else {
@@ -754,15 +756,209 @@ void ImportDock::_property_toggled(const StringName &p_prop, bool p_checked) {
 	}
 }
 
-void ImportDock::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("_reimport"), &ImportDock::_reimport);
+void ImportSettingsEditor::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("_reimport"), &ImportSettingsEditor::_reimport);
 }
 
-void ImportDock::initialize_import_options() const {
+void ImportSettingsEditor::initialize_import_options() const {
 	ERR_FAIL_COND(!import_opts || !params);
 
 	import_opts->edit(params);
 }
+
+void ImportSettingsEditor::_store_section_folding() {
+	for (const String &section : folding_sections) {
+		section_unfolded[folding_importer + "::" + section] = params->editor_is_section_unfolded(section);
+	}
+}
+
+void ImportSettingsEditor::_restore_section_folding() {
+	folding_sections.clear();
+	folding_importer = params->importer.is_valid() ? params->importer->get_importer_name() : String();
+
+	HashSet<String> seen;
+	for (const PropertyInfo &E : params->properties) {
+		const String name = E.name;
+		int slash = name.find_char('/');
+		while (slash != -1) {
+			const String section = name.substr(0, slash);
+			if (!seen.has(section)) {
+				seen.insert(section);
+				folding_sections.push_back(section);
+			}
+			slash = name.find_char('/', slash + 1);
+		}
+	}
+
+	// Sections start unfolded, then keep whatever the user chose.
+	for (const String &section : folding_sections) {
+		const bool *unfolded = section_unfolded.getptr(folding_importer + "::" + section);
+		params->editor_set_section_unfold(section, unfolded ? *unfolded : true, true);
+	}
+}
+
+void ImportSettingsEditor::set_embedded(bool p_embedded) {
+	embedded = p_embedded;
+	imported->set_visible(!embedded);
+	import_opts->set_vertical_scroll_mode(embedded ? ScrollContainer::SCROLL_MODE_DISABLED : ScrollContainer::SCROLL_MODE_AUTO);
+	if (embedded) {
+		import_opts->set_draw_focus_border(false);
+		import_opts->set_focus_mode(FOCUS_NONE);
+	}
+}
+
+ImportSettingsEditor::ImportSettingsEditor() {
+	imported = memnew(Label);
+	imported->set_focus_mode(FOCUS_ACCESSIBILITY);
+	imported->add_theme_style_override(CoreStringName(normal), EditorNode::get_singleton()->get_editor_theme()->get_stylebox(CoreStringName(normal), SNAME("LineEdit")));
+	imported->set_clip_text(true);
+	add_child(imported);
+	HBoxContainer *hb = memnew(HBoxContainer);
+	add_margin_child(TTRC("Import As:"), hb);
+	import_as = memnew(OptionButton);
+	import_as->set_disabled(true);
+	import_as->set_fit_to_longest_item(false);
+	import_as->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
+	import_as->set_h_size_flags(SIZE_EXPAND_FILL);
+	import_as->connect(SceneStringName(item_selected), callable_mp(this, &ImportSettingsEditor::_importer_selected));
+	import_as->set_accessibility_name(TTRC("Import As:"));
+	hb->add_child(import_as);
+	import_as->set_h_size_flags(SIZE_EXPAND_FILL);
+	preset = memnew(MenuButton);
+	preset->set_text(TTRC("Preset"));
+	preset->set_disabled(true);
+	preset->get_popup()->connect("index_pressed", callable_mp(this, &ImportSettingsEditor::_preset_selected));
+	hb->add_child(preset);
+
+	MarginContainer *mc = memnew(MarginContainer);
+	mc->set_theme_type_variation("NoBorderPanel");
+	mc->set_v_size_flags(SIZE_EXPAND_FILL);
+	add_child(mc);
+
+	import_opts = memnew(EditorInspector);
+	mc->add_child(import_opts);
+	import_opts->set_scroll_hint_mode(ScrollContainer::SCROLL_HINT_MODE_ALL);
+	import_opts->connect("property_edited", callable_mp(this, &ImportSettingsEditor::_property_edited));
+	import_opts->connect("property_toggled", callable_mp(this, &ImportSettingsEditor::_property_toggled));
+	// Make it possible to display tooltips stored in the XML class reference.
+	// The object name is set when the importer changes in `_update_options()`.
+	import_opts->set_use_doc_hints(true);
+	// Option sections fold like in the inspector.
+	import_opts->set_use_folding(!bool(EDITOR_GET("interface/inspector/disable_folding")));
+
+	hb = memnew(HBoxContainer);
+	add_child(hb);
+	import = memnew(Button);
+	import->set_text(TTRC("Reimport"));
+	import->set_disabled(true);
+	import->connect(SceneStringName(pressed), callable_mp(this, &ImportSettingsEditor::_reimport_pressed));
+	advanced_spacer = hb->add_spacer();
+	advanced = memnew(Button);
+	advanced->set_text(TTRC("Advanced..."));
+	hb->add_child(advanced);
+	hb->add_spacer();
+	hb->add_child(import);
+	hb->add_spacer();
+
+	advanced->hide();
+	advanced_spacer->hide();
+	advanced->connect(SceneStringName(pressed), callable_mp(this, &ImportSettingsEditor::_advanced_options));
+
+	reimport_confirm = memnew(ConfirmationDialog);
+	add_child(reimport_confirm);
+	reimport_confirm->connect(SceneStringName(confirmed), callable_mp(this, &ImportSettingsEditor::_reimport_and_cleanup));
+
+	VBoxContainer *vbc_confirm = memnew(VBoxContainer());
+	cleanup_warning = memnew(Label(TTRC("The imported resource is currently loaded. All instances will be replaced and undo history will be cleared.")));
+	vbc_confirm->add_child(cleanup_warning);
+	label_warning = memnew(Label(TTRC("WARNING: Assets exist that use this resource. They may stop loading properly after changing type.")));
+	vbc_confirm->add_child(label_warning);
+	reimport_confirm->add_child(vbc_confirm);
+
+	params = memnew(ImportDockParameters);
+}
+
+ImportSettingsEditor::~ImportSettingsEditor() {
+	_store_section_folding();
+	memdelete(params);
+}
+
+///////////////////// IMPORT DOCK /////////////////////////
+
+ImportDock *ImportDock::singleton = nullptr;
+
+void ImportDock::_update_visibility() {
+	settings->set_visible(settings->is_editing());
+	select_a_resource->set_visible(!settings->is_editing());
+}
+
+void ImportDock::set_edit_path(const String &p_path) {
+	settings->set_edit_path(p_path);
+	_update_visibility();
+}
+
+void ImportDock::set_edit_multiple_paths(const Vector<String> &p_paths) {
+	settings->set_edit_multiple_paths(p_paths);
+	_update_visibility();
+}
+
+void ImportDock::reimport_resources(const Vector<String> &p_paths) {
+	settings->reimport_resources(p_paths);
+	_update_visibility();
+}
+
+void ImportDock::initialize_import_options() const {
+	settings->initialize_import_options();
+}
+
+void ImportDock::clear() {
+	settings->clear();
+	_update_visibility();
+}
+
+///////////////////// INSPECTOR /////////////////////////
+
+// Foldable "Import" category with the file's import settings, added at the bottom of the inspector.
+class ImportInspectorSection : public VBoxContainer {
+	GDCLASS(ImportInspectorSection, VBoxContainer);
+
+public:
+	ImportInspectorSection(const String &p_path) {
+		EditorInspectorCategory *category = memnew(EditorInspectorCategory);
+		category->set_property_info(PropertyInfo(Variant::NIL, TTR("Import"), PROPERTY_HINT_NONE, String(), PROPERTY_USAGE_CATEGORY));
+		category->set_icon_name(SNAME("FileAccess"));
+		category->set_tooltip_text(TTR("Import settings of the resource file."));
+		add_child(category);
+
+		ImportSettingsEditor *settings = memnew(ImportSettingsEditor);
+		settings->set_embedded(true);
+		add_child(settings);
+		settings->set_edit_path(p_path);
+
+		category->setup_folding("::import_settings");
+		category->add_fold_content(settings);
+		category->apply_fold();
+	}
+};
+
+class EditorInspectorPluginImport : public EditorInspectorPlugin {
+	GDCLASS(EditorInspectorPluginImport, EditorInspectorPlugin);
+
+public:
+	virtual bool can_handle(Object *p_object) override {
+		const Resource *res = Object::cast_to<Resource>(p_object);
+		if (!res) {
+			return false;
+		}
+		const String path = res->get_path();
+		return path.is_resource_file() && FileAccess::exists(path + ".import");
+	}
+
+	virtual void parse_end(Object *p_object) override {
+		const Resource *res = Object::cast_to<Resource>(p_object);
+		add_custom_control(memnew(ImportInspectorSection(res->get_path())));
+	}
+};
 
 ImportDock::ImportDock() {
 	singleton = this;
@@ -774,77 +970,10 @@ ImportDock::ImportDock() {
 	VBoxContainer *main_vb = memnew(VBoxContainer);
 	add_child(main_vb);
 
-	content = memnew(VBoxContainer);
-	content->set_v_size_flags(SIZE_EXPAND_FILL);
-	main_vb->add_child(content);
-	content->hide();
-
-	imported = memnew(Label);
-	imported->set_focus_mode(FOCUS_ACCESSIBILITY);
-	imported->add_theme_style_override(CoreStringName(normal), EditorNode::get_singleton()->get_editor_theme()->get_stylebox(CoreStringName(normal), SNAME("LineEdit")));
-	imported->set_clip_text(true);
-	content->add_child(imported);
-	HBoxContainer *hb = memnew(HBoxContainer);
-	content->add_margin_child(TTRC("Import As:"), hb);
-	import_as = memnew(OptionButton);
-	import_as->set_disabled(true);
-	import_as->set_fit_to_longest_item(false);
-	import_as->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
-	import_as->set_h_size_flags(SIZE_EXPAND_FILL);
-	import_as->connect(SceneStringName(item_selected), callable_mp(this, &ImportDock::_importer_selected));
-	import_as->set_accessibility_name(TTRC("Import As:"));
-	hb->add_child(import_as);
-	import_as->set_h_size_flags(SIZE_EXPAND_FILL);
-	preset = memnew(MenuButton);
-	preset->set_text(TTRC("Preset"));
-	preset->set_disabled(true);
-	preset->get_popup()->connect("index_pressed", callable_mp(this, &ImportDock::_preset_selected));
-	hb->add_child(preset);
-
-	MarginContainer *mc = memnew(MarginContainer);
-	mc->set_theme_type_variation("NoBorderPanel");
-	mc->set_v_size_flags(SIZE_EXPAND_FILL);
-	content->add_child(mc);
-
-	import_opts = memnew(EditorInspector);
-	mc->add_child(import_opts);
-	import_opts->set_scroll_hint_mode(ScrollContainer::SCROLL_HINT_MODE_ALL);
-	import_opts->connect("property_edited", callable_mp(this, &ImportDock::_property_edited));
-	import_opts->connect("property_toggled", callable_mp(this, &ImportDock::_property_toggled));
-	// Make it possible to display tooltips stored in the XML class reference.
-	// The object name is set when the importer changes in `_update_options()`.
-	import_opts->set_use_doc_hints(true);
-
-	hb = memnew(HBoxContainer);
-	content->add_child(hb);
-	import = memnew(Button);
-	import->set_text(TTRC("Reimport"));
-	import->set_disabled(true);
-	import->connect(SceneStringName(pressed), callable_mp(this, &ImportDock::_reimport_pressed));
-	advanced_spacer = hb->add_spacer();
-	advanced = memnew(Button);
-	advanced->set_text(TTRC("Advanced..."));
-	hb->add_child(advanced);
-	hb->add_spacer();
-	hb->add_child(import);
-	hb->add_spacer();
-
-	advanced->hide();
-	advanced_spacer->hide();
-	advanced->connect(SceneStringName(pressed), callable_mp(this, &ImportDock::_advanced_options));
-
-	reimport_confirm = memnew(ConfirmationDialog);
-	content->add_child(reimport_confirm);
-	reimport_confirm->connect(SceneStringName(confirmed), callable_mp(this, &ImportDock::_reimport_and_cleanup));
-
-	VBoxContainer *vbc_confirm = memnew(VBoxContainer());
-	cleanup_warning = memnew(Label(TTRC("The imported resource is currently loaded. All instances will be replaced and undo history will be cleared.")));
-	vbc_confirm->add_child(cleanup_warning);
-	label_warning = memnew(Label(TTRC("WARNING: Assets exist that use this resource. They may stop loading properly after changing type.")));
-	vbc_confirm->add_child(label_warning);
-	reimport_confirm->add_child(vbc_confirm);
-
-	params = memnew(ImportDockParameters);
+	settings = memnew(ImportSettingsEditor);
+	settings->set_v_size_flags(SIZE_EXPAND_FILL);
+	main_vb->add_child(settings);
+	settings->hide();
 
 	select_a_resource = memnew(Label);
 	select_a_resource->set_focus_mode(FOCUS_ACCESSIBILITY);
@@ -856,9 +985,12 @@ ImportDock::ImportDock() {
 	select_a_resource->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
 	select_a_resource->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
 	main_vb->add_child(select_a_resource);
+
+	Ref<EditorInspectorPluginImport> inspector_plugin;
+	inspector_plugin.instantiate();
+	EditorInspector::add_inspector_plugin(inspector_plugin);
 }
 
 ImportDock::~ImportDock() {
 	singleton = nullptr;
-	memdelete(params);
 }

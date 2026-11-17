@@ -430,6 +430,7 @@ class EditorInspectorCategory : public Control {
 	PropertyInfo info;
 
 	Ref<Texture2D> icon;
+	StringName icon_name; // Editor theme icon overriding the class icon.
 	String label;
 	String doc_class_name;
 	PopupMenu *menu = nullptr;
@@ -466,12 +467,19 @@ public:
 	void set_as_favorite();
 	void set_property_info(const PropertyInfo &p_info);
 	void set_doc_class_name(const String &p_name);
+	void set_icon_name(const StringName &p_icon_name);
 	void set_color_level(int p_color_level);
 
 	void register_property(EditorProperty *p_property) { category_properties.push_back(p_property); }
 
 	void setup_folding(const String &p_key);
 	void add_fold_content(Control *p_control);
+	// Hides the fold content if the category is folded (for categories built outside of EditorInspector).
+	void apply_fold() {
+		if (folded) {
+			_apply_fold();
+		}
+	}
 	bool is_foldable() const { return foldable; }
 	bool is_folded() const { return folded; }
 	void fold();

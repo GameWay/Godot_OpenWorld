@@ -2084,6 +2084,15 @@ void EditorInspectorCategory::set_doc_class_name(const String &p_name) {
 	doc_class_name = p_name;
 }
 
+void EditorInspectorCategory::set_icon_name(const StringName &p_icon_name) {
+	icon_name = p_icon_name;
+	if (is_inside_tree()) {
+		_update_icon();
+		update_minimum_size();
+		queue_redraw();
+	}
+}
+
 void EditorInspectorCategory::set_color_level(int p_color_level) {
 	ERR_FAIL_COND(p_color_level < -1 || p_color_level > 16);
 	color_level = p_color_level;
@@ -2207,6 +2216,11 @@ void EditorInspectorCategory::_update_icon() {
 	}
 
 	icon = Ref<Texture2D>();
+
+	if (icon_name != StringName()) {
+		icon = get_editor_theme_icon(icon_name);
+		return;
+	}
 
 	Ref<Script> scr = _get_category_script(info);
 	if (scr.is_valid()) {

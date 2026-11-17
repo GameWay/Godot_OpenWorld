@@ -42,8 +42,10 @@
 class ImportDockParameters;
 class VBoxContainer;
 
-class ImportDock : public EditorDock {
-	GDCLASS(ImportDock, EditorDock);
+// Import settings UI for one or more imported files: importer, preset, options and Reimport.
+// Used by the Import dock and embedded at the bottom of the inspector.
+class ImportSettingsEditor : public VBoxContainer {
+	GDCLASS(ImportSettingsEditor, VBoxContainer);
 
 	Label *imported = nullptr;
 	OptionButton *import_as = nullptr;
@@ -56,14 +58,21 @@ class ImportDock : public EditorDock {
 	Button *import = nullptr;
 	List<String> need_cleanup;
 	bool dirty = false;
+	bool editing = false;
+	bool embedded = false;
 
 	Control *advanced_spacer = nullptr;
 	Button *advanced = nullptr;
 
 	ImportDockParameters *params = nullptr;
 
-	VBoxContainer *content = nullptr;
-	Label *select_a_resource = nullptr;
+	// Fold state of option sections, shared by all editors (keyed by importer and section path).
+	static inline HashMap<String, bool> section_unfolded;
+	Vector<String> folding_sections;
+	String folding_importer;
+
+	void _store_section_folding();
+	void _restore_section_folding();
 
 	void _preset_selected(int p_idx);
 	void _importer_selected(int i_idx);
@@ -86,17 +95,39 @@ class ImportDock : public EditorDock {
 		ITEM_CLEAR_DEFAULT,
 	};
 
+protected:
+	static void _bind_methods();
+	void _notification(int p_what);
+
+public:
+	void set_edit_path(const String &p_path);
+	void set_edit_multiple_paths(const Vector<String> &p_paths);
+	void reimport_resources(const Vector<String> &p_paths);
+	void initialize_import_options() const;
+	void clear();
+	bool is_editing() const { return editing; }
+
+	// Embedded in the inspector: no own scrolling and no file name row.
+	void set_embedded(bool p_embedded);
+
+	ImportSettingsEditor();
+	~ImportSettingsEditor();
+};
+
+class ImportDock : public EditorDock {
+	GDCLASS(ImportDock, EditorDock);
+
+	ImportSettingsEditor *settings = nullptr;
+	Label *select_a_resource = nullptr;
+
+	void _update_visibility();
+
 private:
 	static ImportDock *singleton;
 
 public:
 	static ImportDock *get_singleton() { return singleton; }
 
-protected:
-	static void _bind_methods();
-	void _notification(int p_what);
-
-public:
 	void set_edit_path(const String &p_path);
 	void set_edit_multiple_paths(const Vector<String> &p_paths);
 	void reimport_resources(const Vector<String> &p_paths);
