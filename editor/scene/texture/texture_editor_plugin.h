@@ -35,7 +35,8 @@
 #include "scene/gui/margin_container.h"
 #include "scene/resources/texture.h"
 
-class AcceptDialog;
+class HScrollBar;
+class VScrollBar;
 class AspectRatioContainer;
 class ColorRect;
 class TextureRect;
@@ -70,7 +71,6 @@ private:
 
 	// Opens the texture in a large dialog (inspector preview only).
 	Button *open_big_preview = nullptr;
-	AcceptDialog *big_preview_dialog = nullptr;
 
 	// Zoomable mode (used by the large dialog).
 	Control *zoom_view = nullptr;
@@ -79,6 +79,10 @@ private:
 	real_t zoom = 1.0;
 	Vector2 zoom_offset;
 	bool panning = false;
+	HScrollBar *h_scroll = nullptr;
+	VScrollBar *v_scroll = nullptr;
+	bool updating_scroll = false;
+	HBoxContainer *toolbar = nullptr;
 
 	void _draw_outline();
 	void _update_metadata_label_text();
@@ -88,6 +92,7 @@ private:
 	void _set_zoom(real_t p_zoom, const Vector2 &p_pivot);
 	void _zoom_reset();
 	void _zoom_view_gui_input(const Ref<InputEvent> &p_event);
+	void _scroll_changed(double p_value);
 
 protected:
 	void _notification(int p_what);
@@ -98,8 +103,14 @@ protected:
 public:
 	static void init_shaders();
 	static void finish_shaders();
+	// Opens the texture in a large zoomable dialog that frees itself when closed.
+	static void popup_texture_dialog(const Ref<Texture2D> &p_texture);
 
 	TextureRect *get_texture_display();
+	// Zoomable mode: scroll bars placed by the owner next to the preview.
+	void set_zoom_scroll_bars(HScrollBar *p_h_scroll, VScrollBar *p_v_scroll);
+	// Zoomable mode: toolbar with the preview controls, to be added by the owner above the preview.
+	HBoxContainer *get_zoom_toolbar() const;
 	TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata, bool p_zoomable = false);
 };
 

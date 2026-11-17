@@ -31,6 +31,7 @@
 #include "texture_editor_plugin.h"
 
 #include "core/object/callable_mp.h"
+#include "editor/editor_node.h"
 #include "editor/editor_string_names.h"
 #include "editor/scene/texture/color_channel_selector.h"
 #include "editor/themes/editor_scale.h"
@@ -38,6 +39,8 @@
 #include "scene/gui/button.h"
 #include "scene/gui/color_rect.h"
 #include "scene/gui/dialogs.h"
+#include "scene/gui/grid_container.h"
+#include "scene/gui/scroll_bar.h"
 #include "scene/gui/label.h"
 #include "scene/gui/spin_box.h"
 #include "scene/gui/texture_rect.h"
@@ -258,25 +261,97 @@ void TexturePreview::_update_metadata_label_text() {
 
 void TexturePreview::_toggle_metadata_label() {
 	metadata_label->set_visible(!metadata_label->is_visible());
-	metadata_toggle->set_modulate(Color(1, 1, 1, metadata_label->is_visible() ? 0.8 : 0.4));
+	if (toolbar) {
+		metadata_toggle->set_modulate(Color(1, 1, 1, metadata_label->is_visible() ? 1.0 : 0.5));
+	} else {
+		metadata_toggle->set_modulate(Color(1, 1, 1, metadata_label->is_visible() ? 0.8 : 0.4));
+	}
 }
 
 void TexturePreview::_open_big_preview() {
-	const Ref<Texture2D> texture = texture_display->get_texture();
-	ERR_FAIL_COND(texture.is_null());
+	popup_texture_dialog(texture_display->get_texture());
+}
 
-	if (!big_preview_dialog) {
-		big_preview_dialog = memnew(AcceptDialog);
-		String title = texture->get_path().get_file();
-		if (title.is_empty()) {
-			title = texture->get_name();
-		}
-		big_preview_dialog->set_title(title.is_empty() ? TTR("Texture Preview") : vformat(TTR("Texture Preview: %s"), title));
-		TexturePreview *big_preview = memnew(TexturePreview(texture, true, true));
-		big_preview_dialog->add_child(big_preview);
-		add_child(big_preview_dialog);
+void TexturePreview::popup_texture_dialog(const Ref<Texture2D> &p_texture) {
+	ERR_FAIL_COND(p_texture.is_null());
+
+	String title = p_texture->get_path().get_file();
+	if (title.is_empty()) {
+		title = p_texture->get_name();
 	}
-	big_preview_dialog->popup_centered_clamped(Size2(1000, 900) * EDSCALE, 0.8);
+
+	Ref<Texture2D> texture = p_texture;
+	// Load the full-resolution image for streamed textures.
+	const Ref<StreamedTexture2D> streamed_texture(texture);
+	if (streamed_texture.is_valid()) {
+		const Ref<Image> image = streamed_texture->get_image();
+		if (image.is_valid()) {
+			texture = ImageTexture::create_from_image(image);
+		}
+	}
+
+	AcceptDialog *dialog = memnew(AcceptDialog);
+	dialog->set_title(title.is_empty() ? TTR("Texture Preview") : vformat(TTR("Texture Preview: %s"), title));
+
+	// Toolbar on top, then the preview with scroll bars along the right and bottom edges.
+	VBoxContainer *vb = memnew(VBoxContainer);
+	dialog->add_child(vb);
+
+	TexturePreview *big_preview = memnew(TexturePreview(texture, true, true));
+	vb->add_child(big_preview->get_zoom_toolbar());
+
+	// The view area holds the grid plus overlays that must stay fixed to its corners
+	// (the preview itself shrinks when scroll bars appear).
+	Control *view_area = memnew(Control);
+	view_area->set_v_size_flags(SIZE_EXPAND_FILL);
+	view_area->set_mouse_filter(MOUSE_FILTER_IGNORE);
+	view_area->set_custom_minimum_size(Size2(256, 256) * EDSCALE);
+	vb->add_child(view_area);
+
+	GridContainer *grid = memnew(GridContainer);
+	grid->set_columns(2);
+	grid->set_anchors_and_offsets_preset(PRESET_FULL_RECT);
+	grid->add_theme_constant_override("h_separation", 0);
+	grid->add_theme_constant_override("v_separation", 0);
+	view_area->add_child(grid);
+
+	big_preview->set_h_size_flags(SIZE_EXPAND_FILL);
+	big_preview->set_v_size_flags(SIZE_EXPAND_FILL);
+	grid->add_child(big_preview);
+
+	VScrollBar *vbar = memnew(VScrollBar);
+	vbar->hide();
+	grid->add_child(vbar);
+
+	HScrollBar *hbar = memnew(HScrollBar);
+	hbar->hide();
+	grid->add_child(hbar);
+
+	grid->add_child(memnew(Control)); // Corner.
+
+	big_preview->set_zoom_scroll_bars(hbar, vbar);
+
+	// The dialog frees itself once closed.
+	dialog->connect(SceneStringName(confirmed), callable_mp((Node *)dialog, &Node::queue_free), CONNECT_DEFERRED);
+	dialog->connect("canceled", callable_mp((Node *)dialog, &Node::queue_free), CONNECT_DEFERRED);
+	EditorNode::get_singleton()->get_gui_base()->add_child(dialog);
+
+	// Pin the metadata overlay to the bottom-right corner of the view area, clear of the scroll bars,
+	// so it doesn't jump when they appear or disappear while zooming.
+	Label *metadata = big_preview->metadata_label;
+	if (metadata) {
+		metadata->get_parent()->remove_child(metadata);
+		view_area->add_child(metadata);
+		const real_t margin = 4 * EDSCALE;
+		metadata->set_anchors_and_offsets_preset(PRESET_BOTTOM_RIGHT, PRESET_MODE_MINSIZE);
+		metadata->set_h_grow_direction(GROW_DIRECTION_BEGIN);
+		metadata->set_v_grow_direction(GROW_DIRECTION_BEGIN);
+		metadata->set_offset(SIDE_RIGHT, -(vbar->get_combined_minimum_size().x + margin));
+		metadata->set_offset(SIDE_BOTTOM, -(hbar->get_combined_minimum_size().y + margin));
+		metadata->set_offset(SIDE_LEFT, metadata->get_offset(SIDE_RIGHT) - metadata->get_combined_minimum_size().x);
+		metadata->set_offset(SIDE_TOP, metadata->get_offset(SIDE_BOTTOM) - metadata->get_combined_minimum_size().y);
+	}
+	dialog->popup_centered_clamped(Size2(1000, 900) * EDSCALE, 0.8);
 }
 
 void TexturePreview::_update_zoom_layout() {
@@ -307,6 +382,47 @@ void TexturePreview::_update_zoom_layout() {
 	centering_container->set_position(zoom_offset.round());
 	centering_container->set_size(display_size.round());
 	zoom_button->set_text(itos(Math::round(zoom * 100.0)) + "%");
+
+	// Scroll bars appear only when the texture extends past the view.
+	// Showing/hiding them resizes the view, which re-runs this layout.
+	updating_scroll = true;
+	if (h_scroll) {
+		h_scroll->set_visible(display_size.x > view_size.x + 0.5);
+		h_scroll->set_max(display_size.x);
+		h_scroll->set_page(view_size.x);
+		h_scroll->set_value(-zoom_offset.x);
+	}
+	if (v_scroll) {
+		v_scroll->set_visible(display_size.y > view_size.y + 0.5);
+		v_scroll->set_max(display_size.y);
+		v_scroll->set_page(view_size.y);
+		v_scroll->set_value(-zoom_offset.y);
+	}
+	updating_scroll = false;
+}
+
+void TexturePreview::_scroll_changed(double p_value) {
+	if (updating_scroll) {
+		return;
+	}
+	if (h_scroll && h_scroll->is_visible()) {
+		zoom_offset.x = -h_scroll->get_value();
+	}
+	if (v_scroll && v_scroll->is_visible()) {
+		zoom_offset.y = -v_scroll->get_value();
+	}
+	_update_zoom_layout();
+}
+
+void TexturePreview::set_zoom_scroll_bars(HScrollBar *p_h_scroll, VScrollBar *p_v_scroll) {
+	h_scroll = p_h_scroll;
+	v_scroll = p_v_scroll;
+	for (ScrollBar *bar : { (ScrollBar *)h_scroll, (ScrollBar *)v_scroll }) {
+		if (bar) {
+			bar->connect(SceneStringName(value_changed), callable_mp(this, &TexturePreview::_scroll_changed));
+		}
+	}
+	_update_zoom_layout();
 }
 
 void TexturePreview::_set_zoom(real_t p_zoom, const Vector2 &p_pivot) {
@@ -363,6 +479,7 @@ void TexturePreview::_zoom_view_gui_input(const Ref<InputEvent> &p_event) {
 
 		if (mb->get_button_index() == MouseButton::LEFT || mb->get_button_index() == MouseButton::MIDDLE) {
 			panning = mb->is_pressed();
+			zoom_view->set_default_cursor_shape(panning ? CURSOR_DRAG : CURSOR_ARROW);
 			if (mb->is_pressed() && mb->is_double_click()) {
 				_zoom_reset();
 			}
@@ -451,6 +568,13 @@ TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata, b
 	centering_container->add_child(outline_overlay);
 
 	outline_overlay->connect(SceneStringName(draw), callable_mp(this, &TexturePreview::_draw_outline));
+
+	if (p_zoomable) {
+		// Let the zoom view receive all mouse input (drag to pan, wheel to scroll/zoom).
+		checkerboard->set_mouse_filter(MOUSE_FILTER_IGNORE);
+		texture_display->set_mouse_filter(MOUSE_FILTER_IGNORE);
+		outline_overlay->set_mouse_filter(MOUSE_FILTER_IGNORE);
+	}
 
 	if (p_texture.is_valid()) {
 		_update_texture_display_ratio();
@@ -549,6 +673,53 @@ TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata, b
 		metadata_toggle->connect(SceneStringName(pressed), callable_mp(this, &TexturePreview::_toggle_metadata_label));
 		add_child(metadata_toggle);
 	}
+
+	if (p_zoomable) {
+		// In the large dialog the controls live in a toolbar above the texture instead of overlaying it.
+		// The owner places the toolbar (see `get_zoom_toolbar()`).
+		toolbar = memnew(HBoxContainer);
+
+		auto move_to_toolbar = [this](Control *p_control) {
+			if (!p_control) {
+				return;
+			}
+			if (p_control->get_parent()) {
+				p_control->get_parent()->remove_child(p_control);
+			}
+			p_control->set_theme_type_variation(StringName());
+			p_control->set_modulate(Color(1, 1, 1));
+			p_control->set_h_size_flags(Control::SIZE_SHRINK_BEGIN);
+			p_control->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
+			toolbar->add_child(p_control);
+		};
+
+		move_to_toolbar(channel_selector);
+
+		Control *spacer = memnew(Control);
+		spacer->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+		toolbar->add_child(spacer);
+
+		move_to_toolbar(zoom_button);
+
+		if (mipmap_spinbox) {
+			Label *mip_label = memnew(Label(TTR("Mipmap:")));
+			toolbar->add_child(mip_label);
+			move_to_toolbar(mipmap_spinbox);
+		}
+
+		move_to_toolbar(metadata_toggle);
+		if (metadata_toggle) {
+			metadata_toggle->set_modulate(Color(1, 1, 1, metadata_label->is_visible() ? 1.0 : 0.5));
+		}
+
+		remove_child(top_right_box);
+		memdelete(top_right_box);
+		top_right_box = nullptr;
+	}
+}
+
+HBoxContainer *TexturePreview::get_zoom_toolbar() const {
+	return toolbar;
 }
 
 bool EditorInspectorPluginTexture::can_handle(Object *p_object) {

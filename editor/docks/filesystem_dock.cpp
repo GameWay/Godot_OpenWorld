@@ -62,6 +62,7 @@
 #include "editor/run/editor_run_bar.h"
 #include "editor/scene/editor_scene_tabs.h"
 #include "editor/scene/scene_create_dialog.h"
+#include "editor/scene/texture/texture_editor_plugin.h"
 #include "editor/settings/editor_command_palette.h"
 #include "editor/settings/editor_feature_profile.h"
 #include "editor/settings/editor_settings.h"
@@ -1337,6 +1338,17 @@ HashSet<String> FileSystemDock::_get_valid_conversions_for_file_paths(const Vect
 	return all_valid_conversion_to_targets;
 }
 
+// Opening a 2D texture also shows it in the large zoomable preview dialog.
+static void _popup_texture_preview(const String &p_path, const String &p_resource_type) {
+	if (!ClassDB::is_parent_class(p_resource_type, "Texture2D")) {
+		return;
+	}
+	const Ref<Texture2D> texture = ResourceLoader::load(p_path);
+	if (texture.is_valid()) {
+		TexturePreview::popup_texture_dialog(texture);
+	}
+}
+
 void FileSystemDock::_select_file(const String &p_path, bool p_select_in_favorites, bool p_navigate) {
 	String fpath = p_path;
 	if (fpath.ends_with("/")) {
@@ -1394,9 +1406,11 @@ void FileSystemDock::_select_file(const String &p_path, bool p_select_in_favorit
 
 			if (!used_advanced_settings) {
 				EditorNode::get_singleton()->load_resource(fpath);
+				_popup_texture_preview(fpath, resource_type);
 			}
 		} else {
 			EditorNode::get_singleton()->load_resource(fpath);
+			_popup_texture_preview(fpath, resource_type);
 		}
 	}
 	if (p_navigate) {
