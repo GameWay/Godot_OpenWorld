@@ -3310,10 +3310,28 @@ void fragment_shader(in SceneData scene_data) {
 	specular_buffer.rgb = specular_buffer.rgb * fog.a;
 #endif //!FOG_DISABLED
 
+#ifndef MODE_UNSHADED
+	// OEngine: subsurface scattering blurs this buffer. Dividing out the albedo luminance keeps
+	// dark albedo detail (hair, stubble, pores) from being smeared over the skin; the SSS pass
+	// multiplies the luminance stored in the specular alpha back in after the blur. Pixels
+	// without SSS store 1.0 so that MSAA resolves at material edges stay close to neutral.
+	if (bool(scene_data.flags & SCENE_DATA_FLAGS_SSS_DEMODULATE)) {
+		if (abs(diffuse_buffer.a) < 0.001) {
+			diffuse_buffer.a = 0.0;
+			specular_buffer.a = 1.0;
+		} else {
+			float albedo_luminance = clamp(dot(albedo, vec3(0.2126, 0.7152, 0.0722)), 0.02, 1.0);
+			diffuse_buffer.rgb /= albedo_luminance;
+			specular_buffer.a = albedo_luminance;
+		}
+	}
+#endif //!MODE_UNSHADED
+
 	// OEngine: material channel debug views. The value is converted from sRGB so that
 	// the displayed brightness equals it after the output conversion.
-	if (bool(scene_data.flags & (SCENE_DATA_FLAGS_DEBUG_ROUGHNESS | SCENE_DATA_FLAGS_DEBUG_SPECULAR))) {
-		float debug_value = clamp(bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_ROUGHNESS) ? float(roughness) : float(specular), 0.0, 1.0);
+	if (bool(scene_data.flags & (SCENE_DATA_FLAGS_DEBUG_ROUGHNESS | SCENE_DATA_FLAGS_DEBUG_SPECULAR | SCENE_DATA_FLAGS_DEBUG_SSS))) {
+		float debug_value = bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_ROUGHNESS) ? float(roughness) : (bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_SPECULAR) ? float(specular) : abs(float(sss_strength)));
+		debug_value = clamp(debug_value, 0.0, 1.0);
 		debug_value = debug_value <= 0.04045 ? debug_value * (1.0 / 12.92) : pow((debug_value + 0.055) * (1.0 / 1.055), 2.4);
 		diffuse_buffer = vec4(vec3(debug_value), 0.0);
 		specular_buffer = vec4(0.0);
@@ -3340,8 +3358,9 @@ void fragment_shader(in SceneData scene_data) {
 
 	// OEngine: material channel debug views. The value is converted from sRGB so that
 	// the displayed brightness equals it after the output conversion.
-	if (bool(scene_data.flags & (SCENE_DATA_FLAGS_DEBUG_ROUGHNESS | SCENE_DATA_FLAGS_DEBUG_SPECULAR))) {
-		float debug_value = clamp(bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_ROUGHNESS) ? float(roughness) : float(specular), 0.0, 1.0);
+	if (bool(scene_data.flags & (SCENE_DATA_FLAGS_DEBUG_ROUGHNESS | SCENE_DATA_FLAGS_DEBUG_SPECULAR | SCENE_DATA_FLAGS_DEBUG_SSS))) {
+		float debug_value = bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_ROUGHNESS) ? float(roughness) : (bool(scene_data.flags & SCENE_DATA_FLAGS_DEBUG_SPECULAR) ? float(specular) : abs(float(sss_strength)));
+		debug_value = clamp(debug_value, 0.0, 1.0);
 		debug_value = debug_value <= 0.04045 ? debug_value * (1.0 / 12.92) : pow((debug_value + 0.055) * (1.0 / 1.055), 2.4);
 		frag_color.rgb = vec3(debug_value);
 	}

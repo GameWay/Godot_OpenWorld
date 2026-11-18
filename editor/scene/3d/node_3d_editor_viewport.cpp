@@ -4672,6 +4672,7 @@ void Node3DEditorViewport::_menu_option(int p_option) {
 		case VIEW_DISPLAY_NORMAL_BUFFER:
 		case VIEW_DISPLAY_DEBUG_ROUGHNESS:
 		case VIEW_DISPLAY_DEBUG_SPECULAR:
+		case VIEW_DISPLAY_DEBUG_SSS:
 		case VIEW_DISPLAY_DEBUG_SHADOW_ATLAS:
 		case VIEW_DISPLAY_DEBUG_DIRECTIONAL_SHADOW_ATLAS:
 		case VIEW_DISPLAY_DEBUG_VOXEL_GI_ALBEDO:
@@ -4705,6 +4706,7 @@ void Node3DEditorViewport::_menu_option(int p_option) {
 				VIEW_DISPLAY_NORMAL_BUFFER,
 				VIEW_DISPLAY_DEBUG_ROUGHNESS,
 				VIEW_DISPLAY_DEBUG_SPECULAR,
+				VIEW_DISPLAY_DEBUG_SSS,
 				VIEW_DISPLAY_DEBUG_SHADOW_ATLAS,
 				VIEW_DISPLAY_DEBUG_DIRECTIONAL_SHADOW_ATLAS,
 				VIEW_DISPLAY_DEBUG_VOXEL_GI_ALBEDO,
@@ -4740,6 +4742,7 @@ void Node3DEditorViewport::_menu_option(int p_option) {
 				Viewport::DEBUG_DRAW_NORMAL_BUFFER,
 				Viewport::DEBUG_DRAW_ROUGHNESS,
 				Viewport::DEBUG_DRAW_SPECULAR,
+				Viewport::DEBUG_DRAW_SSS,
 				Viewport::DEBUG_DRAW_SHADOW_ATLAS,
 				Viewport::DEBUG_DRAW_DIRECTIONAL_SHADOW_ATLAS,
 				Viewport::DEBUG_DRAW_VOXEL_GI_ALBEDO,
@@ -7067,6 +7070,8 @@ Node3DEditorViewport::Node3DEditorViewport(Node3DEditor *p_spatial_editor, int p
 			TTRC("Displays the material roughness as unlit grayscale (black = smooth, white = rough). Displayed brightness equals the value."));
 	_add_advanced_debug_draw_mode_item(display_submenu, TTRC("Specular"), VIEW_DISPLAY_DEBUG_SPECULAR, SupportedRenderingMethods::FORWARD_PLUS,
 			TTRC("Displays the material specular parameter as unlit grayscale (0.5 is the default for dielectrics). Displayed brightness equals the value."));
+	_add_advanced_debug_draw_mode_item(display_submenu, TTRC("Subsurface Scattering"), VIEW_DISPLAY_DEBUG_SSS, SupportedRenderingMethods::FORWARD_PLUS,
+			TTRC("Displays the material subsurface scattering strength as unlit grayscale (black = no scattering). Displayed brightness equals the value."));
 	display_submenu->add_separator();
 	_add_advanced_debug_draw_mode_item(display_submenu, TTRC("Shadow Atlas"), VIEW_DISPLAY_DEBUG_SHADOW_ATLAS, SupportedRenderingMethods::ALL,
 			TTRC("Displays the shadow atlas used for positional (omni/spot) shadow mapping.\nRequires a visible OmniLight3D or SpotLight3D node with shadows enabled to have a visible effect."));

@@ -105,6 +105,9 @@ params;
 layout(set = 0, binding = 0) uniform sampler2D source_image;
 layout(rgba16f, set = 1, binding = 0) uniform restrict writeonly image2D dest_image;
 layout(set = 2, binding = 0) uniform sampler2D source_depth;
+// OEngine: separate specular buffer; for SSS pixels its alpha is the albedo luminance that the
+// scene shader divided out, so only the lighting is blurred and albedo detail stays sharp.
+layout(set = 3, binding = 0) uniform sampler2D source_specular;
 
 void do_filter(inout vec3 color_accum, inout vec3 divisor, vec2 uv, vec2 step, bool p_skin) {
 	// Accumulate the other samples:
@@ -183,6 +186,11 @@ void main() {
 		do_filter(color, divisor, uv, -step, skin);
 
 		base_color.rgb = color / divisor;
+
+		if (params.vertical) {
+			// Last pass: restore the albedo luminance divided out before the blur.
+			base_color.rgb *= texture(source_specular, uv).a;
+		}
 	}
 
 	imageStore(dest_image, ssC, base_color);

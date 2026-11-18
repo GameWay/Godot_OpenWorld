@@ -208,6 +208,7 @@ class Node3DEditorViewport : public Control {
 		VIEW_DISPLAY_DEBUG_SSAO_BENT_NORMAL, // OEngine: appended to keep saved display modes valid.
 		VIEW_DISPLAY_DEBUG_ROUGHNESS, // OEngine: appended to keep saved display modes valid.
 		VIEW_DISPLAY_DEBUG_SPECULAR, // OEngine: appended to keep saved display modes valid.
+		VIEW_DISPLAY_DEBUG_SSS, // OEngine: appended to keep saved display modes valid.
 		VIEW_DISPLAY_MAX,
 		// > Keep in sync with menu.
 

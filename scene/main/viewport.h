@@ -192,6 +192,7 @@ public:
 		DEBUG_DRAW_SSAO_BENT_NORMAL, // OEngine: CORTAO bent normals.
 		DEBUG_DRAW_ROUGHNESS, // OEngine: material roughness.
 		DEBUG_DRAW_SPECULAR, // OEngine: material specular.
+		DEBUG_DRAW_SSS, // OEngine: material subsurface scattering strength.
 	};
 
 	enum DefaultCanvasItemTextureFilter {

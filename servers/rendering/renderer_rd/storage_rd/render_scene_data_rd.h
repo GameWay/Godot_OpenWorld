@@ -75,6 +75,7 @@ public:
 	bool material_uv2_mode = false;
 	float emissive_exposure_normalization = 0.0;
 	bool shadow_pass = false;
+	bool sss_demodulate = false; // OEngine: Forward+ opaque pass whose diffuse is blurred by subsurface scattering.
 
 	Size2 shadow_atlas_pixel_size;
 	Size2 directional_shadow_pixel_size;
@@ -114,6 +115,8 @@ private:
 		SCENE_DATA_FLAGS_IN_SHADOW_PASS = 1 << 8, // Only used by Forward+ renderer.
 		SCENE_DATA_FLAGS_DEBUG_ROUGHNESS = 1 << 9, // OEngine: Forward+ only, outputs material roughness.
 		SCENE_DATA_FLAGS_DEBUG_SPECULAR = 1 << 10, // OEngine: Forward+ only, outputs material specular.
+		SCENE_DATA_FLAGS_SSS_DEMODULATE = 1 << 11, // OEngine: Forward+ only, subsurface scattering runs after this pass.
+		SCENE_DATA_FLAGS_DEBUG_SSS = 1 << 12, // OEngine: Forward+ only, outputs subsurface scattering strength.
 		SCENE_DATA_FLAGS_MAX
 	};
 

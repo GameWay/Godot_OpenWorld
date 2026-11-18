@@ -779,6 +779,10 @@
 			Draws the material specular parameter as unlit grayscale, without post-processing. The displayed brightness equals the value.
 			[b]Note:[/b] Only supported when using the Forward+ rendering method.
 		</constant>
+		<constant name="DEBUG_DRAW_SSS" value="32" enum="DebugDraw">
+			Draws the material subsurface scattering strength ([member BaseMaterial3D.subsurf_scatter_strength] or [code]SSS_STRENGTH[/code] in a shader) as unlit grayscale, without post-processing. The displayed brightness equals the value.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
+		</constant>
 		<constant name="DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST" value="0" enum="DefaultCanvasItemTextureFilter">
 			The texture filter reads from the nearest pixel only. This makes the texture look pixelated from up close, and grainy from a distance (due to mipmaps not being sampled).
 		</constant>

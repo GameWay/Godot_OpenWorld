@@ -607,6 +607,7 @@ enum ViewportDebugDraw {
 	VIEWPORT_DEBUG_DRAW_SSAO_BENT_NORMAL, // OEngine: CORTAO bent normals.
 	VIEWPORT_DEBUG_DRAW_ROUGHNESS, // OEngine: material roughness, unlit grayscale.
 	VIEWPORT_DEBUG_DRAW_SPECULAR, // OEngine: material specular, unlit grayscale.
+	VIEWPORT_DEBUG_DRAW_SSS, // OEngine: material subsurface scattering strength, unlit grayscale.
 };
 
 enum ViewportVRSMode {

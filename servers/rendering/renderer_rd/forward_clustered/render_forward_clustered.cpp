@@ -1887,8 +1887,9 @@ void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, boo
 	}
 }
 
-void RenderForwardClustered::_process_sss(Ref<RenderSceneBuffersRD> p_render_buffers, const Projection &p_camera) {
+void RenderForwardClustered::_process_sss(Ref<RenderSceneBuffersRD> p_render_buffers, Ref<RenderBufferDataForwardClustered> p_render_buffer_data, const Projection &p_camera) {
 	ERR_FAIL_COND(p_render_buffers.is_null());
+	ERR_FAIL_COND(p_render_buffer_data.is_null());
 
 	Size2i internal_size = p_render_buffers->get_internal_size();
 	bool can_use_effects = internal_size.x >= 8 && internal_size.y >= 8;
@@ -1903,7 +1904,9 @@ void RenderForwardClustered::_process_sss(Ref<RenderSceneBuffersRD> p_render_buf
 	for (uint32_t v = 0; v < p_render_buffers->get_view_count(); v++) {
 		RID internal_texture = p_render_buffers->get_internal_texture(v);
 		RID depth_texture = p_render_buffers->get_depth_texture(v);
-		ss_effects->sub_surface_scattering(p_render_buffers, internal_texture, depth_texture, p_camera, internal_size);
+		// The separate specular buffer's alpha carries the albedo luminance divided out of SSS pixels.
+		RID specular_texture = p_render_buffer_data->get_specular(v);
+		ss_effects->sub_surface_scattering(p_render_buffers, internal_texture, depth_texture, specular_texture, p_camera, internal_size);
 	}
 }
 
@@ -2416,7 +2419,12 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	// Shadow pass can change the base uniform set samplers.
 	_update_render_base_uniform_set();
 
+	// OEngine: subsurface scattering blurs the diffuse buffer, so the opaque pass divides out the
+	// albedo luminance and _process_sss() multiplies it back after the blur. Hair, stubble and
+	// other dark albedo detail then stay sharp instead of being smeared across the skin.
+	p_render_data->scene_data->sss_demodulate = using_sss && rb->get_internal_size().x >= 8 && rb->get_internal_size().y >= 8;
 	uint32_t opaque_pass_uniform_buffer_index = _setup_environment(p_render_data, is_reflection_probe, screen_size, screen_size, p_default_bg_color, true, using_motion_pass);
+	p_render_data->scene_data->sss_demodulate = false;
 
 	RID rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_OPAQUE, p_render_data, is_multiview, radiance_texture, samplers, opaque_pass_uniform_buffer_index, true);
 
@@ -2556,7 +2564,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		if (using_sss) {
 			RENDER_TIMESTAMP("Sub-Surface Scattering");
 			RD::get_singleton()->draw_command_begin_label("Process Sub-Surface Scattering");
-			_process_sss(rb, p_render_data->scene_data->cam_projection);
+			_process_sss(rb, rb_data, p_render_data->scene_data->cam_projection);
 			RD::get_singleton()->draw_command_end_label();
 		}
 

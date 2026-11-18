@@ -157,6 +157,8 @@ void RenderSceneDataRD::update_ubo(RID p_uniform_buffer, RSE::ViewportDebugDraw 
 	ubo.flags |= shadow_pass ? SCENE_DATA_FLAGS_IN_SHADOW_PASS : 0;
 	ubo.flags |= p_debug_mode == RSE::VIEWPORT_DEBUG_DRAW_ROUGHNESS ? SCENE_DATA_FLAGS_DEBUG_ROUGHNESS : 0;
 	ubo.flags |= p_debug_mode == RSE::VIEWPORT_DEBUG_DRAW_SPECULAR ? SCENE_DATA_FLAGS_DEBUG_SPECULAR : 0;
+	ubo.flags |= p_debug_mode == RSE::VIEWPORT_DEBUG_DRAW_SSS ? SCENE_DATA_FLAGS_DEBUG_SSS : 0;
+	ubo.flags |= sss_demodulate ? SCENE_DATA_FLAGS_SSS_DEMODULATE : 0;
 
 	if (p_debug_mode == RSE::VIEWPORT_DEBUG_DRAW_UNSHADED) {
 		ubo.flags |= SCENE_DATA_FLAGS_USE_AMBIENT_LIGHT;

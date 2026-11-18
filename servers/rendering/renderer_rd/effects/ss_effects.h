@@ -161,7 +161,9 @@ public:
 	RSE::SubSurfaceScatteringQuality sss_get_quality() const;
 	void sss_set_scale(float p_scale, float p_depth_scale);
 
-	void sub_surface_scattering(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_diffuse, RID p_depth, const Projection &p_camera, const Size2i &p_screen_size);
+	// p_specular is the separate specular buffer; its alpha holds the albedo luminance that the
+	// scene shader divided out of SSS pixels, and the vertical pass multiplies it back (OEngine).
+	void sub_surface_scattering(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_diffuse, RID p_depth, RID p_specular, const Projection &p_camera, const Size2i &p_screen_size);
 
 	/* Screen Space Shadows */
 	struct SSCSRenderBuffers {
