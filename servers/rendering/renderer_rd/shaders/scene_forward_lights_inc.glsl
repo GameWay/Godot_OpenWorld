@@ -15,6 +15,14 @@
 #define SPEC_CONSTANT_LOOP_ANNOTATION
 #endif
 
+// OEngine: minimum perceptual roughness of the GGX lobe, so a perfectly smooth surface keeps a sharp highlight
+// instead of losing it (Filament: 0.045 in fp32, 0.089 in fp16 where alpha^2 underflows).
+#ifdef EXPLICIT_FP16
+#define MIN_SPECULAR_ROUGHNESS half(0.089)
+#else
+#define MIN_SPECULAR_ROUGHNESS half(0.045)
+#endif
+
 half D_GGX(half NoH, half roughness, hvec3 n, hvec3 h) {
 	half a = NoH * roughness;
 #ifdef EXPLICIT_FP16
@@ -248,12 +256,14 @@ void light_compute(hvec3 N, hvec3 L, hvec3 V, half A, hvec3 light_color, bool is
 #endif
 		}
 
+#if defined(SPECULAR_SCHLICK_GGX)
+		roughness = max(roughness, MIN_SPECULAR_ROUGHNESS);
+#endif
 		if (roughness > half(0.0)) {
 #if defined(SPECULAR_SCHLICK_GGX)
 			half cNdotH = clamp(A + dot(N, H), half(0.0), half(1.0));
 #endif
 			// Apply specular light.
-			// FIXME: roughness == 0 should not disable specular light entirely
 #if defined(SPECULAR_TOON)
 			hvec3 R = normalize(-reflect(L, N));
 			half RdotV = dot(R, V);

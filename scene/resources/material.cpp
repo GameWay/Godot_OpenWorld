@@ -1029,7 +1029,12 @@ uniform float specular : hint_range(0.0, 1.0, 0.01);
 uniform float metallic : hint_range(0.0, 1.0, 0.01);
 )";
 	} else {
+		// OEngine: the ORM channels are scaled like the separate textures, and specular is exposed.
 		code += "uniform sampler2D texture_orm : hint_roughness_g, " + texfilter_str + ";\n";
+		code += R"(uniform float roughness : hint_range(0.0, 1.0);
+uniform float specular : hint_range(0.0, 1.0, 0.01);
+uniform float metallic : hint_range(0.0, 1.0, 0.01);
+)";
 	}
 
 	if (animation_enabled) {
@@ -1383,21 +1388,19 @@ void vertex() {)";
 	TANGENT += vec3(1.0, 0.0, 0.0) * abs(normal.y);
 	TANGENT += vec3(1.0, 0.0, 0.0) * abs(normal.z);
 )";
-		if (flags[FLAG_UV1_USE_WORLD_TRIPLANAR]) {
-			code += "	TANGENT = inverse(MODEL_NORMAL_MATRIX) * normalize(TANGENT);\n";
-		} else {
-			code += "	TANGENT = normalize(TANGENT);\n";
-		}
-
 		code += R"(
 	BINORMAL = vec3(0.0, 1.0, 0.0) * abs(normal.x);
 	BINORMAL += vec3(0.0, 0.0, -1.0) * abs(normal.y);
 	BINORMAL += vec3(0.0, 1.0, 0.0) * abs(normal.z);
+	// OEngine: the blended frame is made orthonormal to the normal, so normal maps decode without skew.
+	vec3 triplanar_n = normalize(normal);
+	TANGENT = normalize(TANGENT - triplanar_n * dot(triplanar_n, TANGENT));
+	BINORMAL = BINORMAL - triplanar_n * dot(triplanar_n, BINORMAL);
+	BINORMAL = normalize(BINORMAL - TANGENT * dot(TANGENT, BINORMAL));
 )";
 		if (flags[FLAG_UV1_USE_WORLD_TRIPLANAR]) {
-			code += "	BINORMAL = inverse(MODEL_NORMAL_MATRIX) * normalize(BINORMAL);\n";
-		} else {
-			code += "	BINORMAL = normalize(BINORMAL);\n";
+			code += "	TANGENT = inverse(MODEL_NORMAL_MATRIX) * TANGENT;\n";
+			code += "	BINORMAL = inverse(MODEL_NORMAL_MATRIX) * BINORMAL;\n";
 		}
 	}
 
@@ -1476,7 +1479,32 @@ float msdf_median(float r, float g, float b) {
 	}
 
 	if (flags[FLAG_UV1_USE_TRIPLANAR] || flags[FLAG_UV2_USE_TRIPLANAR]) {
+		// OEngine: each projection of a tangent space normal map is unpacked in its own frame
+		// (reoriented onto the surface normal with RNM, the sign of the facing axis handles mirrored sides),
+		// the results are blended as normals and encoded back for NORMAL_MAP in the fragment tangent frame.
+		// Frames match the tangents generated in vertex(): X: T=-Z B=+Y, Y: T=+X B=-Z, Z: T=+X B=+Y.
 		code += R"(
+vec3 triplanar_rnm(vec3 p_surface, vec2 p_detail_xy) {
+	vec3 t = p_surface + vec3(0.0, 0.0, 1.0);
+	vec3 u = vec3(-p_detail_xy, sqrt(max(0.0, 1.0 - dot(p_detail_xy, p_detail_xy))));
+	return t * dot(t, u) / t.z - u;
+}
+
+vec3 triplanar_normal_map(sampler2D p_sampler, vec3 p_weights, vec3 p_triplanar_pos, vec3 p_normal, mat3 p_to_view, vec3 p_tangent, vec3 p_binormal) {
+	vec3 s = vec3(p_normal.x < 0.0 ? -1.0 : 1.0, p_normal.y < 0.0 ? -1.0 : 1.0, p_normal.z < 0.0 ? -1.0 : 1.0);
+	vec2 tx = texture(p_sampler, p_triplanar_pos.zy * vec2(-1.0, 1.0)).xy * 2.0 - 1.0;
+	vec2 ty = texture(p_sampler, p_triplanar_pos.xz).xy * 2.0 - 1.0;
+	vec2 tz = texture(p_sampler, p_triplanar_pos.xy).xy * 2.0 - 1.0;
+	vec3 rx = triplanar_rnm(vec3(-p_normal.z, p_normal.y, abs(p_normal.x)), tx);
+	vec3 ry = triplanar_rnm(vec3(p_normal.x, -p_normal.z, abs(p_normal.y)), ty);
+	vec3 rz = triplanar_rnm(vec3(p_normal.xy, abs(p_normal.z)), tz);
+	vec3 n = vec3(s.x * rx.z, rx.y, -rx.x) * p_weights.x;
+	n += vec3(ry.x, s.y * ry.z, -ry.y) * p_weights.y;
+	n += vec3(rz.x, rz.y, s.z * rz.z) * p_weights.z;
+	n = normalize(p_to_view * n);
+	return vec3(dot(n, p_tangent), dot(n, p_binormal), 1.0) * 0.5 + 0.5;
+}
+
 vec4 triplanar_texture(sampler2D p_sampler, vec3 p_weights, vec3 p_triplanar_pos) {
 	vec4 samp = vec4(0.0);
 	samp += texture(p_sampler, p_triplanar_pos.xy) * p_weights.z;
@@ -1490,6 +1518,29 @@ vec4 triplanar_texture(sampler2D p_sampler, vec3 p_weights, vec3 p_triplanar_pos
 	// Generate fragment shader.
 	code += R"(
 void fragment() {)";
+
+	{
+		// OEngine: triplanar normal maps need the surface normal in the triplanar space and the way back to view space.
+		const bool tri1 = flags[FLAG_UV1_USE_TRIPLANAR] && (features[FEATURE_NORMAL_MAPPING] || features[FEATURE_BENT_NORMAL_MAPPING] || (features[FEATURE_DETAIL] && detail_uv == DETAIL_UV_1));
+		const bool tri2 = flags[FLAG_UV2_USE_TRIPLANAR] && features[FEATURE_DETAIL] && detail_uv == DETAIL_UV_2;
+		if (tri1 || tri2) {
+			code += "\n	vec3 triplanar_world_normal = mat3(INV_VIEW_MATRIX) * NORMAL;\n";
+		}
+		if (tri1) {
+			if (flags[FLAG_UV1_USE_WORLD_TRIPLANAR]) {
+				code += "	vec3 uv1_triplanar_normal = normalize(triplanar_world_normal);\n	mat3 uv1_triplanar_to_view = mat3(VIEW_MATRIX);\n";
+			} else {
+				code += "	vec3 uv1_triplanar_normal = normalize(transpose(mat3(MODEL_MATRIX)) * triplanar_world_normal);\n	mat3 uv1_triplanar_to_view = mat3(VIEW_MATRIX) * MODEL_NORMAL_MATRIX;\n";
+			}
+		}
+		if (tri2) {
+			if (flags[FLAG_UV2_USE_WORLD_TRIPLANAR]) {
+				code += "	vec3 uv2_triplanar_normal = normalize(triplanar_world_normal);\n	mat3 uv2_triplanar_to_view = mat3(VIEW_MATRIX);\n";
+			} else {
+				code += "	vec3 uv2_triplanar_normal = normalize(transpose(mat3(MODEL_MATRIX)) * triplanar_world_normal);\n	mat3 uv2_triplanar_to_view = mat3(VIEW_MATRIX) * MODEL_NORMAL_MATRIX;\n";
+			}
+		}
+	}
 
 	if (!flags[FLAG_UV1_USE_TRIPLANAR]) {
 		code += R"(
@@ -1721,9 +1772,14 @@ void fragment() {)";
 )";
 		}
 
-		code += R"(	ROUGHNESS = orm_tex.g;
- 	METALLIC = orm_tex.b;
+		code += R"(	ROUGHNESS = orm_tex.g * roughness;
+	METALLIC = orm_tex.b * metallic;
+	SPECULAR = specular;
 )";
+		if (!features[FEATURE_AMBIENT_OCCLUSION]) {
+			// OEngine: the occlusion channel of ORM is always used; the AO group only adds the light affect.
+			code += "	AO = orm_tex.r;\n";
+		}
 	}
 
 	if (features[FEATURE_NORMAL_MAPPING]) {
@@ -1731,7 +1787,7 @@ void fragment() {)";
 	// Normal Map: Enabled
 )";
 		if (flags[FLAG_UV1_USE_TRIPLANAR]) {
-			code += "	NORMAL_MAP = triplanar_texture(texture_normal, uv1_power_normal, uv1_triplanar_pos).rgb;\n";
+			code += "	NORMAL_MAP = triplanar_normal_map(texture_normal, uv1_power_normal, uv1_triplanar_pos, uv1_triplanar_normal, uv1_triplanar_to_view, TANGENT, BINORMAL);\n";
 		} else {
 			code += "	NORMAL_MAP = texture(texture_normal, base_uv).rgb;\n";
 		}
@@ -1743,7 +1799,7 @@ void fragment() {)";
 	// Bent Normal Map: Enabled
 )";
 		if (flags[FLAG_UV1_USE_TRIPLANAR]) {
-			code += "	BENT_NORMAL_MAP = triplanar_texture(texture_bent_normal, uv1_power_normal, uv1_triplanar_pos).rgb;\n";
+			code += "	BENT_NORMAL_MAP = triplanar_normal_map(texture_bent_normal, uv1_power_normal, uv1_triplanar_pos, uv1_triplanar_normal, uv1_triplanar_to_view, TANGENT, BINORMAL);\n";
 		} else {
 			code += "	BENT_NORMAL_MAP = texture(texture_bent_normal, base_uv).rgb;\n";
 		}
@@ -1993,9 +2049,9 @@ void fragment() {)";
 		if (triplanar) {
 			const String tp_uv = detail_uv == DETAIL_UV_1 ? "uv1" : "uv2";
 			code += vformat(R"(	vec4 detail_tex = triplanar_texture(texture_detail_albedo, %s_power_normal, %s_triplanar_pos);
-	vec4 detail_norm_tex = triplanar_texture(texture_detail_normal, %s_power_normal, %s_triplanar_pos);
+	vec4 detail_norm_tex = vec4(triplanar_normal_map(texture_detail_normal, %s_power_normal, %s_triplanar_pos, %s_triplanar_normal, %s_triplanar_to_view, TANGENT, BINORMAL), 1.0);
 )",
-					tp_uv, tp_uv, tp_uv, tp_uv);
+					tp_uv, tp_uv, tp_uv, tp_uv, tp_uv, tp_uv);
 		} else {
 			const String det_uv = detail_uv == DETAIL_UV_1 ? "base_uv" : "base_uv2";
 			code += vformat(R"(	vec4 detail_tex = texture(texture_detail_albedo, %s);
@@ -2044,8 +2100,13 @@ void fragment() {)";
 				break; // Internal value, skip.
 		}
 
-		code += R"(	vec3 detail_norm = mix(NORMAL_MAP, detail_norm_tex.rgb, detail_tex.a);
-	NORMAL_MAP = mix(NORMAL_MAP, detail_norm, detail_mask_tex.r);
+		// OEngine: Reoriented Normal Mapping keeps the relief of both maps; the detail weight fades the detail normal to flat.
+		code += R"(	vec3 detail_base_n = vec3(NORMAL_MAP.xy * 2.0 - 1.0, 0.0);
+	detail_base_n.z = sqrt(max(0.0, 1.0 - dot(detail_base_n.xy, detail_base_n.xy))) + 1.0;
+	vec3 detail_n = vec3((detail_norm_tex.xy * 2.0 - 1.0) * -(detail_tex.a * detail_mask_tex.r), 0.0);
+	detail_n.z = sqrt(max(0.0, 1.0 - dot(detail_n.xy, detail_n.xy)));
+	vec3 detail_rnm = normalize(detail_base_n * dot(detail_base_n, detail_n) / detail_base_n.z - detail_n);
+	NORMAL_MAP = vec3(detail_rnm.xy * 0.5 + 0.5, 1.0);
 	ALBEDO.rgb = mix(ALBEDO.rgb, detail, detail_mask_tex.r);
 )";
 	}
@@ -2717,7 +2778,8 @@ void BaseMaterial3D::_validate_property(PropertyInfo &p_property) const {
 			// Vertex not supported in ORM mode, since no individual roughness.
 			p_property.hint_string = "Unshaded,Per-Pixel";
 		}
-		if (p_property.name.begins_with("roughness") || p_property.name.begins_with("metallic") || p_property.name.begins_with("ao_texture")) {
+		// OEngine: roughness, metallic and specular stay visible as multipliers of the ORM channels.
+		if (p_property.name.begins_with("roughness_texture") || p_property.name.begins_with("metallic_texture") || p_property.name.begins_with("ao_texture") || p_property.name == "ao_on_uv2") {
 			p_property.usage = PROPERTY_USAGE_NONE;
 		}
 
@@ -3969,7 +4031,8 @@ BaseMaterial3D::BaseMaterial3D(bool p_orm) :
 	set_albedo(Color(1.0, 1.0, 1.0, 1.0));
 	set_specular(0.5);
 	set_roughness(1.0);
-	set_metallic(0.0);
+	// OEngine: metallic multiplies the ORM blue channel, so ORM defaults to 1 (the texture alone, as before).
+	set_metallic(p_orm ? 1.0 : 0.0);
 	set_emission(Color(0, 0, 0));
 	set_emission_energy_multiplier(1.0);
 	set_normal_scale(1);

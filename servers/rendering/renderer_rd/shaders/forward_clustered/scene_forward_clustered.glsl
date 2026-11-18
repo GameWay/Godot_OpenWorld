@@ -2343,6 +2343,11 @@ void fragment_shader(in SceneData scene_data) {
 		// 10.0 is a magic number, it gives the intended effect in most scenarios.
 		// Low enough for occlusion, high enough for reaction to lights and shadows.
 		specular_occlusion = max(min(reflective_f * specular_occlusion * 10.0, 1.0), specular_occlusion);
+		{
+			// OEngine: material AO and SSAO occlude reflections depending on roughness and view angle (Lagarde 2014).
+			float so_NdotV = clamp(dot(normal, view), 0.0, 1.0);
+			specular_occlusion = min(specular_occlusion, clamp(pow(so_NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0));
+		}
 		if (bool(implementation_data.ss_effects_flags & SCREEN_SPACE_EFFECTS_FLAGS_USE_SSAO_BENT_NORMAL) && implementation_data.ssao_specular_occlusion > 0.0) {
 			// OEngine: the CORTAO bent normal gives the direction of the occlusion, use the visibility cone instead.
 			float cone_occlusion = bent_normal_specular_occlusion(ao, roughness, indirect_normal, reflect(-view, normal));
@@ -2414,6 +2419,13 @@ void fragment_shader(in SceneData scene_data) {
 	f0 = mix(f0, f0_Clear_Coat_To_Surface(f0), clearcoat);
 #endif
 
+#if !defined(DIFFUSE_TOON)
+	// OEngine: multiscattering compensation is computed even without ambient light, the direct lights use it too.
+	float NdotV = clamp(dot(normal, view), 0.0001, 1.0);
+	vec2 envBRDF = prefiltered_dfg(roughness, NdotV);
+	energy_compensation = get_energy_compensation(f0, envBRDF.y);
+#endif
+
 #ifndef AMBIENT_LIGHT_DISABLED
 	{
 #if defined(DIFFUSE_TOON)
@@ -2421,14 +2433,12 @@ void fragment_shader(in SceneData scene_data) {
 		indirect_specular_light *= specular * metallic * albedo * 2.0;
 #else
 		// Base Layer
-		float NdotV = clamp(dot(normal, view), 0.0001, 1.0);
-		vec2 envBRDF = prefiltered_dfg(roughness, NdotV);
-		// Multiscattering
-		energy_compensation = get_energy_compensation(f0, envBRDF.y);
-
-		// cheap luminance approximation
-		float f90 = clamp(50.0 * f0.g, metallic, 1.0);
-		indirect_specular_light *= energy_compensation * ((f90 - f0) * envBRDF.x + f0 * envBRDF.y);
+		// OEngine: same f90 as the direct lights (luminance of f0, specular occlusion term from Filament).
+		float f90 = clamp(dot(f0, vec3(50.0 * 0.33)), metallic, 1.0);
+		vec3 specular_albedo = energy_compensation * ((f90 - f0) * envBRDF.x + f0 * envBRDF.y);
+		indirect_specular_light *= specular_albedo;
+		// OEngine: light reflected by the specular layer is not available to the diffuse layer.
+		ambient_light *= clamp(1.0 - specular_albedo, 0.0, 1.0);
 
 #ifdef LIGHT_CLEARCOAT_USED
 		float geo_NdotV = max(dot(geo_normal, view), 0.0001); // We want to use geometric normal, not normal_map
