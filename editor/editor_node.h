@@ -53,6 +53,8 @@ class Control;
 class FileDialog;
 class HBoxContainer;
 class ImageTexture;
+class ItemList;
+class Label;
 class MenuBar;
 class MenuButton;
 class OptionButton;
@@ -391,6 +393,8 @@ private:
 	bool stop_download_confirmation = false;
 	Button *confirmation_button = nullptr;
 	ConfirmationDialog *save_confirmation = nullptr;
+	Label *save_confirmation_label = nullptr;
+	ItemList *save_confirmation_list = nullptr;
 	ConfirmationDialog *import_confirmation = nullptr;
 	ConfirmationDialog *pick_main_scene = nullptr;
 	ConfirmationDialog *open_project_settings = nullptr;
@@ -623,6 +627,8 @@ private:
 	void _cancel_confirmation();
 
 	void _prepare_save_confirmation_popup();
+	void _set_save_confirmation_text(const String &p_text, const PackedStringArray &p_items = PackedStringArray());
+	PackedStringArray _get_edited_external_resources() const;
 
 	void _inherit_request(String p_file);
 	void _instantiate_request(const Vector<String> &p_files);

@@ -163,6 +163,8 @@
 #include "scene/gui/control.h"
 #include "scene/gui/dialogs.h"
 #include "scene/gui/file_dialog.h"
+#include "scene/gui/item_list.h"
+#include "scene/gui/label.h"
 #include "scene/gui/menu_bar.h"
 #include "scene/gui/menu_button.h"
 #include "scene/gui/panel.h"
@@ -3893,12 +3895,13 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 				bool save_each = EDITOR_GET("interface/editor/behavior/save_each_scene_on_quit");
 				if (_next_unsaved_scene(!save_each) == -1) {
 					if (EditorUndoRedoManager::get_singleton()->is_history_unsaved(EditorUndoRedoManager::GLOBAL_HISTORY)) {
+						const PackedStringArray edited_resources = _get_edited_external_resources();
 						if (is_restart) {
 							save_confirmation->set_ok_button_text(TTR("Save & Reload"));
-							save_confirmation->set_text(TTR("Save modified resources before reloading?"));
+							_set_save_confirmation_text(TTR("Save modified resources before reloading?"), edited_resources);
 						} else {
 							save_confirmation->set_ok_button_text(TTR("Save & Quit"));
-							save_confirmation->set_text(TTR("Save modified resources before closing?"));
+							_set_save_confirmation_text(TTR("Save modified resources before closing?"), edited_resources);
 						}
 						save_confirmation->reset_size();
 						save_confirmation->popup_centered();
@@ -3911,11 +3914,10 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 						if (!unsaved_status.is_empty()) {
 							if (is_restart) {
 								save_confirmation->set_ok_button_text(TTR("Save & Reload"));
-								save_confirmation->set_text(unsaved_status);
 							} else {
 								save_confirmation->set_ok_button_text(TTR("Save & Quit"));
-								save_confirmation->set_text(unsaved_status);
 							}
+							_set_save_confirmation_text(unsaved_status);
 							save_confirmation->reset_size();
 							save_confirmation->popup_centered();
 							plugin_to_save = editor_data.get_editor_plugin(i);
@@ -3938,18 +3940,18 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 					}
 					_proceed_closing_scene_tabs();
 				} else {
-					String unsaved_scenes;
+					PackedStringArray unsaved_scenes;
 					int i = _next_unsaved_scene(true, 0);
 					while (i != -1) {
-						unsaved_scenes += "\n            " + editor_data.get_edited_scene_root(i)->get_scene_file_path();
+						unsaved_scenes.push_back(editor_data.get_edited_scene_root(i)->get_scene_file_path());
 						i = _next_unsaved_scene(true, ++i);
 					}
 					if (is_restart) {
 						save_confirmation->set_ok_button_text(TTR("Save & Reload"));
-						save_confirmation->set_text(TTR("Save changes to the following scene(s) before reloading?") + unsaved_scenes);
+						_set_save_confirmation_text(TTR("Save changes to the following scene(s) before reloading?"), unsaved_scenes);
 					} else {
 						save_confirmation->set_ok_button_text(TTR("Save & Quit"));
-						save_confirmation->set_text((p_option == SCENE_QUIT ? TTR("Save changes to the following scene(s) before quitting?") : TTR("Save changes to the following scene(s) before opening Project Manager?")) + unsaved_scenes);
+						_set_save_confirmation_text(p_option == SCENE_QUIT ? TTR("Save changes to the following scene(s) before quitting?") : TTR("Save changes to the following scene(s) before opening Project Manager?"), unsaved_scenes);
 					}
 					save_confirmation->reset_size();
 					save_confirmation->popup_centered();
@@ -6994,7 +6996,7 @@ void EditorNode::_scene_tab_closed(int p_tab) {
 
 	if (!unsaved_message.is_empty()) {
 		save_confirmation->set_ok_button_text(TTR("Save & Close"));
-		save_confirmation->set_text(unsaved_message + "\n\n" + TTR("Save before closing?"));
+		_set_save_confirmation_text(unsaved_message + "\n\n" + TTR("Save before closing?"));
 		save_confirmation->reset_size();
 		save_confirmation->popup_centered();
 	} else {
@@ -7022,6 +7024,78 @@ void EditorNode::_prepare_save_confirmation_popup() {
 	if (save_confirmation->get_window() != get_last_exclusive_window()) {
 		save_confirmation->reparent(get_last_exclusive_window());
 	}
+}
+
+void EditorNode::_set_save_confirmation_text(const String &p_text, const PackedStringArray &p_items) {
+	// The dialog's own label is left empty; the text and the optional list live in a custom container.
+	save_confirmation->set_text(String());
+	save_confirmation_label->set_text(p_text);
+
+	save_confirmation_list->clear();
+	if (p_items.is_empty()) {
+		save_confirmation_list->hide();
+		save_confirmation_list->set_custom_minimum_size(Size2());
+		return;
+	}
+
+	for (const String &item : p_items) {
+		const int idx = save_confirmation_list->add_item(item);
+		save_confirmation_list->set_item_tooltip(idx, item);
+	}
+
+	constexpr int MAX_VISIBLE_ITEMS = 10;
+	if (p_items.size() <= MAX_VISIBLE_ITEMS) {
+		save_confirmation_list->set_auto_height(true);
+		save_confirmation_list->set_custom_minimum_size(Size2());
+	} else {
+		// Fixed height for MAX_VISIBLE_ITEMS rows, the rest is reachable through the scrollbar.
+		save_confirmation_list->set_auto_height(false);
+		const Ref<Font> font = save_confirmation_list->get_theme_font(SceneStringName(font));
+		const int font_size = save_confirmation_list->get_theme_font_size(SceneStringName(font_size));
+		const int v_separation = save_confirmation_list->get_theme_constant(SNAME("v_separation"));
+		const Ref<StyleBox> panel = save_confirmation_list->get_theme_stylebox(SceneStringName(panel));
+		real_t row_height = v_separation;
+		if (font.is_valid()) {
+			row_height += font->get_height(font_size);
+		}
+		real_t height = row_height * MAX_VISIBLE_ITEMS;
+		if (panel.is_valid()) {
+			height += panel->get_minimum_size().height;
+		}
+		save_confirmation_list->set_custom_minimum_size(Size2(0, height));
+	}
+	save_confirmation_list->show();
+}
+
+PackedStringArray EditorNode::_get_edited_external_resources() const {
+	// Mirrors the selection logic of _save_external_resources().
+	HashSet<String> edited_resources;
+	List<Ref<Resource>> cached;
+	ResourceCache::get_cached_resources(&cached);
+
+	for (const Ref<Resource> &res : cached) {
+		if (!res->is_edited()) {
+			continue;
+		}
+		const String path = res->get_path();
+		if (!path.begins_with("res://")) {
+			continue;
+		}
+		const int subres_pos = path.find("::");
+		const String file_path = subres_pos == -1 ? path : path.substr(0, subres_pos);
+		Ref<Resource> file_res = ResourceCache::get_ref(file_path);
+		if (file_res.is_null() || Ref<PackedScene>(file_res).is_valid()) {
+			continue; // PackedScenes (and uncached files) are not saved by _save_external_resources().
+		}
+		edited_resources.insert(file_path);
+	}
+
+	PackedStringArray result;
+	for (const String &E : edited_resources) {
+		result.push_back(E);
+	}
+	result.sort();
+	return result;
 }
 
 void EditorNode::_toggle_distraction_free_mode() {
@@ -9478,6 +9552,20 @@ EditorNode::EditorNode() {
 	save_confirmation->connect("custom_action", callable_mp(this, &EditorNode::_discard_changes));
 	save_confirmation->connect("canceled", callable_mp(this, &EditorNode::_cancel_close_scene_tab));
 	save_confirmation->connect("about_to_popup", callable_mp(this, &EditorNode::_prepare_save_confirmation_popup));
+	{
+		VBoxContainer *save_confirmation_vb = memnew(VBoxContainer);
+		save_confirmation->add_child(save_confirmation_vb);
+
+		save_confirmation_label = memnew(Label);
+		save_confirmation_vb->add_child(save_confirmation_label);
+
+		save_confirmation_list = memnew(ItemList);
+		save_confirmation_list->set_focus_mode(Control::FOCUS_NONE);
+		save_confirmation_list->set_select_mode(ItemList::SELECT_SINGLE);
+		save_confirmation_list->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+		save_confirmation_list->hide();
+		save_confirmation_vb->add_child(save_confirmation_list);
+	}
 
 	gradle_build_manage_templates = memnew(ConfirmationDialog);
 	gradle_build_manage_templates->set_flag(Window::FLAG_RESIZE_DISABLED, true);
