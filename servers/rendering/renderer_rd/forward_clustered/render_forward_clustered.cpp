@@ -1563,6 +1563,8 @@ void RenderForwardClustered::_process_cortao(RenderDataRD *p_render_data, const 
 	settings.temporal_depth_tolerance = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/cortao/temporal_depth_tolerance");
 	settings.temporal_clamp_margin = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/cortao/temporal_clamp_margin");
 	settings.disocclusion_blur_frames = GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/disocclusion_blur_frames");
+	settings.temporal_velocity_threshold = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/cortao/temporal_velocity_threshold");
+	settings.motion_vectors = p_render_data->scene_data->calculate_motion_vectors;
 	// Same distance fade as ASSAO.
 	settings.fade_from = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/fadeout_from");
 	settings.fade_to = GLOBAL_GET_CACHED(float, "rendering/environment/ssao/fadeout_to");
@@ -2022,6 +2024,10 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	} else if (!is_reflection_probe && using_taa) {
 		motion_vectors_required = true;
 	} else if (!is_reflection_probe && using_upscaling) {
+		motion_vectors_required = true;
+	} else if (!is_reflection_probe && p_render_data->environment.is_valid() && environment_get_ssao_enabled(p_render_data->environment) &&
+			environment_get_ssao_cortao_enabled(p_render_data->environment) && GLOBAL_GET_CACHED(int, "rendering/environment/ssao/cortao/temporal_frames") > 1) {
+		// OEngine: the CORTAO temporal pass finds moving objects with the previous frame's motion vectors.
 		motion_vectors_required = true;
 	} else {
 		motion_vectors_required = false;

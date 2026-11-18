@@ -39,6 +39,7 @@
 #include "core/templates/hashfuncs.h"
 #include "servers/rendering/renderer_compositor.h"
 #include "servers/rendering/renderer_rd/effects/ss_effects.h" // RB_SCOPE_SSAO, RB_FINAL.
+#include "servers/rendering/renderer_rd/storage_rd/texture_storage.h"
 #include "servers/rendering/renderer_rd/uniform_set_cache_rd.h"
 #include "servers/rendering/rendering_server_globals.h"
 
@@ -258,6 +259,12 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 	history->current ^= 1;
 	history->valid = true;
 
+	// Motion vectors of the previous frame: the opaque pass of this frame has not written them yet. MSAA resolves
+	// them into the single sample buffer only for TAA and upscaling, so it is skipped.
+	const bool use_velocity = history_valid && history->motion_vectors_valid && p_settings.temporal_frames > 1 &&
+			p_render_buffers->get_msaa_3d() == RSE::VIEWPORT_MSAA_DISABLED && p_render_buffers->has_velocity_buffer(false);
+	history->motion_vectors_valid = p_settings.motion_vectors;
+
 	const StringName history_cur_name = history->current ? SNAME("history1") : SNAME("history0");
 	const StringName history_prev_name = history->current ? SNAME("history0") : SNAME("history1");
 	const StringName history_depth_cur_name = history->current ? SNAME("history_depth1") : SNAME("history_depth0");
@@ -445,6 +452,10 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 			push.max_frames = float(CLAMP(p_settings.temporal_frames, 1, 256));
 			push.depth_tolerance = MAX(p_settings.temporal_depth_tolerance, 0.0f);
 			push.clamp_margin = MAX(p_settings.temporal_clamp_margin, 0.0f);
+			push.velocity_threshold = MAX(p_settings.temporal_velocity_threshold, 0.0f);
+			if (use_velocity) {
+				push.flags |= TEMPORAL_FLAG_USE_VELOCITY;
+			}
 			push.fade_mul = -1.0f / (fade_to - fade_from);
 			push.fade_add = fade_from / (fade_to - fade_from) + 1.0f;
 			push.disocclusion_frames = float(MAX(p_settings.disocclusion_blur_frames, 0));
@@ -458,12 +469,14 @@ void CORTAO::process(Ref<RenderSceneBuffersRD> p_render_buffers, const RID *p_no
 			RD::Uniform u_history_depth_prev(RD::UNIFORM_TYPE_TEXTURE, 3, history_depth_prev);
 			RD::Uniform u_sampler(RD::UNIFORM_TYPE_SAMPLER, 4, nearest_clamp_sampler);
 			RD::Uniform u_normal(RD::UNIFORM_TYPE_TEXTURE, 5, p_normal_roughness_slices[v]);
+			RID velocity = use_velocity ? p_render_buffers->get_velocity_buffer(false, v) : TextureStorage::get_singleton()->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_BLACK);
+			RD::Uniform u_velocity(RD::UNIFORM_TYPE_TEXTURE, 6, velocity);
 			RD::Uniform u_history_cur(RD::UNIFORM_TYPE_IMAGE, 0, history_cur);
 			RD::Uniform u_history_depth_cur(RD::UNIFORM_TYPE_IMAGE, 1, history_depth_cur);
 			RD::Uniform u_dest(RD::UNIFORM_TYPE_IMAGE, 2, final);
 
 			RD::get_singleton()->compute_list_bind_compute_pipeline(compute_list, temporal_pipeline.get_rid());
-			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 0, u_packed, u_source, u_history_prev, u_history_depth_prev, u_sampler, u_normal), 0);
+			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 0, u_packed, u_source, u_history_prev, u_history_depth_prev, u_sampler, u_normal, u_velocity), 0);
 			RD::get_singleton()->compute_list_bind_uniform_set(compute_list, uniform_set_cache->get_cache(shader, 1, u_history_cur, u_history_depth_cur, u_dest), 1);
 			RD::get_singleton()->compute_list_set_push_constant(compute_list, &push, sizeof(TemporalPushConstant));
 			RD::get_singleton()->compute_list_dispatch_threads(compute_list, size.x, size.y, 1);

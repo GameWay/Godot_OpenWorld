@@ -7,7 +7,8 @@
 // OEngine: temporal accumulation of the CORTAO output.
 // CORTAO only removes part of its noise spatially and expects a temporal filter after it. The history is reprojected
 // with the camera motion, rejected on depth mismatches, and clamped to the current 3x3 neighborhood so that moving
-// objects do not leave trails. Pixels with little history get an extra depth and normal aware blur, and the result
+// objects do not leave trails. Moving objects are found with the motion vectors of the previous frame (the current ones
+// are written later, by the opaque pass): their history is taken along their own motion and kept short. Pixels with little history get an extra depth and normal aware blur, and the result
 // fades out with the distance. The final texture holds the occlusion in R and the view space bent normal in GBA.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
@@ -18,6 +19,7 @@ layout(set = 0, binding = 2) uniform texture2D history_prev; // RGBA16F: occlusi
 layout(set = 0, binding = 3) uniform texture2D history_depth_prev; // RG32F: linear depth, accumulated frames.
 layout(set = 0, binding = 4) uniform sampler nearest_sampler;
 layout(set = 0, binding = 5) uniform texture2D source_normal_roughness;
+layout(set = 0, binding = 6) uniform texture2D last_velocity; // RG16F, previous frame motion vectors: previous UV - UV.
 
 layout(rgba16f, set = 1, binding = 0) uniform restrict writeonly image2D history_cur;
 layout(rg32f, set = 1, binding = 1) uniform restrict writeonly image2D history_depth_cur;
@@ -25,6 +27,7 @@ layout(rgba8, set = 1, binding = 2) uniform restrict writeonly image2D dest;
 
 #define FLAG_ORTHOGONAL (1 << 0)
 #define FLAG_HISTORY_VALID (1 << 1)
+#define FLAG_USE_VELOCITY (1 << 2)
 
 layout(push_constant, std430) uniform Params {
 	// Current view space to previous view space, as the rows of a 3x4 matrix.
@@ -42,7 +45,7 @@ layout(push_constant, std430) uniform Params {
 	float max_frames;
 	float depth_tolerance;
 	float clamp_margin;
-	float pad;
+	float velocity_threshold; // In pixels.
 
 	// Distance fade: 1.0 up to the fade start, 0.0 from its end (fade = depth * mul + add).
 	float fade_mul;
@@ -116,6 +119,19 @@ void main() {
 		}
 		prev_uv += params.prev_projection.zw;
 
+		// The camera reprojection assumes a static scene. Where last frame's motion vector disagrees with it, the pixel
+		// belongs to a moving object: follow its motion instead (one frame late, which is close enough for smooth
+		// motion), compare depths with its current depth, and keep the history short to absorb the remaining error.
+		bool moving = false;
+		if (bool(params.flags & FLAG_USE_VELOCITY)) {
+			vec2 object_prev_uv = uv + texelFetch(sampler2D(last_velocity, nearest_sampler), pos, 0).xy;
+			if (length((object_prev_uv - prev_uv) * vec2(size)) > params.velocity_threshold) {
+				moving = true;
+				prev_uv = object_prev_uv;
+				prev_depth = depth;
+			}
+		}
+
 		if (prev_depth > 0.0 && all(greaterThanEqual(prev_uv, vec2(0.0))) && all(lessThanEqual(prev_uv, vec2(1.0)))) {
 			// Bilinear footprint of the history, keeping only the texels on the same surface.
 			vec2 texel = prev_uv * vec2(size) - 0.5;
@@ -137,6 +153,9 @@ void main() {
 				history += load_history(base + ivec2(1, 0), size) * weights.z;
 				history += load_history(base, size) * weights.w;
 				frames = min(dot(counts, weights) + 1.0, params.max_frames);
+				if (moving) {
+					frames = min(frames, max(2.0, params.max_frames * 0.25));
+				}
 			}
 		}
 	}

@@ -3031,6 +3031,10 @@
 			Number of frames over which the CORTAO occlusion and bent normals are accumulated. Higher values remove more noise but react slower to changes. [code]1[/code] disables the temporal accumulation.
 			[b]Note:[/b] Only used when [member Environment.ssao_mode] is [constant Environment.SSAO_MODE_CORTAO] in the Forward+ renderer.
 		</member>
+		<member name="rendering/environment/ssao/cortao/temporal_velocity_threshold" type="float" setter="" getter="" default="2.0">
+			Difference in pixels between the motion vector of the previous frame and the camera motion above which a pixel is treated as part of a moving object. Its CORTAO history is then reprojected along the object motion and kept short, which removes trails inside moving silhouettes. Requires motion vectors, which are computed while the CORTAO accumulation is enabled.
+			[b]Note:[/b] Only used when [member Environment.ssao_mode] is [constant Environment.SSAO_MODE_CORTAO] in the Forward+ renderer.
+		</member>
 		<member name="rendering/environment/ssao/fadeout_from" type="float" setter="" getter="" default="50.0">
 			Distance at which the screen-space ambient occlusion effect starts to fade out. Use this hide ambient occlusion from far away.
 			With [constant Environment.SSAO_MODE_CORTAO], the bent normals fade out toward the surface normals over the same distance.

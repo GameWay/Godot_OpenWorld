@@ -3768,6 +3768,7 @@ void RenderingServer::init() {
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/cortao/temporal_frames", PROPERTY_HINT_RANGE, "1,64,1"), 16);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/environment/ssao/cortao/temporal_depth_tolerance", PROPERTY_HINT_RANGE, "0.001,1,0.001"), 0.05);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/environment/ssao/cortao/temporal_clamp_margin", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.05);
+	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/environment/ssao/cortao/temporal_velocity_threshold", PROPERTY_HINT_RANGE, "0.5,16,0.1,suffix:px"), 2.0);
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssao/cortao/disocclusion_blur_frames", PROPERTY_HINT_RANGE, "0,16,1"), 4);
 
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/environment/ssil/quality", PROPERTY_HINT_ENUM, "Very Low (Fast),Low (Fast),Medium (Average),High (Slow),Ultra (Custom)"), 2);

@@ -51,9 +51,17 @@ public:
 	uint32_t current = 0; // Which of the two history textures is written this frame.
 	uint64_t last_frame_number = 0;
 	bool valid = false;
+	// The velocity buffer still holds the motion vectors of the previous frame when CORTAO runs.
+	bool motion_vectors_valid = false;
 
-	virtual void configure(RenderSceneBuffersRD *p_render_buffers) override { valid = false; }
-	virtual void free_data() override { valid = false; }
+	virtual void configure(RenderSceneBuffersRD *p_render_buffers) override {
+		valid = false;
+		motion_vectors_valid = false;
+	}
+	virtual void free_data() override {
+		valid = false;
+		motion_vectors_valid = false;
+	}
 };
 
 // OEngine: CORTAO (Circular Occluder Ray-Traced Ambient Occlusion), https://github.com/theagentd/CORTAO.
@@ -101,6 +109,10 @@ public:
 		float temporal_depth_tolerance = 0.05;
 		float temporal_clamp_margin = 0.05;
 		int disocclusion_blur_frames = 4; // Pixels with less history get a wider blur, 0 disables it.
+		// This frame computes motion vectors. The next frame uses them to find moving objects, whose history the camera
+		// reprojection alone would take from the wrong place (trails inside the moving silhouette).
+		bool motion_vectors = false;
+		float temporal_velocity_threshold = 2.0; // In pixels, difference to the camera motion that marks a moving object.
 
 		// Distance fade (rendering/environment/ssao/fadeout_from and fadeout_to). Pixels past fade_to are not traced.
 		float fade_from = 50.0;
@@ -169,7 +181,7 @@ private:
 		float max_frames;
 		float depth_tolerance;
 		float clamp_margin;
-		float pad;
+		float velocity_threshold; // In pixels.
 
 		float fade_mul;
 		float fade_add;
@@ -180,6 +192,7 @@ private:
 	enum {
 		TEMPORAL_FLAG_ORTHOGONAL = 1 << 0,
 		TEMPORAL_FLAG_HISTORY_VALID = 1 << 1,
+		TEMPORAL_FLAG_USE_VELOCITY = 1 << 2,
 	};
 
 	Config config;
