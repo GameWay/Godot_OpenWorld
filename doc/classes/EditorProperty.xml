@@ -29,6 +29,12 @@
 				If any of the controls added can gain keyboard focus, add it here. This ensures that focus will be restored if the inspector is refreshed.
 			</description>
 		</method>
+		<method name="clear_alt_revert">
+			<return type="void" />
+			<description>
+				Removes the alternative revert target set by [method set_alt_revert]. The revert icon goes back to resetting the property to its default value.
+			</description>
+		</method>
 		<method name="deselect">
 			<return type="void" />
 			<description>
@@ -59,6 +65,12 @@
 				[b]Note:[/b] This method could return [code]null[/code] if the editor has not yet been associated with a property. However, in [method _update_property] and [method _set_read_only], this value is [i]guaranteed[/i] to be non-[code]null[/code].
 			</description>
 		</method>
+		<method name="has_alt_revert" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if an alternative revert target is set with [method set_alt_revert].
+			</description>
+		</method>
 		<method name="is_selected" qualifiers="const">
 			<return type="bool" />
 			<description>
@@ -70,6 +82,15 @@
 			<param index="0" name="focusable" type="int" default="-1" />
 			<description>
 				Draw property as selected. Used by the inspector.
+			</description>
+		</method>
+		<method name="set_alt_revert">
+			<return type="void" />
+			<param index="0" name="value" type="Variant" />
+			<param index="1" name="text" type="String" />
+			<param index="2" name="color" type="Color" />
+			<description>
+				Sets a second revert target next to the default value, for example the value in the last version control commit. While it is set, the revert icon is shown even when the property is at its default value, it is drawn in [param color], and clicking it opens a menu with [b]Reset[/b] (the default value) and [b]Revert[/b] (this [param value], displayed as [param text]).
 			</description>
 		</method>
 		<method name="set_bottom_editor">

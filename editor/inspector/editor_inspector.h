@@ -178,6 +178,21 @@ private:
 	bool delete_hover = false;
 
 	bool can_revert = false;
+	// OEngine: a second revert target next to the default value (vc_git: the value in the last commit).
+	// While set, the revert icon is shown in alt_revert_color and opens a menu with both targets.
+	enum RevertMenuItems {
+		REVERT_MENU_RESET,
+		REVERT_MENU_ALT,
+	};
+	bool alt_revert_enabled = false;
+	Variant alt_revert_value;
+	String alt_revert_text;
+	Color alt_revert_color;
+	PopupMenu *revert_menu = nullptr;
+	void _revert_to_default();
+	void _popup_revert_menu();
+	void _revert_menu_id_pressed(int p_id);
+	static String _get_revert_value_text(const Variant &p_value);
 	bool can_pin = false;
 	bool pin_hidden = false;
 	bool pinned = false;
@@ -242,6 +257,11 @@ public:
 	static String get_property_warning(Object *p_object, const StringName &p_property);
 
 	void emit_changed(const StringName &p_property, const Variant &p_value, const StringName &p_field = StringName(), bool p_changing = false);
+
+	// OEngine: see alt_revert_enabled.
+	void set_alt_revert(const Variant &p_value, const String &p_text, const Color &p_color);
+	void clear_alt_revert();
+	bool has_alt_revert() const { return alt_revert_enabled; }
 
 	String get_tooltip_string(const String &p_string) const;
 

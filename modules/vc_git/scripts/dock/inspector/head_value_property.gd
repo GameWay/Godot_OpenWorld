@@ -1,5 +1,5 @@
 @tool
-## Child head_inspector.gd puts into the property's own editor: it colours the name with the warning colour while the value differs from the last commit. A click on that name opens the value at HEAD and Revert; once the value matches HEAD again the name is plain.
+## Child head_inspector.gd puts into the property's own editor: while the value differs from the last commit, the name turns the warning colour and so does the property's revert icon, which then offers Reset (the default) and Revert (the value at HEAD); once the value matches HEAD again both are plain.
 ## A Node, not a Control: EditorProperty lays out its Control children as the value editor.
 extends Node
 
@@ -10,7 +10,6 @@ var _object: Object
 ## The Inspector's editor of _property, this node's parent.
 var _target: EditorProperty
 var _changed := false
-var _popup: PopupPanel
 
 
 ## Puts the marker into editor, the editor of property of object.
@@ -20,9 +19,7 @@ static func attach(editor: EditorProperty, object: Object, property: StringName,
 	marker._property = property
 	marker._head = head
 	marker._target = editor
-	marker.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED # the Inspector would translate Revert (see vc_git_dock.gd)
 	editor.add_child(marker)
-	editor.gui_input.connect(marker._on_target_input)
 
 
 func _ready() -> void:
@@ -41,62 +38,15 @@ func _refresh() -> void:
 		return
 	_changed = changed
 	if changed:
-		_target.add_theme_color_override(&"property_color", EditorInterface.get_editor_theme().get_color(&"warning_color", &"Editor"))
+		var color := EditorInterface.get_editor_theme().get_color(&"warning_color", &"Editor")
+		_target.add_theme_color_override(&"property_color", color)
+		# The revert icon (OEngine EditorProperty) offers the value at HEAD next to the default.
+		var head_value: Variant = load(_head["path"]) if _head.has("path") else _head["value"]
+		_target.set_alt_revert(head_value, _head["text"], color)
 	else:
 		_target.remove_theme_color_override(&"property_color")
-		if is_instance_valid(_popup):
-			_popup.hide()
+		_target.clear_alt_revert()
 	_target.queue_redraw()
-
-
-func _on_target_input(event: InputEvent) -> void:
-	var click := event as InputEventMouseButton
-	if not _changed or click == null or not click.pressed or click.button_index != MOUSE_BUTTON_LEFT:
-		return
-	if click.position.x > _label_width():
-		return
-	_open_popup(_target.get_screen_position() + click.position)
-	_target.accept_event()
-
-
-## The name column ends where the property's value editor starts.
-func _label_width() -> float:
-	for child in _target.get_children():
-		var control := child as Control
-		if control != null and control.visible and control.position.x > 0.0:
-			return control.position.x
-	return _target.size.x * 0.5
-
-
-func _open_popup(at: Vector2) -> void:
-	if not is_instance_valid(_popup):
-		_popup = PopupPanel.new()
-		_popup.auto_translate_mode = AUTO_TRANSLATE_MODE_DISABLED
-		var box := VBoxContainer.new()
-		var caption := Label.new()
-		caption.text = "Last commit"
-		caption.add_theme_color_override(&"font_color", EditorInterface.get_editor_theme().get_color(&"warning_color", &"Editor"))
-		box.add_child(caption)
-		var value := Label.new()
-		value.text = _head["text"]
-		value.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-		value.custom_minimum_size.x = 220 * EditorInterface.get_editor_scale()
-		box.add_child(value)
-		var revert := Button.new()
-		revert.text = "Revert"
-		revert.tooltip_text = "Set it back to the value in the last commit"
-		revert.pressed.connect(_revert)
-		box.add_child(revert)
-		_popup.add_child(box)
-		add_child(_popup)
-	_popup.reset_size()
-	_popup.popup(Rect2i(Vector2i(at), Vector2i.ZERO))
-
-
-func _revert() -> void:
-	_popup.hide()
-	if is_instance_valid(_target):
-		_target.emit_changed(_property, load(_head["path"]) if _head.has("path") else _head["value"])
 
 
 ## Whether current matches a HEAD value from head_value(): floats and vectors approximately, resources by file.

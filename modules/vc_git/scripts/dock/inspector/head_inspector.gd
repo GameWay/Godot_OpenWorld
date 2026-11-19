@@ -1,5 +1,5 @@
 @tool
-## Marks what changed since the last commit in the Inspector: the name of each changed property of a node of the edited scene or a .tres turns the warning colour, and a click on it shows the old value with Revert; nodes that are new get a note.
+## Marks what changed since the last commit in the Inspector: the name and the revert icon of each changed property of a node of the edited scene or a .tres turn the warning colour, and the icon offers Reset (default) and Revert (last commit); nodes that are new get a note.
 extends EditorInspectorPlugin
 
 const SceneText := preload("../../util/scene_text.gd")
@@ -67,7 +67,7 @@ static func head_value(text: Variant, object: Object, name: String, state: Dicti
 			default = ClassDB.class_get_property_default_value(object.get_class(), name)
 		else:
 			return {}
-		return { "value": default, "text": "default (%s)" % var_to_str(default).left(60) }
+		return { "value": default, "text": var_to_str(default).left(80) }
 	var value: String = text
 	if value.begins_with("ExtResource(\"") and value.ends_with("\")"):
 		var path := value.trim_prefix("ExtResource(\"").trim_suffix("\")")

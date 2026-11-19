@@ -651,7 +651,7 @@ void EditorProperty::_notification(int p_what) {
 				check_rect = Rect2();
 			}
 
-			if (can_revert && !is_read_only()) {
+			if ((can_revert || alt_revert_enabled) && !is_read_only()) {
 				const Ref<Texture2D> &reload_icon = theme_cache.revert_icon;
 				int rectw = reload_icon->get_width() + half_padding + theme_cache.horizontal_separation;
 				text_limit -= rectw;
@@ -662,7 +662,8 @@ void EditorProperty::_notification(int p_what) {
 					rtl_pos = Point2(size.width - revert_rect.position.x - rectw, revert_rect.position.y);
 				}
 
-				Color color2(1, 1, 1);
+				// OEngine: tinted while the value differs from the alternative revert target.
+				Color color2 = alt_revert_enabled ? alt_revert_color : Color(1, 1, 1);
 				if (revert_hover) {
 					color2.r *= 1.2;
 					color2.g *= 1.2;
@@ -1293,11 +1294,11 @@ void EditorProperty::gui_input(const Ref<InputEvent> &p_event) {
 		if (revert_rect.has_point(mpos)) {
 			accept_event();
 			get_viewport()->gui_release_focus();
-			bool is_valid_revert = false;
-			Variant revert_value = EditorPropertyRevert::get_property_revert_value(object, property, &is_valid_revert);
-			ERR_FAIL_COND(!is_valid_revert);
-			emit_changed(_get_revert_property(), revert_value);
-			update_property();
+			if (alt_revert_enabled) {
+				_popup_revert_menu();
+			} else {
+				_revert_to_default();
+			}
 		}
 
 		if (check_rect.has_point(mpos)) {
@@ -1721,6 +1722,10 @@ void EditorProperty::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("emit_changed", "property", "value", "field", "changing"), &EditorProperty::emit_changed, DEFVAL(StringName()), DEFVAL(false));
 
+	ClassDB::bind_method(D_METHOD("set_alt_revert", "value", "text", "color"), &EditorProperty::set_alt_revert);
+	ClassDB::bind_method(D_METHOD("clear_alt_revert"), &EditorProperty::clear_alt_revert);
+	ClassDB::bind_method(D_METHOD("has_alt_revert"), &EditorProperty::has_alt_revert);
+
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "label"), "set_label", "get_label");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "read_only"), "set_read_only", "is_read_only");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "draw_label"), "set_draw_label", "is_draw_label");
@@ -1774,6 +1779,96 @@ EditorProperty::EditorProperty() {
 	add_child(right_container);
 
 	set_process_shortcut_input(true);
+}
+
+void EditorProperty::set_alt_revert(const Variant &p_value, const String &p_text, const Color &p_color) {
+	alt_revert_enabled = true;
+	alt_revert_value = p_value;
+	alt_revert_text = p_text;
+	alt_revert_color = p_color;
+	queue_redraw();
+}
+
+void EditorProperty::clear_alt_revert() {
+	if (!alt_revert_enabled) {
+		return;
+	}
+	alt_revert_enabled = false;
+	alt_revert_value = Variant();
+	alt_revert_text = String();
+	if (revert_menu) {
+		revert_menu->hide();
+	}
+	queue_redraw();
+}
+
+void EditorProperty::_revert_to_default() {
+	bool is_valid_revert = false;
+	Variant revert_value = EditorPropertyRevert::get_property_revert_value(object, property, &is_valid_revert);
+	ERR_FAIL_COND(!is_valid_revert);
+	emit_changed(_get_revert_property(), revert_value);
+	update_property();
+}
+
+String EditorProperty::_get_revert_value_text(const Variant &p_value) {
+	String text;
+	if (p_value.get_type() == Variant::OBJECT) {
+		const Object *obj = p_value;
+		const Resource *res = Object::cast_to<Resource>(obj);
+		if (res && !res->get_path().is_empty()) {
+			text = res->get_path().get_file();
+		} else {
+			text = obj ? obj->get_class() : String("<empty>");
+		}
+	} else if (p_value.get_type() == Variant::FLOAT) {
+		text = String::num(p_value, 4);
+	} else {
+		text = p_value.stringify();
+	}
+	constexpr int MAX_LENGTH = 60;
+	if (text.length() > MAX_LENGTH) {
+		text = text.left(MAX_LENGTH - 1) + String::utf8("…");
+	}
+	return text;
+}
+
+void EditorProperty::_popup_revert_menu() {
+	if (!revert_menu) {
+		revert_menu = memnew(PopupMenu);
+		revert_menu->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
+		add_child(revert_menu);
+		revert_menu->connect(SceneStringName(id_pressed), callable_mp(this, &EditorProperty::_revert_menu_id_pressed));
+	}
+	revert_menu->clear();
+
+	bool is_valid_default = false;
+	const Variant default_value = EditorPropertyRevert::get_property_revert_value(object, property, &is_valid_default);
+	revert_menu->add_item(vformat(TTR("Reset (%s)"), is_valid_default ? _get_revert_value_text(default_value) : TTR("default")), REVERT_MENU_RESET);
+	revert_menu->set_item_tooltip(-1, TTR("Reset to the default value."));
+	// Already at the default value: only the alternative target is useful.
+	revert_menu->set_item_disabled(-1, !can_revert || !is_valid_default);
+
+	const String alt_text = alt_revert_text.length() > 60 ? alt_revert_text.left(59) + String::utf8("…") : alt_revert_text;
+	revert_menu->add_item(vformat(TTR("Revert (%s)"), alt_text), REVERT_MENU_ALT);
+	revert_menu->set_item_tooltip(-1, TTR("Revert to the value in the last commit."));
+
+	revert_menu->reset_size();
+	revert_menu->set_position(get_screen_transform().xform(revert_rect.position + Vector2(0, revert_rect.size.height)));
+	revert_menu->popup();
+}
+
+void EditorProperty::_revert_menu_id_pressed(int p_id) {
+	switch (p_id) {
+		case REVERT_MENU_RESET: {
+			_revert_to_default();
+		} break;
+		case REVERT_MENU_ALT: {
+			if (alt_revert_enabled) {
+				emit_changed(property, alt_revert_value);
+				update_property();
+			}
+		} break;
+	}
 }
 
 void EditorProperty::_update_popup() {
