@@ -189,18 +189,19 @@ void ColorModeHSV::slider_draw(int p_which) {
 	Color color = color_picker->color_normalized;
 	const real_t margin = 16 * color_picker->theme_cache.base_scale;
 
+	// OEngine: the H and S gradients are drawn at full value (and H at full saturation), so they stay
+	// readable when the picked color is very dark or gray. The V gradient already ignores the value.
 	if (p_which == 0) {
-		float v = color.get_v();
-		left_color = Color(v, v, v);
+		left_color = Color(1, 1, 1);
 		right_color = left_color;
 	} else {
 		Color s_col;
 		Color v_col;
-		s_col.set_hsv(color.get_h(), 0, color.get_v());
+		s_col.set_hsv(color.get_h(), 0, 1);
 		left_color = (p_which == 1) ? s_col : Color(0, 0, 0);
 
 		float s_col_hue = (Math::is_zero_approx(color.get_s())) ? cached_hue / 360.0 : color.get_h();
-		s_col.set_hsv(s_col_hue, 1, color.get_v());
+		s_col.set_hsv(s_col_hue, 1, 1);
 		v_col.set_hsv(color.get_h(), color.get_s(), 1);
 		right_color = (p_which == 1) ? s_col : v_col;
 	}
@@ -217,7 +218,7 @@ void ColorModeHSV::slider_draw(int p_which) {
 
 	if (p_which == 0) { // H
 		Ref<Texture2D> hue = color_picker->theme_cache.color_hue;
-		slider->draw_texture_rect(hue, Rect2(Vector2(), Vector2(size.x, margin)), false, Color::from_hsv(0, 0, color.get_v(), color.get_s()));
+		slider->draw_texture_rect(hue, Rect2(Vector2(), Vector2(size.x, margin)), false, Color(1, 1, 1));
 	}
 }
 
@@ -413,8 +414,9 @@ void ColorModeOKHSL::slider_draw(int p_which) {
 		pos.resize(4);
 		col.resize(4);
 
-		left_color.set_ok_hsl(slider_hue, 0, okhsl_l);
-		right_color.set_ok_hsl(slider_hue, 1, okhsl_l);
+		// OEngine: drawn at a fixed mid lightness, so the gradient stays readable for very light or dark colors.
+		left_color.set_ok_hsl(slider_hue, 0, 0.5);
+		right_color.set_ok_hsl(slider_hue, 1, 0.5);
 
 		col.set(0, left_color);
 		col.set(1, right_color);
@@ -451,7 +453,8 @@ void ColorModeOKHSL::slider_draw(int p_which) {
 
 		for (int i = 0; i < precision; i++) {
 			float h = i / float(precision - 1);
-			colors.write[i] = Color::from_ok_hsl(h, slider_sat, okhsl_l);
+			// OEngine: pure hues at full saturation and mid lightness, independent of the picked color.
+			colors.write[i] = Color::from_ok_hsl(h, 1, 0.5);
 		}
 		hue_gradient->set_colors(colors);
 		slider->draw_texture_rect(hue_texture, Rect2(Vector2(), Vector2(size.x, margin)), false);

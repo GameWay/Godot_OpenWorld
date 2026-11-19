@@ -530,7 +530,9 @@ void ColorPickerShapeOKHSRectangle::_update_cursor(const Vector2 &p_color_change
 
 void ColorPickerShapeOKHSRectangle::_square_draw() {
 	Ref<ShaderMaterial> material = square->get_material();
-	material->set_shader_parameter(SNAME("ok_hsl_l"), color_picker->ok_hsl_l);
+	// OEngine: the hue/saturation plane is drawn at a fixed mid lightness, so its colors stay readable
+	// when the picked color is very light or very dark. Lightness has its own slider.
+	material->set_shader_parameter(SNAME("ok_hsl_l"), 0.5);
 	square->draw_rect(Rect2(Point2(), square->get_size()), Color(1, 1, 1));
 }
 
@@ -956,7 +958,9 @@ void ColorPickerShapeVHSCircle::_value_slider_input(const Ref<InputEvent> &p_eve
 
 void ColorPickerShapeVHSCircle::_circle_draw() {
 	Ref<ShaderMaterial> material = circle->get_material();
-	material->set_shader_parameter(SNAME("v"), color_picker->v);
+	// OEngine: the hue/saturation circle is drawn at full value, so its colors stay readable
+	// when the picked color is very dark. Value has its own slider.
+	material->set_shader_parameter(SNAME("v"), 1.0);
 	circle->draw_rect(Rect2(Point2(), circle->get_size()), Color(1, 1, 1));
 }
 
@@ -1041,7 +1045,9 @@ void ColorPickerShapeOKHSLCircle::_value_slider_input(const Ref<InputEvent> &p_e
 
 void ColorPickerShapeOKHSLCircle::_circle_draw() {
 	Ref<ShaderMaterial> material = circle->get_material();
-	material->set_shader_parameter(SNAME("ok_hsl_l"), color_picker->ok_hsl_l);
+	// OEngine: the hue/saturation circle is drawn at a fixed mid lightness, so its colors stay readable
+	// when the picked color is very light or very dark. Lightness has its own slider.
+	material->set_shader_parameter(SNAME("ok_hsl_l"), 0.5);
 	circle->draw_rect(Rect2(Point2(), circle->get_size()), Color(1, 1, 1));
 }
 
