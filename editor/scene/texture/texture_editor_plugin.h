@@ -88,6 +88,7 @@ private:
 	void _update_metadata_label_text();
 	void _toggle_metadata_label();
 	void _open_big_preview();
+	void _texture_display_gui_input(const Ref<InputEvent> &p_event);
 	void _update_zoom_layout();
 	void _set_zoom(real_t p_zoom, const Vector2 &p_pivot);
 	void _zoom_reset();

@@ -272,6 +272,14 @@ void TexturePreview::_open_big_preview() {
 	popup_texture_dialog(texture_display->get_texture());
 }
 
+void TexturePreview::_texture_display_gui_input(const Ref<InputEvent> &p_event) {
+	const Ref<InputEventMouseButton> mb = p_event;
+	if (mb.is_valid() && mb->is_pressed() && mb->is_double_click() && mb->get_button_index() == MouseButton::LEFT) {
+		texture_display->accept_event();
+		_open_big_preview();
+	}
+}
+
 void TexturePreview::popup_texture_dialog(const Ref<Texture2D> &p_texture) {
 	ERR_FAIL_COND(p_texture.is_null());
 
@@ -617,6 +625,13 @@ TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata, b
 		open_big_preview->set_h_size_flags(Control::SIZE_SHRINK_END);
 		open_big_preview->connect(SceneStringName(pressed), callable_mp(this, &TexturePreview::_open_big_preview));
 		top_right_box->add_child(open_big_preview);
+
+		// Double-clicking the texture opens the large preview too.
+		checkerboard->set_mouse_filter(MOUSE_FILTER_IGNORE);
+		outline_overlay->set_mouse_filter(MOUSE_FILTER_IGNORE);
+		texture_display->set_mouse_filter(MOUSE_FILTER_STOP);
+		texture_display->set_tooltip_text(TTRC("Double-click to open the texture in a large preview window."));
+		texture_display->connect(SceneStringName(gui_input), callable_mp(this, &TexturePreview::_texture_display_gui_input));
 	}
 
 	if (p_zoomable) {
