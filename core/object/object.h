@@ -832,6 +832,11 @@ public:
 	bool editor_is_section_unfolded(const String &p_section);
 	const HashSet<String> &editor_get_section_folding() const { return editor_section_folding; }
 	void editor_clear_section_folding() { editor_section_folding.clear(); }
+
+	// OEngine: called when the user folds or unfolds an inspector section. Returns true when the folding
+	// state was stored elsewhere, so the object is not marked as edited (and does not show up as unsaved).
+	typedef bool (*SectionFoldingChangedFunc)(Object *p_object);
+	static inline SectionFoldingChangedFunc section_folding_changed_func = nullptr;
 #endif
 
 	// Used by script languages to store binding data.

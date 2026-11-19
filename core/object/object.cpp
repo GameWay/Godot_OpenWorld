@@ -1868,14 +1868,15 @@ void Object::_get_property_list_from_classdb(const StringName &p_class, List<Pro
 
 #ifdef TOOLS_ENABLED
 void Object::editor_set_section_unfold(const String &p_section, bool p_unfolded, bool p_initializing) {
-	if (!p_initializing) {
-		set_edited(true);
-	}
-
 	if (p_unfolded) {
 		editor_section_folding.insert(p_section);
 	} else {
 		editor_section_folding.erase(p_section);
+	}
+
+	// OEngine: the folding state is updated first, so the callback can store it.
+	if (!p_initializing && (!section_folding_changed_func || !section_folding_changed_func(this))) {
+		set_edited(true);
 	}
 }
 

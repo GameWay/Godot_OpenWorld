@@ -550,6 +550,11 @@ private:
 	static void _print_handler_impl(const String &p_string, bool p_error, bool p_rich);
 	static void _resource_saved(Ref<Resource> p_resource, const String &p_path);
 	static void _resource_loaded(Ref<Resource> p_resource, const String &p_path);
+	// OEngine: inspector folding of external resources is written to its .godot/editor cfg right away
+	// instead of marking the resource as edited.
+	static bool _section_folding_changed(Object *p_object);
+	void _save_pending_resource_folding();
+	HashSet<ObjectID> pending_resource_folding;
 
 	void _update_system_menu_icons(bool p_dark_mode);
 	void _update_theme(bool p_skip_creation = false);

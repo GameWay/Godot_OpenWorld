@@ -8102,6 +8102,33 @@ void EditorNode::_resource_loaded(Ref<Resource> p_resource, const String &p_path
 	singleton->editor_folding.load_resource_folding(p_resource, p_path);
 }
 
+bool EditorNode::_section_folding_changed(Object *p_object) {
+	Resource *res = Object::cast_to<Resource>(p_object);
+	if (!res || !singleton) {
+		return false;
+	}
+	// Built-in resources and scenes keep their folding in the scene's folding file, saved with the scene.
+	if (!res->get_path().is_resource_file() || Object::cast_to<PackedScene>(res)) {
+		return false;
+	}
+	// Deferred and batched: "Expand All" unfolds many sections of the same resource in one frame.
+	if (singleton->pending_resource_folding.is_empty()) {
+		callable_mp(singleton, &EditorNode::_save_pending_resource_folding).call_deferred();
+	}
+	singleton->pending_resource_folding.insert(res->get_instance_id());
+	return true;
+}
+
+void EditorNode::_save_pending_resource_folding() {
+	for (const ObjectID &id : pending_resource_folding) {
+		Ref<Resource> res = Object::cast_to<Resource>(ObjectDB::get_instance(id));
+		if (res.is_valid() && res->get_path().is_resource_file()) {
+			editor_folding.save_resource_folding(res, res->get_path());
+		}
+	}
+	pending_resource_folding.clear();
+}
+
 void EditorNode::_feature_profile_changed() {
 	Ref<EditorFeatureProfile> profile = feature_profile_manager->get_current_profile();
 	if (profile.is_valid()) {
@@ -9900,6 +9927,7 @@ EditorNode::EditorNode() {
 
 	ResourceSaver::set_save_callback(_resource_saved);
 	ResourceLoader::set_load_callback(_resource_loaded);
+	Object::section_folding_changed_func = _section_folding_changed;
 
 	// Apply setting presets in case the editor_settings file is missing values.
 	EditorSettingsDialog::update_3d_navigation_preset();
@@ -9992,6 +10020,7 @@ EditorNode::EditorNode() {
 }
 
 EditorNode::~EditorNode() {
+	Object::section_folding_changed_func = nullptr;
 	EditorInspector::cleanup_plugins();
 	EditorTranslationParser::get_singleton()->clean_parsers();
 	ResourceImporterScene::clean_up_importer_plugins();
