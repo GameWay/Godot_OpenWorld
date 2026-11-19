@@ -4895,7 +4895,13 @@ void EditorNode::_set_current_scene_nocheck(int p_idx, bool p_ignore_state) {
 		scene_root->add_child(new_scene, true);
 	}
 
-	if (editor_data.check_and_update_scene(p_idx)) {
+	// OEngine: when only instanced scenes changed on disk, replace just those instances
+	// (after the tab state is restored, below) instead of repacking the whole scene.
+	List<String> updated_instance_paths;
+	bool inherited_root_changed = false;
+	editor_data.get_updated_instance_paths(p_idx, updated_instance_paths, inherited_root_changed);
+	if (inherited_root_changed && editor_data.reload_scene_from_memory(p_idx, false)) {
+		updated_instance_paths.clear();
 		if (!editor_data.get_scene_path(p_idx).is_empty()) {
 			editor_folding.load_scene_folding(editor_data.get_edited_scene_root(p_idx), scene_path);
 		}
@@ -4909,6 +4915,13 @@ void EditorNode::_set_current_scene_nocheck(int p_idx, bool p_ignore_state) {
 
 	const Dictionary state = editor_data.restore_edited_scene_state(editor_selection, &editor_history);
 	_set_main_scene_state(state);
+
+	if (!updated_instance_paths.is_empty()) {
+		// Also updates the other open tabs, so they don't reload again when switched to.
+		reload_instances_of_scenes(updated_instance_paths);
+		SceneTreeDock::get_singleton()->get_tree_editor()->update_tree();
+	}
+
 	_update_undo_redo_allowed();
 	_update_unsaved_cache();
 

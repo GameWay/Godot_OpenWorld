@@ -147,6 +147,7 @@ private:
 	int last_created_scene = 1;
 
 	bool _find_updated_instances(Node *p_root, Node *p_node, HashSet<String> &checked_paths);
+	void _collect_updated_instances(Node *p_root, Node *p_node, HashSet<String> &r_checked, List<String> &r_paths, bool &r_root_changed);
 
 	HashMap<StringName, String> _script_class_icon_paths;
 	HashMap<String, StringName> _script_class_file_to_path;
@@ -223,6 +224,8 @@ public:
 	void set_edited_scene_live_edit_root(const NodePath &p_root);
 	NodePath get_edited_scene_live_edit_root();
 	bool check_and_update_scene(int p_idx);
+	// OEngine: paths of instanced scenes changed on disk; r_root_changed when the root's inherited scene changed.
+	void get_updated_instance_paths(int p_idx, List<String> &r_paths, bool &r_root_changed);
 	bool reload_scene_from_memory(int p_idx, bool p_mark_unsaved);
 	void move_scene_to_index(int p_idx, int p_to_idx);
 	void move_edited_scene_to_index(int p_idx);

@@ -771,6 +771,44 @@ bool EditorData::check_and_update_scene(int p_idx) {
 	return false;
 }
 
+void EditorData::_collect_updated_instances(Node *p_root, Node *p_node, HashSet<String> &r_checked, List<String> &r_paths, bool &r_root_changed) {
+	Ref<SceneState> ss;
+	if (p_node == p_root) {
+		ss = p_node->get_scene_inherited_state();
+	} else if (p_node->is_instance()) {
+		ss = p_node->get_scene_instance_state();
+	}
+
+	if (ss.is_valid()) {
+		const String path = ss->get_path();
+		if (!r_checked.has(path)) {
+			r_checked.insert(path);
+			if (FileAccess::get_modified_time(path) != ss->get_last_modified_time()) {
+				if (p_node == p_root) {
+					r_root_changed = true;
+				} else {
+					r_paths.push_back(path);
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < p_node->get_child_count(); i++) {
+		_collect_updated_instances(p_root, p_node->get_child(i), r_checked, r_paths, r_root_changed);
+	}
+}
+
+void EditorData::get_updated_instance_paths(int p_idx, List<String> &r_paths, bool &r_root_changed) {
+	r_root_changed = false;
+	ERR_FAIL_INDEX(p_idx, edited_scene.size());
+	Node *root = edited_scene[p_idx].root;
+	if (!root) {
+		return;
+	}
+	HashSet<String> checked;
+	_collect_updated_instances(root, root, checked, r_paths, r_root_changed);
+}
+
 bool EditorData::reload_scene_from_memory(int p_idx, bool p_mark_unsaved) {
 	ERR_FAIL_INDEX_V(p_idx, edited_scene.size(), false);
 	if (!edited_scene[p_idx].root) {
