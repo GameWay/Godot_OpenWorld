@@ -156,6 +156,8 @@ void OptionButton::_notification(int p_what) {
 					_set_internal_margin(SIDE_RIGHT, theme_cache.arrow_icon->get_width());
 				}
 			}
+			// OEngine: long lists scroll instead of filling the screen height.
+			popup->set_max_visible_items(MAX(0, theme_cache.popup_max_visible_items));
 			_refresh_size_cache();
 		} break;
 
@@ -675,6 +677,7 @@ void OptionButton::_bind_methods() {
 	BIND_THEME_ITEM_CUSTOM(Theme::DATA_TYPE_ICON, OptionButton, arrow_icon, "arrow");
 	BIND_THEME_ITEM(Theme::DATA_TYPE_CONSTANT, OptionButton, arrow_margin);
 	BIND_THEME_ITEM(Theme::DATA_TYPE_CONSTANT, OptionButton, modulate_arrow);
+	BIND_THEME_ITEM(Theme::DATA_TYPE_CONSTANT, OptionButton, popup_max_visible_items);
 
 	PopupMenu::Item defaults(true);
 

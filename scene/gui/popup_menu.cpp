@@ -268,7 +268,10 @@ Size2 PopupMenu::_get_contents_minimum_size() const {
 		}
 		body_max_w = MAX(body_max_w, body_w);
 
-		minsize.height += _get_item_height(i) + theme_cache.v_separation;
+		// OEngine: rows beyond max_visible_items are reached with the scroll bar.
+		if (max_visible_items <= 0 || i < max_visible_items) {
+			minsize.height += _get_item_height(i) + theme_cache.v_separation;
+		}
 	}
 
 	body_max_w = theme_cache.item_start_padding + body_max_w + accel_max_w + theme_cache.item_end_padding;
@@ -3422,6 +3425,19 @@ int PopupMenu::get_search_bar_min_item_count() const {
 	return search_bar_min_item_count;
 }
 
+void PopupMenu::set_max_visible_items(int p_count) {
+	ERR_FAIL_COND(p_count < 0);
+	if (max_visible_items == p_count) {
+		return;
+	}
+	max_visible_items = p_count;
+	_menu_changed();
+}
+
+int PopupMenu::get_max_visible_items() const {
+	return max_visible_items;
+}
+
 void PopupMenu::set_search_bar_fuzzy_search_enabled(bool p_enabled) {
 	search_bar_fuzzy_search_enabled = p_enabled;
 }
@@ -3629,6 +3645,8 @@ void PopupMenu::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_search_bar_enabled"), &PopupMenu::is_search_bar_enabled);
 	ClassDB::bind_method(D_METHOD("set_search_bar_min_item_count", "count"), &PopupMenu::set_search_bar_min_item_count);
 	ClassDB::bind_method(D_METHOD("get_search_bar_min_item_count"), &PopupMenu::get_search_bar_min_item_count);
+	ClassDB::bind_method(D_METHOD("set_max_visible_items", "count"), &PopupMenu::set_max_visible_items);
+	ClassDB::bind_method(D_METHOD("get_max_visible_items"), &PopupMenu::get_max_visible_items);
 	ClassDB::bind_method(D_METHOD("set_search_bar_fuzzy_search_enabled", "enabled"), &PopupMenu::set_search_bar_fuzzy_search_enabled);
 	ClassDB::bind_method(D_METHOD("is_search_bar_fuzzy_search_enabled"), &PopupMenu::is_search_bar_fuzzy_search_enabled);
 	ClassDB::bind_method(D_METHOD("set_search_bar_fuzzy_search_max_misses", "max_misses"), &PopupMenu::set_search_bar_fuzzy_search_max_misses);
@@ -3649,6 +3667,7 @@ void PopupMenu::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "prefer_native_menu"), "set_prefer_native_menu", "is_prefer_native_menu");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "shrink_height"), "set_shrink_height", "get_shrink_height");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "shrink_width"), "set_shrink_width", "get_shrink_width");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_visible_items", PROPERTY_HINT_RANGE, "0,100,1,or_greater"), "set_max_visible_items", "get_max_visible_items");
 
 	ADD_GROUP("Search Bar", "search_bar_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "search_bar_enabled", PROPERTY_HINT_GROUP_ENABLE), "set_search_bar_enabled", "is_search_bar_enabled");

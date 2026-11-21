@@ -992,6 +992,9 @@
 		<member name="interface/editor/appearance/editor_screen" type="int" setter="" getter="">
 			The preferred monitor to display the editor. If [b]Auto[/b], the editor will remember the last screen it was displayed on across multiple sessions.
 		</member>
+		<member name="interface/editor/appearance/dropdown_max_visible_items" type="int" setter="" getter="">
+			The maximum number of rows shown at once in dropdown lists ([OptionButton]), such as the animation list of the [AnimationPlayer] editor; the remaining rows are reached with the scroll bar. A value of [code]0[/code] limits the height only by the screen.
+		</member>
 		<member name="interface/editor/appearance/expand_to_title" type="bool" setter="" getter="">
 			Expanding main editor window content to the title, if supported by [DisplayServer]. See [constant DisplayServer.WINDOW_FLAG_EXTEND_TO_TITLE].
 			Specific to the macOS platform.

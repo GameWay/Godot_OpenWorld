@@ -300,6 +300,9 @@
 		<theme_item name="modulate_arrow" data_type="constant" type="int" default="0">
 			If different than [code]0[/code], the arrow icon will be modulated to the font color.
 		</theme_item>
+		<theme_item name="popup_max_visible_items" data_type="constant" type="int" default="20">
+			The maximum number of rows shown at once in the dropdown list; the remaining rows are reached with the scroll bar. [code]0[/code] limits the height only by the available screen space. Sets [member PopupMenu.max_visible_items] of the popup.
+		</theme_item>
 		<theme_item name="arrow" data_type="icon" type="Texture2D">
 			The arrow icon to be drawn on the right end of the button.
 		</theme_item>

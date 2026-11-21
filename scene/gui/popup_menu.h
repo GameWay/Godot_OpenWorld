@@ -190,6 +190,7 @@ class PopupMenu : public Popup {
 
 	bool search_bar_enabled = false;
 	int search_bar_min_item_count = 0;
+	int max_visible_items = 0; // OEngine: 0 = limited only by the screen.
 	bool search_bar_fuzzy_search_enabled = true;
 	int search_bar_fuzzy_search_max_misses = 2;
 	PanelContainer *panel = nullptr;
@@ -415,6 +416,9 @@ public:
 
 	void set_search_bar_min_item_count(int p_count);
 	int get_search_bar_min_item_count() const;
+
+	void set_max_visible_items(int p_count);
+	int get_max_visible_items() const;
 
 	void set_search_bar_fuzzy_search_enabled(bool p_enabled);
 	bool is_search_bar_fuzzy_search_enabled() const;

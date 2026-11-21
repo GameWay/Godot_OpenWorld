@@ -717,6 +717,10 @@
 			The text of the item at [code]index[/code].
 			[b]Note:[/b] [code]index[/code] is a value in the [code]0 .. item_count - 1[/code] range.
 		</member>
+		<member name="max_visible_items" type="int" setter="set_max_visible_items" getter="get_max_visible_items" default="0">
+			The maximum number of rows (items and separators) shown at once; the remaining rows are reached with the scroll bar. [code]0[/code] limits the height only by the available screen space.
+			[b]Note:[/b] The popup of an [OptionButton] takes this value from its [theme_item OptionButton.popup_max_visible_items] theme constant.
+		</member>
 		<member name="prefer_native_menu" type="bool" setter="set_prefer_native_menu" getter="is_prefer_native_menu" default="false">
 			If [code]true[/code], [MenuBar] will use native menu when supported.
 			[b]Note:[/b] If [PopupMenu] is linked to [StatusIndicator], [MenuBar], or another [PopupMenu] item it can use native menu regardless of this property, use [method is_native_menu] to check it.
