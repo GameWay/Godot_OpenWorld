@@ -53,6 +53,8 @@ class AnimationPlayerEditor : public EditorDock {
 	AnimationPlayer *player = nullptr; // For AnimationPlayerEditor, could be dummy.
 	ObjectID cached_root_node_id;
 	bool is_dummy = false;
+	// OEngine: AnimationTrees driven by the edited player, paused while the panel previews it.
+	LocalVector<ObjectID> paused_trees;
 
 	enum {
 		TOOL_NEW_ANIM,
@@ -243,6 +245,7 @@ class AnimationPlayerEditor : public EditorDock {
 	String _get_current() const;
 
 	void _ensure_dummy_player();
+	void _update_paused_trees();
 
 	~AnimationPlayerEditor();
 

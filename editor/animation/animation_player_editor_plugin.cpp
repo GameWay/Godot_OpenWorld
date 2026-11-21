@@ -88,6 +88,7 @@ void AnimationPlayerEditor::_node_removed(Node *p_node) {
 		}
 
 		player = nullptr;
+		_update_paused_trees();
 
 		set_process(false);
 
@@ -222,6 +223,12 @@ void AnimationPlayerEditor::_notification(int p_what) {
 		case NOTIFICATION_VISIBILITY_CHANGED: {
 			_find_player();
 			_ensure_dummy_player();
+			_update_paused_trees();
+			// OEngine: the player may have been selected while the panel was hidden, when seeking is
+			// skipped; show the selected animation's pose now.
+			if (is_visible_in_tree() && player) {
+				_animation_key_editor_seek(timeline_position);
+			}
 		} break;
 	}
 }
@@ -1233,6 +1240,38 @@ void AnimationPlayerEditor::_update_playback_tooltips() {
 	play_bw->set_tooltip_text(TTR("Play Animation Backwards from End") + " (" + ED_GET_SHORTCUT("animation_editor/play_animation_from_end")->get_as_text() + ")");
 }
 
+void AnimationPlayerEditor::_update_paused_trees() {
+	// OEngine: an active AnimationTree using this player re-poses the skeleton every frame, which hid
+	// the animation previewed here. Pause such trees like the dummy-player preview pauses its tree.
+	for (const ObjectID &id : paused_trees) {
+		AnimationTree *tree = ObjectDB::get_instance<AnimationTree>(id);
+		if (tree && !(is_dummy && tree == original_node)) {
+			tree->set_editing(false);
+		}
+	}
+	paused_trees.clear();
+
+	if (!player || is_dummy || !is_visible_in_tree() || !player->is_inside_tree()) {
+		return;
+	}
+	Node *scene_root = get_tree()->get_edited_scene_root();
+	if (!scene_root || !(scene_root == player || scene_root->is_ancestor_of(player))) {
+		return;
+	}
+	TypedArray<Node> trees = scene_root->find_children("", "AnimationTree", true, false);
+	for (int i = 0; i < trees.size(); i++) {
+		AnimationTree *tree = Object::cast_to<AnimationTree>(trees[i]);
+		if (!tree || tree->is_editing() || tree->get_animation_player().is_empty()) {
+			continue;
+		}
+		if (tree->get_node_or_null(tree->get_animation_player()) != player) {
+			continue;
+		}
+		tree->set_editing(true);
+		paused_trees.push_back(tree->get_instance_id());
+	}
+}
+
 void AnimationPlayerEditor::_ensure_dummy_player() {
 	bool dummy_exists = is_dummy && player && original_node;
 	if (dummy_exists) {
@@ -1288,6 +1327,8 @@ void AnimationPlayerEditor::edit(AnimationMixer *p_node, AnimationPlayer *p_play
 			tree->connect(SNAME("animation_player_changed"), callable_mp(this, &AnimationPlayerEditor::unpin));
 		}
 	}
+
+	_update_paused_trees();
 
 	if (player) {
 		if (!player->is_connected(SNAME("animation_list_changed"), callable_mp(this, &AnimationPlayerEditor::_animation_libraries_updated))) {
