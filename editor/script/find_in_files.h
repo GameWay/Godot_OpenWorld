@@ -48,6 +48,7 @@ class FindInFilesSearch : public Node {
 	bool whole_words = false;
 	bool match_case = false;
 	EditorLanguage::LookupResult symbol_rename;
+	bool symbol_usages = false; // OEngine: the symbol is searched for usages instead of being renamed.
 
 	// State.
 	HashSet<String> include_wildcards;
@@ -83,6 +84,7 @@ public:
 	void set_excludes(const String &p_exclude_wildcards);
 	void set_folder(const String &p_folder);
 	void set_symbol_rename(const EditorLanguage::LookupResult &p_symbol) { symbol_rename = p_symbol; }
+	void set_symbol_usages(bool p_usages) { symbol_usages = p_usages; }
 
 	String get_search_text() const { return pattern; }
 	bool get_whole_words() { return whole_words; }
@@ -95,7 +97,10 @@ public:
 
 	bool is_whole_words() const { return whole_words; }
 	bool is_match_case() const { return match_case; }
-	bool is_rename_mode() const { return !symbol_rename.script_path.is_empty(); }
+	// Symbol mode: the finder is bound to a resolved symbol and can't be altered (rename or usages).
+	bool is_symbol_mode() const { return !symbol_rename.script_path.is_empty(); }
+	bool is_rename_mode() const { return is_symbol_mode() && !symbol_usages; }
+	bool is_usages_mode() const { return is_symbol_mode() && symbol_usages; }
 
 	void start();
 	void stop();
@@ -104,6 +109,7 @@ public:
 	float get_progress() const;
 };
 
+class Label;
 class LineEdit;
 class CheckBox;
 class FileDialog;
@@ -165,6 +171,9 @@ class FindInFilesSearchPanel : public ScrollContainer {
 	LineEdit *excludes_line_edit = nullptr;
 
 	VBoxContainer *rename_view = nullptr;
+	Label *rename_label = nullptr;
+	Label *new_name_label = nullptr;
+	HBoxContainer *applydiscard_hb = nullptr;
 	LineEdit *renamed_symbol_name = nullptr;
 	LineEdit *rename_line_edit = nullptr;
 	Button *apply_rename = nullptr;
@@ -240,6 +249,7 @@ class FindInFilesResultsPanel : public MarginContainer {
 
 	String replace_text;
 	EditorLanguage::LookupResult symbol_rename;
+	bool symbol_usages = false;
 
 	MarginContainer *results_mc = nullptr;
 
@@ -275,6 +285,7 @@ public:
 	void set_with_replace(bool p_with_replace);
 	void set_replace_text(const String &p_text);
 	void set_symbol_rename(const EditorLanguage::LookupResult &p_symbol);
+	void set_symbol_usages(const EditorLanguage::LookupResult &p_symbol);
 	void set_search_labels_visibility(bool p_visible);
 
 	void start_search();
@@ -319,6 +330,7 @@ class FindInFilesContainer : public EditorDock {
 
 	void _update_current_title();
 	void _close_current_tab();
+	void _create_symbol_control(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup, bool p_usages);
 
 	void _result_selected(const String &p_fpath, int p_line_number, int p_begin, int p_end);
 	void _files_modified();
@@ -338,6 +350,7 @@ public:
 	FindInFilesSearchPanel *get_search_control() { return search_control; }
 	FindInFilesResultsPanel *create_new_panel();
 	void create_rename_control(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup);
+	void create_usages_control(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup);
 
 	FindInFilesContainer();
 };

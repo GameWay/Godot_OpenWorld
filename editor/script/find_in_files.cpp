@@ -110,6 +110,8 @@ void FindInFilesSearch::copy_from(const FindInFilesSearch *p_other) {
 	include_string = p_other->include_string;
 	exclude_string = p_other->exclude_string;
 	extension_filter = p_other->extension_filter;
+	symbol_rename = p_other->symbol_rename;
+	symbol_usages = p_other->symbol_usages;
 }
 
 void FindInFilesSearch::set_search_text(const String &p_pattern) {
@@ -422,8 +424,16 @@ void FindInFilesSearch::_bind_methods() {
 void FindInFilesSearchPanel::set_finder(FindInFilesSearch *p_finder, bool p_init) {
 	finder = p_finder;
 
-	default_view->set_visible(!p_finder->is_rename_mode());
-	rename_view->set_visible(p_finder->is_rename_mode());
+	default_view->set_visible(!p_finder->is_symbol_mode());
+	rename_view->set_visible(p_finder->is_symbol_mode());
+
+	// OEngine: the symbol view is shared by Rename Symbol and Find Usages; usages only show the symbol.
+	const bool usages = p_finder->is_usages_mode();
+	rename_label->set_text(usages ? TTRC("Find Usages") : TTRC("Rename Symbol"));
+	renamed_symbol_name->set_accessibility_name(usages ? TTRC("Symbol to Find") : TTRC("Symbol to Rename"));
+	new_name_label->set_visible(!usages);
+	rename_line_edit->set_visible(!usages);
+	applydiscard_hb->set_visible(!usages);
 
 	search_text_line_edit->set_text(finder->get_search_text());
 	renamed_symbol_name->set_text(finder->get_search_text());
@@ -553,8 +563,8 @@ void FindInFilesSearchPanel::_on_search_modified() {
 }
 
 void FindInFilesSearchPanel::_update_finder() {
-	if (finder->is_rename_mode()) {
-		// The finder in rename mode can't be altered, so copying these settings is pointless.
+	if (finder->is_symbol_mode()) {
+		// The finder in rename or usages mode can't be altered, so copying these settings is pointless.
 		return;
 	}
 	finder->set_search_text(search_text_line_edit->get_text());
@@ -792,7 +802,7 @@ FindInFilesSearchPanel::FindInFilesSearchPanel() {
 	add_child(rename_view);
 
 	{
-		Label *rename_label = memnew(Label);
+		rename_label = memnew(Label);
 		rename_label->set_text(TTRC("Rename Symbol"));
 		rename_view->add_child(rename_label);
 
@@ -801,7 +811,7 @@ FindInFilesSearchPanel::FindInFilesSearchPanel() {
 		renamed_symbol_name->set_editable(false);
 		rename_view->add_child(renamed_symbol_name);
 
-		Label *new_name_label = memnew(Label);
+		new_name_label = memnew(Label);
 		new_name_label->set_text(TTRC("New Name"));
 		rename_view->add_child(new_name_label);
 
@@ -810,7 +820,7 @@ FindInFilesSearchPanel::FindInFilesSearchPanel() {
 		rename_view->add_child(rename_line_edit);
 		rename_line_edit->connect(SceneStringName(text_submitted), callable_mp(this, &FindInFilesSearchPanel::_on_rename_apply).bind(false).unbind(1));
 
-		HBoxContainer *applydiscard_hb = memnew(HBoxContainer);
+		applydiscard_hb = memnew(HBoxContainer);
 		applydiscard_hb->set_alignment(BoxContainer::ALIGNMENT_CENTER);
 		rename_view->add_child(applydiscard_hb);
 
@@ -855,7 +865,14 @@ void FindInFilesResultsPanel::set_replace_text(const String &p_text) {
 
 void FindInFilesResultsPanel::set_symbol_rename(const EditorLanguage::LookupResult &p_symbol) {
 	symbol_rename = p_symbol;
+	symbol_usages = false;
 	set_with_replace(true);
+}
+
+void FindInFilesResultsPanel::set_symbol_usages(const EditorLanguage::LookupResult &p_symbol) {
+	symbol_rename = p_symbol;
+	symbol_usages = true;
+	set_with_replace(false);
 }
 
 void FindInFilesResultsPanel::set_search_labels_visibility(bool p_visible) {
@@ -934,6 +951,14 @@ void FindInFilesResultsPanel::update_layout(EditorDock::DockLayout p_layout, int
 }
 
 void FindInFilesContainer::create_rename_control(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup) {
+	_create_symbol_control(p_symbol, p_lookup, false);
+}
+
+void FindInFilesContainer::create_usages_control(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup) {
+	_create_symbol_control(p_symbol, p_lookup, true);
+}
+
+void FindInFilesContainer::_create_symbol_control(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup, bool p_usages) {
 	FindInFilesResultsPanel *new_panel = memnew(FindInFilesResultsPanel);
 	tabs->add_child(new_panel);
 	tabs->set_current_tab(tabs->get_tab_count() - 1);
@@ -955,17 +980,24 @@ void FindInFilesContainer::create_rename_control(const String &p_symbol, const E
 	finder->set_whole_words(true);
 	finder->set_filter(exts);
 	finder->set_symbol_rename(p_lookup);
+	finder->set_symbol_usages(p_usages);
 
 	search_control->set_block_signals(true); // Prevent premature search.
 	search_control->set_finder(finder, false);
 	search_control->set_search_text(p_symbol);
-	search_control->set_replace(true);
-	search_control->set_replace_text(p_symbol);
+	if (!p_usages) {
+		search_control->set_replace(true);
+		search_control->set_replace_text(p_symbol);
+	}
 	search_control->set_block_signals(false);
 
 	_update_current_title();
 
-	new_panel->set_symbol_rename(p_lookup);
+	if (p_usages) {
+		new_panel->set_symbol_usages(p_lookup);
+	} else {
+		new_panel->set_symbol_rename(p_lookup);
+	}
 	new_panel->start_search();
 }
 
@@ -1004,7 +1036,43 @@ void FindInFilesResultsPanel::_notification(int p_what) {
 	}
 }
 
+// Checks that a text match resolves to the same symbol (shared by Rename Symbol and Find Usages).
+static bool _is_symbol_occurrence(const EditorLanguage::LookupResult &p_symbol, const String &p_fpath, int p_line_number, int p_begin, int p_end) {
+	const Ref<Script> source_script = ResourceLoader::load(p_fpath);
+	if (source_script.is_null()) {
+		ERR_PRINT(vformat("Failed to load Script at \"%s\".", p_fpath));
+		return false;
+	}
+
+	PackedStringArray lines = source_script->get_source_code().split("\n");
+	if (p_line_number < 1 || p_line_number > lines.size()) {
+		return false;
+	}
+	const String current_line = lines[p_line_number - 1];
+	lines.write[p_line_number - 1] = current_line.insert(p_begin, String::chr(0xFFFF));
+
+	EditorLanguage::LookupResult result;
+	Error err = source_script->get_language()->get_editor_language()->lookup_code_for_rename(String("\n").join(lines), current_line.substr(p_begin, p_end - p_begin), source_script->get_path(), result);
+	if (err != OK) {
+		return false;
+	}
+	return result.type == p_symbol.type &&
+			result.class_name == p_symbol.class_name &&
+			result.class_member == p_symbol.class_member &&
+			result.doc_type == p_symbol.doc_type &&
+			result.enumeration == p_symbol.enumeration &&
+			result.is_bitfield == p_symbol.is_bitfield &&
+			result.value == p_symbol.value &&
+			result.script_path == p_symbol.script_path &&
+			result.location == p_symbol.location;
+}
+
 void FindInFilesResultsPanel::_on_result_found(const String &p_fpath, int p_line_number, int p_begin, int p_end, const String &p_text) {
+	// OEngine: Find Usages lists only the matches that resolve to the searched symbol.
+	if (symbol_usages && !_is_symbol_occurrence(symbol_rename, p_fpath, p_line_number, p_begin, p_end)) {
+		return;
+	}
+
 	TreeItem *file_item;
 	Ref<Texture2D> remove_texture = get_editor_theme_icon(SNAME("Close"));
 	Ref<Texture2D> replace_texture = get_editor_theme_icon(SNAME("ReplaceText"));
@@ -1064,32 +1132,9 @@ void FindInFilesResultsPanel::_on_result_found(const String &p_fpath, int p_line
 	if (with_replace) {
 		_update_replace_item(item, r);
 
-		bool check_item = false;
+		bool check_item = true;
 		if (!symbol_rename.script_path.is_empty()) {
-			const Ref<Script> source_script = ResourceLoader::load(p_fpath);
-			if (source_script.is_valid()) {
-				PackedStringArray lines = source_script->get_source_code().split("\n");
-				const String current_line = lines[p_line_number - 1];
-				lines.write[p_line_number - 1] = current_line.insert(p_begin, String::chr(0xFFFF));
-
-				EditorLanguage::LookupResult result;
-				Error err = source_script->get_language()->get_editor_language()->lookup_code_for_rename(String("\n").join(lines), current_line.substr(p_begin, p_end - p_begin), source_script->get_path(), result);
-				if (err == OK) {
-					check_item = result.type == symbol_rename.type &&
-							result.class_name == symbol_rename.class_name &&
-							result.class_member == symbol_rename.class_member &&
-							result.doc_type == symbol_rename.doc_type &&
-							result.enumeration == symbol_rename.enumeration &&
-							result.is_bitfield == symbol_rename.is_bitfield &&
-							result.value == symbol_rename.value &&
-							result.script_path == symbol_rename.script_path &&
-							result.location == symbol_rename.location;
-				}
-			} else {
-				ERR_PRINT(vformat("Failed to load Script at \"%s\".", p_fpath));
-			}
-		} else {
-			check_item = true;
+			check_item = _is_symbol_occurrence(symbol_rename, p_fpath, p_line_number, p_begin, p_end);
 		}
 		item->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
 		item->set_checked(0, check_item);
@@ -1491,7 +1536,7 @@ FindInFilesResultsPanel::FindInFilesResultsPanel() {
 FindInFilesResultsPanel *FindInFilesContainer::create_new_panel() {
 	int index = tabs->get_current_tab();
 	FindInFilesResultsPanel *old_panel = Object::cast_to<FindInFilesResultsPanel>(tabs->get_current_tab_control());
-	bool copy_old_panel = old_panel && !old_panel->get_finder()->is_rename_mode();
+	bool copy_old_panel = old_panel && !old_panel->get_finder()->is_symbol_mode();
 
 	FindInFilesResultsPanel *new_panel = memnew(FindInFilesResultsPanel);
 	tabs->add_child(new_panel);
@@ -1520,6 +1565,8 @@ void FindInFilesContainer::_update_current_title() {
 	FindInFilesResultsPanel *panel = Object::cast_to<FindInFilesResultsPanel>(tabs->get_current_tab_control());
 	if (panel->get_finder()->is_rename_mode()) {
 		tabs->set_tab_title(tabs->get_current_tab(), vformat(TTR("Rename: %s"), search_control->get_search_text()));
+	} else if (panel->get_finder()->is_usages_mode()) {
+		tabs->set_tab_title(tabs->get_current_tab(), vformat(TTR("Usages: %s"), search_control->get_search_text()));
 	} else {
 		tabs->set_tab_title(tabs->get_current_tab(), vformat(TTR("Find: %s"), search_control->get_search_text()));
 	}
@@ -1634,7 +1681,7 @@ void FindInFilesContainer::_update_bar_visibility() {
 	for (int i = 0; i < tabs->get_tab_count(); i++) {
 		FindInFilesResultsPanel *panel = Object::cast_to<FindInFilesResultsPanel>(tabs->get_tab_control(i));
 		if (panel) {
-			panel->set_search_labels_visibility(!bar_visible && !panel->get_finder()->is_rename_mode());
+			panel->set_search_labels_visibility(!bar_visible && !panel->get_finder()->is_symbol_mode());
 			panel->get_new_tab_button()->set_visible(!bar_visible);
 		}
 	}

@@ -3747,6 +3747,11 @@ void ScriptEditor::rename_symbol(const String &p_symbol, const EditorLanguage::L
 	callable_mp(name_edit, &LineEdit::select_all).call_deferred();
 }
 
+void ScriptEditor::find_symbol_usages(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup) {
+	FindInFiles::get_singleton()->get_container()->create_usages_control(p_symbol, p_lookup);
+	EditorDockManager::get_singleton()->focus_dock(FindInFiles::get_singleton()->get_container());
+}
+
 void DocumentEditorContainer::_update_selected_editor_menu() {
 	for (ScriptEditorBase::EditMenusBase *editor_menu : editor_menus) {
 		editor_menu->set_visible(editor_menu->handles(_get_current_editor()));

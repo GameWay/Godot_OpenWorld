@@ -574,6 +574,7 @@ public:
 	void clear_docs_from_script(const Ref<Script> &p_script) { script_container->clear_docs_from_script(p_script); }
 	void update_docs_from_script(const Ref<Script> &p_script) { script_container->update_docs_from_script(p_script); }
 	void rename_symbol(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup);
+	void find_symbol_usages(const String &p_symbol, const EditorLanguage::LookupResult &p_lookup);
 
 	void trigger_live_script_reload(const String &p_script_path) { script_container->trigger_live_script_reload(p_script_path); }
 

@@ -1715,6 +1715,9 @@ bool GDScriptParser::parse_function_signature(FunctionNode *p_function, SuiteNod
 				is_rest = true;
 			}
 
+			// OEngine: lookup on a parameter name (rename, find usages). Overridden below with the body suite.
+			make_completion_context(COMPLETION_DECLARATION, p_body);
+
 			ParameterNode *parameter = parse_parameter();
 			if (parameter == nullptr) {
 				break;
@@ -1749,6 +1752,14 @@ bool GDScriptParser::parse_function_signature(FunctionNode *p_function, SuiteNod
 				p_body->add_local(parameter, current_function);
 			}
 		} while (match(GDScriptTokenizer::Token::COMMA));
+
+#ifdef TOOLS_ENABLED
+		// Temporarily change the `current_suite` context and recreate the completion context, so that lookup on a parameter uses the body suite where parameters are declared as locals.
+		SuiteNode *previous_suite = current_suite;
+		current_suite = p_body;
+		override_completion_context(p_body, COMPLETION_DECLARATION, p_body);
+		current_suite = previous_suite;
+#endif
 	}
 
 	pop_multiline();

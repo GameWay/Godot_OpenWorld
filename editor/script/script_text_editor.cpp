@@ -1692,6 +1692,12 @@ void ScriptTextEditor::shortcut_input(const Ref<InputEvent> &p_event) {
 		return;
 	}
 
+	if (ED_IS_SHORTCUT("script_text_editor/find_usages", p_event)) {
+		_edit_option(FIND_USAGES);
+		accept_event();
+		return;
+	}
+
 	const Callable custom_callback = EditorContextMenuPluginManager::get_singleton()->match_custom_shortcut(EditorContextMenuPlugin::CONTEXT_SLOT_SCRIPT_EDITOR_CODE, p_event);
 	if (custom_callback.is_valid()) {
 #ifndef DISABLE_DEPRECATED
@@ -1877,7 +1883,8 @@ bool ScriptTextEditor::_edit_option(int p_op) {
 				_lookup_symbol(text, tx->get_caret_line(0), tx->get_caret_column(0));
 			}
 		} break;
-		case RENAME_SYMBOL: {
+		case RENAME_SYMBOL:
+		case FIND_USAGES: {
 			String text = tx->get_word_under_caret(0);
 			if (text.is_empty()) {
 				text = tx->get_selected_text(0);
@@ -1894,10 +1901,14 @@ bool ScriptTextEditor::_edit_option(int p_op) {
 			}
 
 			if (result.script_path.is_empty()) {
-				// Don't allow renaming native symbols.
+				// Don't allow renaming native symbols (Find Usages shares the same limitation).
 				break;
 			}
-			ScriptEditor::get_singleton()->rename_symbol(text, result);
+			if (p_op == FIND_USAGES) {
+				ScriptEditor::get_singleton()->find_symbol_usages(text, result);
+			} else {
+				ScriptEditor::get_singleton()->rename_symbol(text, result);
+			}
 		} break;
 
 		default: {
@@ -2589,6 +2600,7 @@ void ScriptTextEditor::_make_ste_context_menu(bool p_selection, bool p_color, bo
 			context_menu->add_shortcut(ED_GET_SHORTCUT("script_text_editor/goto_symbol"), LOOKUP_SYMBOL);
 		}
 		if (p_allow_rename) {
+			context_menu->add_shortcut(ED_GET_SHORTCUT("script_text_editor/find_usages"), FIND_USAGES);
 			context_menu->add_shortcut(ED_GET_SHORTCUT("script_text_editor/rename_symbol"), RENAME_SYMBOL);
 			context_menu->set_item_text(-1, TTR("Rename Symbol (Experimental)"));
 		}
@@ -2675,6 +2687,7 @@ void ScriptTextEditor::register_editor() {
 	ED_SHORTCUT_OVERRIDE("script_text_editor/goto_line", "macos", KeyModifierMask::CMD_OR_CTRL | Key::L);
 	ED_SHORTCUT("script_text_editor/goto_symbol", TTRC("Lookup Symbol"));
 	ED_SHORTCUT("script_text_editor/rename_symbol", TTRC("Rename Symbol"), Key::F2);
+	ED_SHORTCUT("script_text_editor/find_usages", TTRC("Find Usages"), KeyModifierMask::ALT | Key::F7);
 
 	ED_SHORTCUT("script_text_editor/toggle_breakpoint", TTRC("Toggle Breakpoint"), Key::F9);
 	ED_SHORTCUT_OVERRIDE("script_text_editor/toggle_breakpoint", "macos", KeyModifierMask::META | KeyModifierMask::SHIFT | Key::B);

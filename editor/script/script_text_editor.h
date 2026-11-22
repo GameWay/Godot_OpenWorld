@@ -111,6 +111,7 @@ class ScriptTextEditor : public CodeEditorBase {
 		HELP_CONTEXTUAL,
 		LOOKUP_SYMBOL,
 		RENAME_SYMBOL,
+		FIND_USAGES,
 	};
 
 	class EditMenusScTE : public EditMenusCEB {
