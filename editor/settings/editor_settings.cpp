@@ -266,6 +266,7 @@ void EditorSettings::_initial_set(const StringName &p_name, const Variant &p_val
 	props[p_name].initial = p_value;
 	props[p_name].has_default_value = true;
 	props[p_name].basic = p_basic;
+	props[p_name].used = true;
 }
 
 struct _EVCSort {
@@ -275,6 +276,7 @@ struct _EVCSort {
 	bool basic = false;
 	bool save = false;
 	bool restart_if_changed = false;
+	bool unused = false;
 
 	bool operator<(const _EVCSort &p_vcs) const { return order < p_vcs.order; }
 };
@@ -283,6 +285,15 @@ void EditorSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 	_THREAD_SAFE_METHOD_
 
 	RBSet<_EVCSort> vclist;
+
+	// Sections that have settings in use. An unused setting inside such a section is still shown,
+	// since engine settings may be declared lazily (the first time a tool needs them).
+	HashSet<String> used_sections;
+	for (const KeyValue<String, VariantContainer> &E : props) {
+		if (E.value.used || hints.has(E.key)) {
+			used_sections.insert(E.key.get_base_dir());
+		}
+	}
 
 	for (const KeyValue<String, VariantContainer> &E : props) {
 		const VariantContainer *v = &E.value;
@@ -293,6 +304,7 @@ void EditorSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 
 		_EVCSort vc;
 		vc.name = E.key;
+		vc.unused = !v->used && !hints.has(E.key) && !used_sections.has(E.key.get_base_dir());
 		vc.order = v->order;
 		vc.type = v->variant.get_type();
 		vc.basic = v->basic;
@@ -313,7 +325,10 @@ void EditorSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 			pusage |= PROPERTY_USAGE_STORAGE;
 		}
 
-		if (!E.name.begins_with("_") && !E.name.begins_with("projects/")) {
+		if (E.unused) {
+			// Not shown, but kept in the file for the projects that use it.
+			pusage |= PROPERTY_USAGE_STORAGE;
+		} else if (!E.name.begins_with("_") && !E.name.begins_with("projects/")) {
 			pusage |= PROPERTY_USAGE_EDITOR;
 		} else {
 			pusage |= PROPERTY_USAGE_STORAGE; //hiddens must always be saved
@@ -1636,13 +1651,22 @@ void EditorSettings::set_optimize_save(bool p_optimize) {
 
 // Properties
 
+void EditorSettings::_mark_used(const String &p_setting) const {
+	const VariantContainer *v = props.getptr(p_setting);
+	if (v) {
+		v->used = true;
+	}
+}
+
 void EditorSettings::set_setting(const String &p_setting, const Variant &p_value) {
 	_THREAD_SAFE_METHOD_
 	set(p_setting, p_value);
+	_mark_used(p_setting);
 }
 
 Variant EditorSettings::get_setting(const String &p_setting) const {
 	_THREAD_SAFE_METHOD_
+	_mark_used(p_setting);
 	if (ProjectSettings::get_singleton()->has_editor_setting_override(p_setting)) {
 		return ProjectSettings::get_singleton()->get_editor_setting_override(p_setting);
 	}
@@ -1651,6 +1675,7 @@ Variant EditorSettings::get_setting(const String &p_setting) const {
 
 bool EditorSettings::has_setting(const String &p_setting) const {
 	_THREAD_SAFE_METHOD_
+	_mark_used(p_setting);
 
 #ifndef DISABLE_DEPRECATED
 	return props.has(p_setting) || compat_map.has(p_setting);
@@ -1679,6 +1704,7 @@ void EditorSettings::set_restart_if_changed(const StringName &p_setting, bool p_
 		return;
 	}
 	props[p_setting].restart_if_changed = p_restart;
+	props[p_setting].used = true;
 }
 
 void EditorSettings::set_basic(const StringName &p_setting, bool p_basic) {
@@ -1698,6 +1724,7 @@ void EditorSettings::set_initial_value(const StringName &p_setting, const Varian
 	}
 	props[p_setting].initial = p_value;
 	props[p_setting].has_default_value = true;
+	props[p_setting].used = true;
 	if (p_update_current) {
 		set(p_setting, p_value);
 	}

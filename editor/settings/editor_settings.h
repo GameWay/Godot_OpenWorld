@@ -78,6 +78,9 @@ private:
 		bool hide_from_editor = false;
 		bool save = false;
 		bool restart_if_changed = false;
+		// Declared or accessed by code in this session (engine or an enabled plugin).
+		// Settings only loaded from the file, e.g. of plugins missing or disabled in this project, are not shown in the editor.
+		mutable bool used = false;
 
 		VariantContainer() {}
 
@@ -110,6 +113,7 @@ private:
 	bool optimize_save = true; //do not save stuff that came from config but was not set from engine
 	bool initialized = false;
 
+	void _mark_used(const String &p_setting) const;
 	bool _set(const StringName &p_name, const Variant &p_value);
 	bool _set_only(const StringName &p_name, const Variant &p_value);
 	bool _get(const StringName &p_name, Variant &r_ret) const;
