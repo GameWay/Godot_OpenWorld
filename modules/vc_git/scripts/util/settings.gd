@@ -28,6 +28,8 @@ const EDITOR_KEYS := {
 	"local_history_minutes": "local_history/interval_minutes",
 	"local_history_days": "local_history/keep_days",
 	"local_history_max_mb": "local_history/max_file_size_mb",
+	"changed_lines_markers": "editor/changed_lines_markers",
+	"highlight_changed_characters": "editor/highlight_changed_characters",
 	"show_blame": "editor/show_blame",
 	"toolbar_branch": "editor/toolbar_file_status",
 	"inspector_changes": "editor/inspector_changes",

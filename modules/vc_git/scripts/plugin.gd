@@ -440,6 +440,8 @@ func _on_setting_changed(key: String) -> void:
 			_apply_auto_save_setting()
 		BLAME_SETTING_KEY:
 			blame_gutter.set_enabled(Settings.get_value(BLAME_SETTING_KEY, false))
+		DiffGutterScript.MARKERS_SETTING_KEY, DiffGutterScript.HIGHLIGHT_SETTING_KEY:
+			diff_gutter.apply_settings()
 		VcGitDockScript.AUTO_FETCH_SETTING_KEY, VcGitDockScript.AUTO_FETCH_MINUTES_KEY:
 			dock_instance.apply_auto_fetch_setting()
 		INSPECTOR_SETTING_KEY:

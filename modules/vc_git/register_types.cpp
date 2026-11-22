@@ -90,6 +90,8 @@ static void _vc_git_register_settings() {
 	_vc_git_def("local_history/keep_days", 7, PROPERTY_HINT_RANGE, "1,365,1,suffix:days");
 	_vc_git_def("local_history/max_file_size_mb", 5, PROPERTY_HINT_RANGE, "1,1024,1,suffix:MB");
 
+	_vc_git_def("editor/changed_lines_markers", true);
+	_vc_git_def("editor/highlight_changed_characters", false);
 	_vc_git_def("editor/show_blame", false);
 	_vc_git_def("editor/toolbar_file_status", true);
 	_vc_git_def("editor/inspector_changes", true);

@@ -13,6 +13,10 @@ const PollTimer := preload("../../util/poll_timer.gd")
 const EditorOpen := preload("../../util/editor_open.gd")
 const DiffViewScript := preload("../widgets/diff_view.gd")
 const GutterPainter := preload("gutter_painter.gd")
+const Settings := preload("../../util/settings.gd")
+
+const MARKERS_SETTING_KEY := "changed_lines_markers"
+const HIGHLIGHT_SETTING_KEY := "highlight_changed_characters"
 
 const GUTTER_NAME := "vc_git_diff"
 const GUTTER_WIDTH := 14
@@ -43,10 +47,15 @@ var _edit_timer: Timer
 var _edited: Array[CodeEdit] = []
 ## [previous, next] change Shortcuts (set by plugin.gd), named in the preview's arrow tooltips.
 var navigate_shortcuts: Array = []
+## Editor Settings: the bars in the gutter, and the background behind changed characters.
+var _show_markers := true
+var _highlight_characters := false
 
 
 func enable(_plugin: EditorPlugin) -> void:
 	_script_editor = EditorInterface.get_script_editor()
+	_show_markers = Settings.get_value(MARKERS_SETTING_KEY, true)
+	_highlight_characters = Settings.get_value(HIGHLIGHT_SETTING_KEY, false)
 
 	_refresh_timer = PollTimer.new(REFRESH_INTERVAL)
 	_refresh_timer.poll.connect(_refresh_current)
@@ -80,6 +89,16 @@ func disable() -> void:
 		code_edit.queue_redraw()
 	_connections.clear()
 	_edited.clear()
+
+
+## Re-reads the markers and highlight settings and redraws every open tab with them.
+func apply_settings() -> void:
+	_show_markers = Settings.get_value(MARKERS_SETTING_KEY, true)
+	_highlight_characters = Settings.get_value(HIGHLIGHT_SETTING_KEY, false)
+	for connection in _connections:
+		var code_edit: CodeEdit = connection[0]
+		if is_instance_valid(code_edit) and code_edit.has_meta(META_RES_PATH):
+			refresh_code_edit(code_edit, code_edit.get_meta(META_RES_PATH), true)
 
 
 ## The script editor's current CodeEdit, or null.
@@ -142,7 +161,7 @@ func refresh_code_edit(code_edit: CodeEdit, res_path: String, force := false) ->
 	var regions: Array = [] if head_text == null else DiffHunks.parse_regions(repo.diff_texts(_normalized(head_text), text))
 	code_edit.set_meta(META_REGIONS, regions)
 	code_edit.set_meta(META_FLAGS, _flags_for(regions))
-	code_edit.set_meta(META_INLINE, _inline_for(regions, text.split("\n")))
+	code_edit.set_meta(META_INLINE, _inline_for(regions, text.split("\n")) if _highlight_characters else {})
 	code_edit.remove_meta(META_INLINE_RECTS)
 	code_edit.queue_redraw()
 
@@ -305,12 +324,18 @@ func _install_gutter(code_edit: CodeEdit) -> void:
 		code_edit.set_gutter_name(insert_at, GUTTER_NAME)
 		code_edit.set_gutter_type(insert_at, TextEdit.GUTTER_TYPE_CUSTOM)
 		code_edit.set_meta(META_FLAGS, {})
-	code_edit.set_gutter_width(insert_at, int(GUTTER_WIDTH * EditorInterface.get_editor_scale()))
+	# Collapsed while the markers are off (the flags are still computed, for change navigation and the script menu);
+	# 1 px rather than 0 while characters are highlighted, since TextEdit skips drawing a zero-width gutter and the highlight is drawn from it.
+	var width := int(GUTTER_WIDTH * EditorInterface.get_editor_scale()) if _show_markers else (1 if _highlight_characters else 0)
+	code_edit.set_gutter_width(insert_at, width)
 
-	_move_background(code_edit)
+	if _highlight_characters:
+		_move_background(code_edit)
+	else:
+		_restore_background(code_edit)
 	# Re-bound on every refresh, not just on first install — the gutter lives on the engine-owned CodeEdit and survives a plugin reload, but a reload replaces this whole Node, which would otherwise leave the callback pointing at a freed instance for any tab left open across it.
 	code_edit.set_gutter_custom_draw(insert_at, GutterPainter.draw_diff.bind(code_edit))
-	code_edit.set_gutter_clickable(insert_at, true)
+	code_edit.set_gutter_clickable(insert_at, _show_markers)
 	if not _connections.any(func(connection: Array) -> bool: return connection[0] == code_edit):
 		var on_click := _on_gutter_clicked.bind(code_edit)
 		code_edit.gutter_clicked.connect(on_click)

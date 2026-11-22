@@ -1907,6 +1907,12 @@
 		<member name="version_control/vc_git/diff/syntax_highlighting" type="bool" setter="" getter="">
 			Code in diffs is colored like in the script editor.
 		</member>
+		<member name="version_control/vc_git/editor/changed_lines_markers" type="bool" setter="" getter="">
+			Bars next to the line numbers in the script editor on lines changed since the last commit; click one to see the old lines.
+		</member>
+		<member name="version_control/vc_git/editor/highlight_changed_characters" type="bool" setter="" getter="">
+			The changed characters of modified lines get a background in the script editor.
+		</member>
 		<member name="version_control/vc_git/editor/inspector_changes" type="bool" setter="" getter="">
 			A "Last commit" row with Revert under properties changed since the last commit in the Inspector, and added or changed nodes colored in the Scene dock.
 		</member>

@@ -25,6 +25,8 @@ static func draw_diff(line: int, _gutter: int, region: Rect2, code_edit: CodeEdi
 		for rect: Rect2 in code_edit.get_meta(META_INLINE_RECTS, {}).get(line, []):
 			code_edit.draw_rect(Rect2(rect.position.x - code_edit.get_h_scroll(), region.position.y + rect.position.y, rect.size.x, rect.size.y), INLINE_COLOR)
 
+	if region.size.x <= 1.0: # collapsed while the markers are off
+		return
 	var bar := Vector2(maxf(4.0, region.size.x * 0.3), region.size.y - 2)
 	var edge := maxf(3.0, region.size.y * 0.15)
 	match flags[line + 1]["type"]:
