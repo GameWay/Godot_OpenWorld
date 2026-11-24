@@ -35,6 +35,7 @@
 #include "scene/resources/text_line.h"
 
 class Timer;
+class Button;
 
 class TabBar : public Control {
 	GDCLASS(TabBar, Control);
@@ -116,6 +117,7 @@ private:
 	int highlight_arrow = -1;
 	bool buttons_visible = false;
 	bool missing_right = false;
+	Button *overflow_button = nullptr;
 	Vector<Tab> tabs;
 	int current = -1;
 	int previous = -1;
@@ -213,6 +215,9 @@ private:
 	int get_tab_width(int p_idx) const;
 	Size2 _get_tab_icon_size(int p_idx) const;
 	void _ensure_no_over_offset();
+	int _get_buttons_width() const;
+	void _update_overflow_button();
+	void _overflow_button_minimum_size_changed();
 	bool _can_deselect() const;
 
 	void _update_hover();
@@ -335,6 +340,9 @@ public:
 	void set_tab_offset(int p_offset);
 	int get_tab_offset() const;
 	bool get_offset_buttons_visible() const;
+	// Takes ownership of an editor-supplied button that replaces the scroll arrows.
+	void set_overflow_button(Button *p_button);
+	bool is_tab_visible_in_bar(int p_tab) const;
 
 	void remove_tab(int p_idx);
 

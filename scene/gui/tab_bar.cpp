@@ -34,6 +34,7 @@
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
 #include "scene/gui/box_container.h"
+#include "scene/gui/button.h"
 #include "scene/gui/label.h"
 #include "scene/gui/texture_rect.h"
 #include "scene/main/timer.h"
@@ -51,7 +52,7 @@ Size2 TabBar::get_minimum_size() const {
 	Size2 ms;
 	Size2 combined_max = get_combined_maximum_size();
 
-	int buttons_size = get_tab_count() > 1 ? theme_cache.decrement_icon->get_width() + theme_cache.increment_icon->get_width() : 0;
+	int buttons_size = get_tab_count() > 1 ? _get_buttons_width() : 0;
 
 	if (tabs.is_empty()) {
 		return ms;
@@ -143,6 +144,9 @@ Size2 TabBar::get_minimum_size() const {
 }
 
 bool TabBar::_handle_scroll_button(const Point2 &p_pos) {
+	if (overflow_button) {
+		return overflow_button->get_rect().has_point(p_pos);
+	}
 	if (is_layout_rtl()) {
 		if (p_pos.x < theme_cache.decrement_icon->get_width()) {
 			if (missing_right) {
@@ -166,7 +170,7 @@ bool TabBar::_handle_scroll_button(const Point2 &p_pos) {
 			return true;
 		}
 	} else {
-		int limit = get_size().width - theme_cache.increment_icon->get_width() - theme_cache.decrement_icon->get_width();
+		int limit = get_size().width - _get_buttons_width();
 		if (p_pos.x > limit + theme_cache.decrement_icon->get_width()) {
 			if (missing_right) {
 				offset++;
@@ -193,6 +197,9 @@ bool TabBar::_handle_scroll_button(const Point2 &p_pos) {
 }
 
 void TabBar::_update_scroll_button_highlight(const Point2 &p_pos) {
+	if (overflow_button) {
+		return;
+	}
 	if (is_layout_rtl()) {
 		if (p_pos.x < theme_cache.decrement_icon->get_width()) {
 			if (highlight_arrow != 1) {
@@ -209,7 +216,7 @@ void TabBar::_update_scroll_button_highlight(const Point2 &p_pos) {
 			queue_redraw();
 		}
 	} else {
-		int limit_minus_buttons = get_size().width - theme_cache.increment_icon->get_width() - theme_cache.decrement_icon->get_width();
+		int limit_minus_buttons = get_size().width - _get_buttons_width();
 		if (p_pos.x > limit_minus_buttons + theme_cache.decrement_icon->get_width()) {
 			if (highlight_arrow != 1) {
 				highlight_arrow = 1;
@@ -715,6 +722,7 @@ void TabBar::_notification(int p_what) {
 		} break;
 
 		case NOTIFICATION_LAYOUT_DIRECTION_CHANGED: {
+			_update_overflow_button();
 			queue_redraw();
 		} break;
 
@@ -780,7 +788,7 @@ void TabBar::_notification(int p_what) {
 				return;
 			}
 
-			int limit_minus_buttons = size.width - theme_cache.increment_icon->get_width() - theme_cache.decrement_icon->get_width();
+			int limit_minus_buttons = size.width - _get_buttons_width();
 
 			// Draw unselected tabs in the back.
 			for (int i = offset; i <= max_drawn_tab; i++) {
@@ -819,7 +827,7 @@ void TabBar::_notification(int p_what) {
 				_draw_tab(sb, col, theme_cache.icon_selected_color, current, rtl ? (size.width - tabs[current].ofs_cache - tabs[current].size_cache) : tabs[current].ofs_cache, has_focus(true));
 			}
 
-			if (buttons_visible) {
+			if (buttons_visible && !overflow_button) {
 				int vofs = (size.height - theme_cache.increment_icon->get_size().height) / 2;
 
 				if (rtl) {
@@ -1158,6 +1166,43 @@ bool TabBar::_select_next_available(bool p_play_sound) {
 	return next_available != -1;
 }
 
+int TabBar::_get_buttons_width() const {
+	return overflow_button ? int(overflow_button->get_combined_minimum_size().x) : theme_cache.decrement_icon->get_width() + theme_cache.increment_icon->get_width();
+}
+
+void TabBar::_update_overflow_button() {
+	if (!overflow_button) {
+		return;
+	}
+	overflow_button->set_visible(buttons_visible);
+	const int width = _get_buttons_width();
+	overflow_button->set_position(Point2(is_layout_rtl() ? 0 : MAX(0, get_size().x - width), 0));
+	overflow_button->set_size(Size2(width, get_size().y));
+}
+
+void TabBar::_overflow_button_minimum_size_changed() {
+	_update_cache();
+	_ensure_no_over_offset();
+	queue_redraw();
+	update_minimum_size();
+	update_desired_size();
+}
+
+void TabBar::set_overflow_button(Button *p_button) {
+	ERR_FAIL_NULL(p_button);
+	ERR_FAIL_COND(overflow_button != nullptr);
+	ERR_FAIL_COND(p_button->get_parent() != nullptr);
+	overflow_button = p_button;
+	add_child(overflow_button, false, INTERNAL_MODE_BACK);
+	overflow_button->connect(SNAME("minimum_size_changed"), callable_mp(this, &TabBar::_overflow_button_minimum_size_changed));
+	_overflow_button_minimum_size_changed();
+}
+
+bool TabBar::is_tab_visible_in_bar(int p_tab) const {
+	ERR_FAIL_INDEX_V(p_tab, tabs.size(), false);
+	return !tabs[p_tab].hidden && p_tab >= offset && p_tab <= max_drawn_tab;
+}
+
 void TabBar::set_tab_offset(int p_offset) {
 	ERR_FAIL_INDEX(p_offset, tabs.size());
 	offset = p_offset;
@@ -1483,15 +1528,16 @@ void TabBar::_update_hover() {
 void TabBar::_update_cache(bool p_update_hover) {
 	if (tabs.is_empty()) {
 		buttons_visible = false;
+		_update_overflow_button();
 		return;
 	}
 
 	Size2 combined_max = get_combined_maximum_size();
-	int combined_max_width = combined_max.width >= 0 ? int(combined_max.width) - theme_cache.increment_icon->get_width() - theme_cache.decrement_icon->get_width() : INT_MAX;
+	int combined_max_width = combined_max.width >= 0 ? int(combined_max.width) - _get_buttons_width() : INT_MAX;
 	int effective_max_width = max_width > 0 ? MIN(max_width, combined_max_width) : combined_max_width;
 
 	int limit = combined_max.width > 0 ? MIN(combined_max.width, get_size().width) : get_size().width;
-	int limit_minus_buttons = limit - theme_cache.increment_icon->get_width() - theme_cache.decrement_icon->get_width();
+	int limit_minus_buttons = limit - _get_buttons_width();
 
 	// Calculate sizing information for the chosen tab sizing mode.
 	int visible_count = 0;
@@ -1639,6 +1685,7 @@ void TabBar::_update_cache(bool p_update_hover) {
 
 	missing_right = max_drawn_tab < tabs.size() - 1;
 	buttons_visible = offset > 0 || missing_right;
+	_update_overflow_button();
 
 	if (tab_alignment == ALIGNMENT_LEFT) {
 		if (p_update_hover) {
@@ -1676,7 +1723,7 @@ Size2 TabBar::get_desired_size() const {
 		return Size2();
 	}
 
-	int buttons_size = tabs.size() > 1 ? theme_cache.decrement_icon->get_width() + theme_cache.increment_icon->get_width() : 0;
+	int buttons_size = tabs.size() > 1 ? _get_buttons_width() : 0;
 	int limit = int(combined_max.width);
 	int limit_minus_buttons = limit - buttons_size;
 
@@ -1799,6 +1846,7 @@ void TabBar::clear_tabs() {
 		}
 	}
 	tabs.clear();
+	_update_cache();
 	offset = 0;
 	max_drawn_tab = 0;
 	current = -1;
@@ -2319,7 +2367,7 @@ void TabBar::_ensure_no_over_offset() {
 		return;
 	}
 
-	int limit_with_buttons = get_size().width - theme_cache.increment_icon->get_width() - theme_cache.decrement_icon->get_width();
+	int limit_with_buttons = get_size().width - _get_buttons_width();
 	int limit_with_no_button = get_size().width;
 	int offset_with_buttons = offset;
 	int offset_with_no_button = offset;
@@ -2380,7 +2428,7 @@ void TabBar::ensure_tab_visible(int p_idx) {
 		return;
 	}
 
-	int limit_minus_buttons = get_size().width - theme_cache.increment_icon->get_width() - theme_cache.decrement_icon->get_width();
+	int limit_minus_buttons = get_size().width - _get_buttons_width();
 
 	int total_w = tabs[max_drawn_tab].ofs_cache - tabs[offset].ofs_cache;
 	for (int i = max_drawn_tab; i <= p_idx; i++) {

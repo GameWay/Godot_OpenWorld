@@ -38,6 +38,7 @@ class DockContextPopup;
 class DockTabContainer;
 class EditorDockManager;
 class StyleBoxFlat;
+class MenuButton;
 
 class EditorDockDragHint : public Control {
 	GDCLASS(EditorDockDragHint, Control);
@@ -77,12 +78,16 @@ class DockTabContainer : public TabContainer {
 	GDCLASS(DockTabContainer, TabContainer);
 
 	EditorDockDragHint *drag_hint = nullptr;
+	MenuButton *overflow_button = nullptr;
+	Vector<ObjectID> overflow_docks;
 
 	HashMap<int, int> valid_drop_margins;
 
 	void _pre_popup(const Size2i &p_size);
 	void _tab_rmb_clicked(int p_tab_idx);
 	void _tab_clicked();
+	void _update_overflow_menu();
+	void _overflow_tab_selected(int p_id);
 
 protected:
 	DockContextPopup *dock_context_popup = nullptr;

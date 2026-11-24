@@ -37,6 +37,8 @@
 #include "editor/editor_string_names.h"
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
+#include "scene/gui/menu_button.h"
+#include "scene/gui/popup_menu.h"
 #include "scene/resources/style_box_flat.h"
 
 bool EditorDockDragHint::can_drop_data(const Point2 &p_point, const Variant &p_data) const {
@@ -234,10 +236,68 @@ void DockTabContainer::_tab_clicked() {
 	EditorDockManager::get_singleton()->force_focus_dock(current_dock);
 }
 
+void DockTabContainer::_update_overflow_menu() {
+	PopupMenu *menu = overflow_button->get_popup();
+	menu->clear();
+	overflow_docks.clear();
+	for (int i = 0; i < get_tab_count(); i++) {
+		if (is_tab_hidden(i) || get_tab_bar()->is_tab_visible_in_bar(i)) {
+			continue;
+		}
+		EditorDock *dock = get_dock(i);
+		ERR_CONTINUE(!dock);
+		const int id = overflow_docks.size();
+		overflow_docks.push_back(dock->get_instance_id());
+		menu->add_icon_item(get_tab_icon(i), TTR(dock->get_display_title()), id);
+		menu->set_item_disabled(id, is_tab_disabled(i));
+	}
+}
+
+void DockTabContainer::_overflow_tab_selected(int p_id) {
+	ERR_FAIL_INDEX(p_id, overflow_docks.size());
+	EditorDock *dock = Object::cast_to<EditorDock>(ObjectDB::get_instance(overflow_docks[p_id]));
+	if (!dock || dock->get_parent() != this) {
+		return; // A dock may have been closed or moved while the menu was open.
+	}
+	int index = get_tab_idx_from_control(dock);
+	if (is_tab_hidden(index) || is_tab_disabled(index)) {
+		return;
+	}
+
+	TabBar *bar = get_tab_bar();
+	const bool scroll_to_selected = bar->get_scroll_to_selected();
+	if (!bar->is_tab_visible_in_bar(index)) {
+		int last_visible = bar->get_tab_offset();
+		for (int i = last_visible; i < get_tab_count(); i++) {
+			if (bar->is_tab_visible_in_bar(i)) {
+				last_visible = i;
+			}
+		}
+		const int first_visible = MAX(0, bar->get_tab_offset() - int(index < bar->get_tab_offset()));
+		int target = MAX(first_visible, last_visible - int(index < last_visible));
+		bar->set_scroll_to_selected(false);
+		dock->set_tab_index(target, false);
+		bar->set_tab_offset(first_visible);
+		// A wider title may need an earlier slot to fit completely.
+		while (!bar->is_tab_visible_in_bar(target) && target > first_visible) {
+			dock->set_tab_index(--target, false);
+			bar->set_tab_offset(first_visible);
+		}
+		index = get_tab_idx_from_control(dock);
+	}
+	set_current_tab(index);
+	bar->set_scroll_to_selected(scroll_to_selected);
+	EditorDockManager::get_singleton()->force_focus_dock(dock);
+	EditorNode::get_singleton()->save_editor_layout_delayed();
+}
+
 void DockTabContainer::_notification(int p_what) {
 	if (p_what == NOTIFICATION_POSTINITIALIZE) {
 		connect("pre_popup_pressed", callable_mp(this, &DockTabContainer::_pre_popup).bind(Size2i()));
 		connect("child_order_changed", callable_mp(this, &DockTabContainer::update_visibility));
+	}
+	if (p_what == NOTIFICATION_THEME_CHANGED && overflow_button) {
+		overflow_button->set_button_icon(get_editor_theme_icon(SNAME("TabOverflow")));
 	}
 }
 
@@ -366,6 +426,14 @@ DockTabContainer::DockTabContainer(int p_slot) {
 	EditorNode::get_singleton()->get_gui_base()->add_child(drag_hint);
 
 	get_tab_bar()->set_switch_on_release(true);
+	overflow_button = memnew(MenuButton);
+	overflow_button->set_flat(true);
+	overflow_button->set_tooltip_text(TTR("Hidden tabs"));
+	overflow_button->set_accessibility_name(TTR("Hidden tabs"));
+	overflow_button->set_focus_mode(Control::FOCUS_ALL);
+	overflow_button->connect("about_to_popup", callable_mp(this, &DockTabContainer::_update_overflow_menu));
+	overflow_button->get_popup()->connect("id_pressed", callable_mp(this, &DockTabContainer::_overflow_tab_selected));
+	get_tab_bar()->set_overflow_button(overflow_button);
 	get_tab_bar()->connect("tab_rmb_clicked", callable_mp(this, &DockTabContainer::_tab_rmb_clicked));
 	get_tab_bar()->connect("tab_clicked", callable_mp(this, &DockTabContainer::_tab_clicked).unbind(1));
 }
