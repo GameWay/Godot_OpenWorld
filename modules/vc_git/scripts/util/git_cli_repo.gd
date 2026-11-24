@@ -58,6 +58,41 @@ func get_status() -> Array:
 	return parse_status(GitCli.run(_repo_root, STATUS_ARGS)["text"])
 
 
+## Net tracked-file changes against HEAD, including staged and unstaged edits.
+## Binary files have no line counts. -z preserves tabs/newlines in file names.
+func get_change_stats() -> Dictionary:
+	var result := GitCli.execute("git", GitCli.argv(_repo_root, ["diff", "--numstat", "-z", "-M", "HEAD", "--"]))
+	if result["exit_code"] != 0:
+		# An initial commit has no HEAD yet.
+		result = GitCli.execute("git", GitCli.argv(_repo_root, ["diff", "--cached", "--numstat", "-z", "-M", "--"]))
+	return parse_change_stats(result["out"]) if result["exit_code"] == 0 else {}
+
+
+static func parse_change_stats(bytes: PackedByteArray) -> Dictionary:
+	var stats := {}
+	var records := PackedStringArray()
+	var start := 0
+	for end in bytes.size():
+		if bytes[end] == 0:
+			records.append(bytes.slice(start, end).get_string_from_utf8())
+			start = end + 1
+	var i := 0
+	while i < records.size():
+		var fields := records[i].split("\t", true, 2)
+		i += 1
+		if fields.size() != 3:
+			continue
+		var path := fields[2]
+		if path.is_empty(): # Rename: header NUL old path NUL new path NUL.
+			if i + 1 >= records.size():
+				break
+			path = records[i + 1]
+			i += 2
+		if fields[0].is_valid_int() and fields[1].is_valid_int():
+			stats[path] = { "added": int(fields[0]), "removed": int(fields[1]) }
+	return stats
+
+
 ## Entries from STATUS_ARGS output (e.g. a RepoWatcher snapshot's "status"); also sets status_header.
 func parse_status(text: String) -> Array:
 	var entries: Array = []

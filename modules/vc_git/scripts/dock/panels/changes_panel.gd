@@ -165,6 +165,7 @@ var _known_status := {}
 var _known_ready := false
 ## The status the tree was last built from, rebuilt from as the filter changes.
 var _last_entries: Array = []
+var _change_stats: Dictionary = {}
 ## Shows only the files whose path contains its text; conflicts always show.
 var _filter: LineEdit
 ## Bumped by every filter edit, so only the last one rebuilds the list.
@@ -363,8 +364,7 @@ func _on_polled(snapshot: Dictionary) -> void:
 		return
 	var content := _content_signature(entries)
 	if content != _last_content_signature:
-		_last_content_signature = content
-		_show_selected_diff()
+		refresh(entries)
 
 
 func _content_signature(entries: Array) -> String:
@@ -395,6 +395,7 @@ func refresh(status_entries: Variant = null) -> void:
 	_last_entries = entries
 	_last_status_signature = _status_signature(entries)
 	_last_content_signature = _content_signature(entries)
+	_change_stats = _repo.get_change_stats()
 	_follow_branch_switch()
 
 	var selected_path := ""
@@ -1274,6 +1275,10 @@ func _add_file_item(group_root: TreeItem, folder_cache: Dictionary, path: String
 	item.set_indeterminate(CHECKBOX_COLUMN, partial)
 	item.set_text(TEXT_COLUMN, "%s  %s" % [GitIcons.status_letter(status), path.get_file()])
 	item.set_custom_color(TEXT_COLUMN, GitIcons.status_color(status))
+	if _change_stats.has(path):
+		var stats: Dictionary = _change_stats[path]
+		item.set_suffix(TEXT_COLUMN, "[-%d +%d]" % [stats["removed"], stats["added"]])
+		item.set_custom_draw_callback(TEXT_COLUMN, _draw_change_stats.bind(stats))
 	var meta := { "kind": "file" if in_changelist else "untracked_file", "path": path, "status": status, "staged": staged }
 	item.set_metadata(0, meta)
 	var hint := "Check or press Space to stage, uncheck to unstage, Delete to revert. Double-click to open." if in_changelist else "Check or press Space to add to Git. Right-click to ignore. Double-click to open."
@@ -1283,6 +1288,28 @@ func _add_file_item(group_root: TreeItem, folder_cache: Dictionary, path: String
 	if parent_item != null:
 		parent_item.collapsed = true
 	return item
+
+
+func _draw_change_stats(item: TreeItem, rect: Rect2, stats: Dictionary) -> void:
+	var font := _tree.get_theme_font("font")
+	var font_size := _tree.get_theme_font_size("font_size")
+	var pos := rect.position
+	var normal := _tree.get_theme_color("font_color")
+	var colors := [item.get_custom_color(TEXT_COLUMN), normal, DiffViewScript.DiffRows.COLOR_REMOVED_TEXT, normal, DiffViewScript.DiffRows.COLOR_ADDED_TEXT, normal]
+	var parts := [item.get_text(TEXT_COLUMN), " [", "-%d" % stats["removed"], " ", "+%d" % stats["added"], "]"]
+	for i in parts.size():
+		var width := rect.end.x - pos.x
+		if width <= 0:
+			break
+		var line := TextLine.new()
+		line.add_string(parts[i], font, font_size)
+		var full_width := line.get_size().x
+		line.width = width
+		line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		line.draw(_tree.get_canvas_item(), Vector2(pos.x, rect.position.y + floorf((rect.size.y - line.get_size().y) * 0.5)), colors[i])
+		if full_width > width:
+			break
+		pos.x += full_width
 
 
 func _on_changes_tree_item_edited() -> void:

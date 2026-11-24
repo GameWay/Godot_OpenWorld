@@ -99,11 +99,13 @@ func _init() -> void:
 
 	_stats_added = Label.new()
 	_stats_added.add_theme_color_override("font_color", DiffRows.COLOR_ADDED_TEXT)
-	header_row.add_child(_stats_added)
+	var stats_row := HBoxContainer.new()
+	stats_row.add_child(_stats_added)
+	header_row.add_child(stats_row)
 
 	_stats_removed = Label.new()
 	_stats_removed.add_theme_color_override("font_color", DiffRows.COLOR_REMOVED_TEXT)
-	header_row.add_child(_stats_removed)
+	stats_row.add_child(_stats_removed)
 
 	_scene_toggle = Button.new()
 	_scene_toggle.text = "Scene"
@@ -325,6 +327,8 @@ func _rerender(keep_scroll: bool = false) -> void:
 	_header_label.tooltip_text = path
 	_stats_added.text = ("+%d" % parsed["added"]) if parsed["added"] > 0 else ""
 	_stats_removed.text = ("−%d" % parsed["removed"]) if parsed["removed"] > 0 else ""
+	_stats_added.visible = parsed["added"] > 0
+	_stats_removed.visible = parsed["removed"] > 0
 
 	var show_image := _show_image_preview(path)
 	var is_config := SceneText.is_config_file(path)
