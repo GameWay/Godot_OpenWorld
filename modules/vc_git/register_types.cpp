@@ -177,6 +177,12 @@ static String _vc_git_extract() {
 
 // The running plugin; null while vc_git is off. An ObjectID, since the editor frees its plugins on exit.
 static ObjectID vc_git_plugin;
+// vc_git is being started or stopped right now. The plugin's _enter_tree() mirrors vc_git's
+// preferences onto Godot's own Editor Settings, and every such write that changes one emits
+// settings_changed, which asks for vc_git to be applied again. Answered while the transition was
+// still in progress, that request added a second plugin on top of the first: a second "File status"
+// button in the toolbar, with a second Git tab, watcher and dock behind it.
+static bool vc_git_transitioning = false;
 
 static void _vc_git_add_plugin() {
 	if (ProjectSettings::get_singleton()->has_setting("editor_plugins/enabled")) {
@@ -203,23 +209,32 @@ static void _vc_git_add_plugin() {
 	// What the scripts can't reach from GDScript: Editor Settings opened at vc_git's section.
 	ep->set_meta("vc_git_open_settings", callable_mp_static(&_vc_git_open_settings));
 	ep->set_script(scr);
-	EditorNode::add_editor_plugin(ep, true);
+	vc_git_transitioning = true;
+	// Known as running before it enters the tree: whatever its _enter_tree() triggers must find it.
 	vc_git_plugin = ep->get_instance_id();
+	EditorNode::add_editor_plugin(ep, true);
+	vc_git_transitioning = false;
 }
 
 static void _vc_git_remove_plugin() {
 	EditorPlugin *ep = Object::cast_to<EditorPlugin>(ObjectDB::get_instance(vc_git_plugin));
-	vc_git_plugin = ObjectID();
 	if (ep == nullptr) {
+		vc_git_plugin = ObjectID();
 		return;
 	}
+	vc_git_transitioning = true;
 	// Like disabling an add-on: the plugin's _exit_tree() takes its UI and background work down.
 	EditorNode::remove_editor_plugin(ep, true);
+	vc_git_transitioning = false;
+	vc_git_plugin = ObjectID();
 	memdelete(ep);
 }
 
 // Turns vc_git on or off to match version_control/vc_git/enabled, without restarting the editor.
 static void _vc_git_apply_enabled() {
+	if (vc_git_transitioning) {
+		return; // a settings change made by the start or stop itself
+	}
 	const bool enabled = EDITOR_GET(VC_GIT_ENABLED_SETTING);
 	const bool running = ObjectDB::get_instance(vc_git_plugin) != nullptr;
 	if (enabled && !running) {
