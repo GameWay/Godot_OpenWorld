@@ -2609,7 +2609,12 @@ int Tree::draw_item(const Point2i &p_pos, const Point2 &p_draw_ofs, const Size2 
 						cell_color = theme_cache.font_disabled_color;
 					}
 
-					draw_item_rect(p_item->cells[i], item_rect, cell_color, icon_col, outline_size, font_outline_color, ci);
+					// Keep the native checkbox and its hit testing while allowing a custom inline label.
+					if (p_item->cells[i].custom_draw_callback.is_valid()) {
+						p_item->cells[i].custom_draw_callback.call(p_item, Rect2(item_rect));
+					} else {
+						draw_item_rect(p_item->cells[i], item_rect, cell_color, icon_col, outline_size, font_outline_color, ci);
+					}
 
 				} break;
 				case TreeItem::CELL_MODE_RANGE: {

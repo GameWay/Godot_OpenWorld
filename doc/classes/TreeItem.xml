@@ -676,7 +676,7 @@
 			<param index="0" name="column" type="int" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Sets the given column's custom draw callback. Use an empty [Callable] ([code skip-lint]Callable()[/code]) to clear the custom callback. The cell has to be in [constant CELL_MODE_CUSTOM] to use this feature.
+				Sets the given column's custom draw callback. Use an empty [Callable] ([code skip-lint]Callable()[/code]) to clear the custom callback. The cell has to be in [constant CELL_MODE_CUSTOM] or [constant CELL_MODE_CHECK] to use this feature. In [constant CELL_MODE_CHECK], the checkbox is drawn normally and the callback replaces the label; its rectangle excludes the checkbox.
 				The [param callback] should accept two arguments: the [TreeItem] that is drawn and its position and size as a [Rect2].
 				To draw custom content over the native style, please use [method Tree.get_custom_drawing_canvas_item].
 			</description>
