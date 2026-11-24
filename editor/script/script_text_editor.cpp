@@ -255,6 +255,10 @@ void ScriptTextEditor::_load_theme_settings() {
 	bool folded_code_region_color_updated = updated_folded_code_region_color != folded_code_region_color;
 	if (safe_line_number_color_updated || warning_line_color_updated || marked_line_color_updated || folded_code_region_color_updated) {
 		safe_line_number_color = updated_safe_line_number_color;
+		// OEngine: the code editor is enabled lazily, gutter indexes may not be known yet.
+		if (line_number_gutter < 0) {
+			_update_gutter_indexes();
+		}
 		for (int i = 0; i < text_edit->get_line_count(); i++) {
 			if (warning_line_color_updated && text_edit->get_line_background_color(i) == warning_line_color) {
 				text_edit->set_line_background_color(i, updated_warning_line_color);
@@ -264,7 +268,7 @@ void ScriptTextEditor::_load_theme_settings() {
 				text_edit->set_line_background_color(i, updated_marked_line_color);
 			}
 
-			if (safe_line_number_color_updated && text_edit->get_line_gutter_item_color(i, line_number_gutter) != default_line_number_color) {
+			if (safe_line_number_color_updated && line_number_gutter >= 0 && text_edit->get_line_gutter_item_color(i, line_number_gutter) != default_line_number_color) {
 				text_edit->set_line_gutter_item_color(i, line_number_gutter, safe_line_number_color);
 			}
 
@@ -1101,6 +1105,14 @@ void ScriptTextEditor::_update_errors() {
 	bool last_is_safe = false;
 	CodeEdit *te = code_editor->get_text_editor();
 
+	// OEngine: the code editor is enabled lazily, gutter indexes may not be known yet.
+	if (line_number_gutter < 0) {
+		_update_gutter_indexes();
+	}
+	if (line_number_gutter < 0) {
+		return;
+	}
+
 	for (int i = 0; i < te->get_line_count(); i++) {
 		if (highlight_safe) {
 			if (safe_lines.has(i + 1)) {
@@ -1113,7 +1125,7 @@ void ScriptTextEditor::_update_errors() {
 				last_is_safe = false;
 			}
 		} else {
-			te->set_line_gutter_item_color(i, 1, default_line_number_color);
+			te->set_line_gutter_item_color(i, line_number_gutter, default_line_number_color);
 		}
 	}
 }
