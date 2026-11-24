@@ -129,7 +129,6 @@ func _init() -> void:
 	_update_expand_button()
 
 	_options_button = MenuButton.new()
-	_options_button.text = "⋯"
 	_options_button.tooltip_text = "Diff options"
 	_options_button.flat = true
 	_build_options_menu()
@@ -182,6 +181,8 @@ func _init() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED and _expand_button != null:
 		_update_expand_button()
+		if _options_button != null:
+			_options_button.icon = get_theme_icon(&"GuiTabMenuHl", &"EditorIcons") if has_theme_icon(&"GuiTabMenuHl", &"EditorIcons") else null
 
 
 ## The owner calls this when a click picked a file: while the vc_git tab is open, the diff shows there.

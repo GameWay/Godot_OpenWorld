@@ -192,6 +192,16 @@ func _style_panels() -> void:
 	_sidebar_panel.add_theme_stylebox_override("panel", _panel_style(4))
 	_views.add_theme_stylebox_override("panel", _panel_style(4))
 	_commit_panel.add_theme_stylebox_override("panel", _panel_style(6))
+	_panels["changes"].set_split_panel_style(_panel_style(4), gap)
+	_style_view_surface()
+
+
+## File Status supplies its own list and diff surfaces, exposing the background between them.
+func _style_view_surface() -> void:
+	if _view == "changes":
+		_views.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	else:
+		_views.add_theme_stylebox_override("panel", _panel_style(4))
 
 
 ## The editor docks' panel box (TabContainer's panel: their color and corner radius), with padding of its own; rounded even when the theme's corner radius is 0.
@@ -288,6 +298,7 @@ func show_view(view: String) -> void:
 	if view == "branches" and _has_sidebar():
 		return # always visible in the sidebar
 	_view = view
+	_style_view_surface()
 	_views.current_tab = _panels[view].get_index()
 	_commit_panel.visible = view == "changes"
 	_view_buttons[view].button_pressed = true

@@ -171,6 +171,9 @@ var _filter: LineEdit
 var _filter_edits := 0
 ## The commit message and the Amend/Commit row (see _build_commit_box()).
 var _commit_box: VBoxContainer
+## Separate surfaces supplied by the combined Git tab.
+var _list_panel: PanelContainer
+var _diff_panel: PanelContainer
 ## "Add New" in the changelist row: adds every new file to Git; disabled while there are none.
 var _add_new_button: Button
 ## A left press on a check cell outside its checkbox: {"item", "checked", "indeterminate"} to restore when the Tree toggles it anyway; empty otherwise.
@@ -275,6 +278,30 @@ func detach_commit_box() -> Control:
 	# inconsistent (a warning on every editor start). Its %unique names were resolved in _ready().
 	_release_owner(_commit_box)
 	return _commit_box
+
+
+## Give the file list and diff the same dock surfaces as the surrounding Git tab.
+func set_split_panel_style(style: StyleBox, gap: int) -> void:
+	if _list_panel == null:
+		var split: HSplitContainer = %Split
+		var left := _tree.get_parent()
+		_list_panel = PanelContainer.new()
+		_list_panel.size_flags_horizontal = SIZE_EXPAND_FILL
+		split.add_child(_list_panel)
+		left.owner = null
+		left.reparent(_list_panel)
+		left.owner = self
+		split.move_child(_list_panel, 0)
+		_diff_panel = PanelContainer.new()
+		_diff_panel.size_flags_horizontal = SIZE_EXPAND_FILL
+		split.add_child(_diff_panel)
+		_diff_view.owner = null
+		_diff_view.reparent(_diff_panel)
+		_diff_view.owner = self
+	_list_panel.add_theme_stylebox_override("panel", style)
+	_diff_panel.add_theme_stylebox_override("panel", style)
+	%Split.add_theme_constant_override("separation", gap)
+	_apply_diff_visibility()
 
 
 func _release_owner(node: Node) -> void:
@@ -1837,6 +1864,8 @@ func _update_narrow() -> void:
 func _apply_diff_visibility() -> void:
 	if not _diff_view._expanded:
 		_diff_view.visible = _diff_toggle.button_pressed and not _narrow
+	if _diff_panel != null:
+		_diff_panel.visible = not _diff_view._expanded and _diff_toggle.button_pressed and not _narrow
 
 
 func _open_new_changelist_dialog(and_move_selected_file: bool = false) -> void:
