@@ -596,7 +596,8 @@ void EditorDockManager::load_docks_from_config(Ref<ConfigFile> p_layout, const S
 				continue;
 			}
 
-			const bool transient_closed = dock->transient && !dock->is_open && (p_load_dock_state || dock->default_slot == EditorDock::DOCK_SLOT_NONE);
+			// Contextual editors decide when to open transient docks, even during initial placement.
+			const bool transient_closed = dock->transient && !dock->is_open;
 			if (allow_floating_docks && floating_docks_dump.has(name)) {
 				_restore_dock_to_saved_window(dock, floating_docks_dump[name]);
 			} else if (i >= 0 && !transient_closed) {
