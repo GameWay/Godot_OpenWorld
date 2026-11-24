@@ -1075,12 +1075,7 @@ void EditorNode::_notification(int p_what) {
 
 		case NOTIFICATION_READY: {
 			// Store the default order of bottom docks. It can only be determined dynamically.
-			PackedStringArray bottom_docks;
-			bottom_docks.reserve_exact(bottom_panel->get_tab_count());
-			for (int i = 0; i < bottom_panel->get_tab_count(); i++) {
-				EditorDock *dock = Object::cast_to<EditorDock>(bottom_panel->get_tab_control(i));
-				bottom_docks.append(dock->get_effective_layout_key());
-			}
+			const PackedStringArray bottom_docks = editor_dock_manager->get_default_dock_order(EditorDock::DOCK_SLOT_BOTTOM);
 			default_layout->set_value("docks", "dock_9", String(",").join(bottom_docks));
 
 			RenderingServer::get_singleton()->viewport_set_disable_2d(get_scene_root()->get_viewport_rid(), true);
@@ -1088,6 +1083,7 @@ void EditorNode::_notification(int p_what) {
 			DisplayServer::get_singleton()->screen_set_keep_on(EDITOR_GET("interface/editor/display/keep_screen_on"));
 
 			feature_profile_manager->notify_changed();
+			editor_dock_manager->load_initial_layout();
 
 			// Save the project after opening to mark it as last modified, except in headless mode.
 			// Also use this opportunity to ensure default settings are applied to new projects created from the command line

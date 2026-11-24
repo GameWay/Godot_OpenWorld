@@ -36,6 +36,7 @@
 #include "editor/editor_main_screen.h"
 #include "editor/editor_node.h"
 #include "editor/editor_string_names.h"
+#include "editor/file_system/editor_paths.h"
 #include "editor/gui/window_wrapper.h"
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
@@ -201,6 +202,16 @@ EditorDock *EditorDockManager::get_dock_by_name(const String &p_name) const {
 		}
 	}
 	return nullptr;
+}
+
+PackedStringArray EditorDockManager::get_default_dock_order(int p_slot) const {
+	PackedStringArray names;
+	for (EditorDock *dock : all_docks) {
+		if (dock->default_slot == p_slot) {
+			names.append(dock->get_effective_layout_key());
+		}
+	}
+	return names;
 }
 
 void EditorDockManager::update_docks_menu() {
@@ -537,7 +548,18 @@ void EditorDockManager::save_docks_to_config(Ref<ConfigFile> p_layout, const Str
 	}
 }
 
-void EditorDockManager::load_docks_from_config(Ref<ConfigFile> p_layout, const String &p_section, bool p_first_load) {
+void EditorDockManager::load_initial_layout() {
+	if (initial_layout.is_valid()) {
+		// Resource-dependent dock state is restored after the first filesystem scan.
+		load_docks_from_config(initial_layout, initial_layout_section, initial_layout_is_project, false);
+	}
+}
+
+void EditorDockManager::load_docks_from_config(Ref<ConfigFile> p_layout, const String &p_section, bool p_first_load, bool p_load_dock_state) {
+	if (p_load_dock_state) {
+		// Docks registered after startup should use their normal defaults.
+		initial_layout.unref();
+	}
 	Dictionary floating_docks_dump = p_layout->get_value(p_section, "dock_floating", Dictionary());
 	Array closed_docks = p_layout->get_value(p_section, "dock_closed", Array());
 
@@ -568,25 +590,33 @@ void EditorDockManager::load_docks_from_config(Ref<ConfigFile> p_layout, const S
 
 			if (!dock->enabled) {
 				// Don't open disabled docks.
-				dock->load_layout_from_config(p_layout, section_name);
+				if (p_load_dock_state) {
+					dock->load_layout_from_config(p_layout, section_name);
+				}
 				continue;
 			}
 
+			const bool transient_closed = dock->transient && !dock->is_open && (p_load_dock_state || dock->default_slot == EditorDock::DOCK_SLOT_NONE);
 			if (allow_floating_docks && floating_docks_dump.has(name)) {
 				_restore_dock_to_saved_window(dock, floating_docks_dump[name]);
-			} else if (i >= 0 && !(dock->transient && !dock->is_open)) {
+			} else if (i >= 0 && !transient_closed) {
 				// Safe to include transient open docks here because they won't be in the closed dock dump.
 				if (closed_docks.has(name)) {
+					bool was_open = dock->is_open;
 					dock->is_open = false;
 					dock->hide();
-					dock->emit_signal(SNAME("closed"));
+					if (was_open) {
+						dock->emit_signal(SNAME("closed"));
+					}
 					_move_dock(dock, closed_dock_parent);
 				} else {
 					dock->is_open = true;
 					_move_dock(dock, dock_slots[i], 0, false);
 				}
 			}
-			dock->load_layout_from_config(p_layout, section_name);
+			if (p_load_dock_state) {
+				dock->load_layout_from_config(p_layout, section_name);
+			}
 
 			dock->dock_slot_index = i;
 			dock->previous_tab_index = i >= 0 ? j : 0;
@@ -778,6 +808,33 @@ void EditorDockManager::add_dock(EditorDock *p_dock) {
 	p_dock->connect("_tab_style_changed", callable_mp(this, &EditorDockManager::_queue_update_tab_style).bind(p_dock));
 	p_dock->connect("renamed", callable_mp(this, &EditorDockManager::_queue_update_tab_style).bind(p_dock));
 
+	if (initial_layout.is_valid()) {
+		const String name = p_dock->get_effective_layout_key();
+		for (int i = -1; i < EditorDock::DOCK_SLOT_MAX; i++) {
+			const String key = DockTabContainer::get_config_key(i);
+			const Vector<String> names = String(initial_layout->get_value(initial_layout_section, key, "")).split(",");
+			const int tab_index = names.find(name);
+			if (tab_index < 0) {
+				continue;
+			}
+
+			p_dock->dock_slot_index = i;
+			p_dock->previous_tab_index = tab_index;
+			const Array closed_docks = initial_layout->get_value(initial_layout_section, "dock_closed", Array());
+			const Dictionary floating_docks = initial_layout->get_value(initial_layout_section, "dock_floating", Dictionary());
+			const bool restore_floating = EditorNode::get_singleton()->is_multi_window_enabled() && (!initial_layout_is_project || EDITOR_GET("interface/multi_window/restore_windows_on_load")) && floating_docks.has(name);
+			const bool should_open = p_dock->enabled && !closed_docks.has(name) && (!p_dock->transient || p_dock->default_slot != EditorDock::DOCK_SLOT_NONE);
+			if (should_open && !restore_floating && i >= 0 && dock_slots[i]) {
+				open_dock(p_dock, false);
+			} else {
+				// Floating docks and slots not yet constructed are placed when the UI is ready.
+				closed_dock_parent->add_child(p_dock);
+				p_dock->hide();
+			}
+			return;
+		}
+	}
+
 	if (p_dock->default_slot != EditorDock::DOCK_SLOT_NONE) {
 		open_dock(p_dock, false);
 	} else {
@@ -868,6 +925,16 @@ PopupMenu *EditorDockManager::get_docks_menu() {
 
 EditorDockManager::EditorDockManager() {
 	singleton = this;
+
+	initial_layout.instantiate();
+	if (initial_layout->load(EditorPaths::get_singleton()->get_project_settings_dir().path_join("editor_layout.cfg")) == OK) {
+		initial_layout_section = "docks";
+		initial_layout_is_project = true;
+	} else if (initial_layout->load(EditorSettings::get_singleton()->get_editor_layouts_config()) == OK && initial_layout->has_section("Default")) {
+		initial_layout_section = "Default";
+	} else {
+		initial_layout.unref();
+	}
 
 	closed_dock_parent = memnew(Control);
 	closed_dock_parent->hide();

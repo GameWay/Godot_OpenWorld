@@ -95,7 +95,7 @@ private:
 	DockSplitContainer *main_hsplit = nullptr;
 	DockSplitContainer *bottom_hsplit = nullptr;
 
-	DockTabContainer *dock_slots[EditorDock::DOCK_SLOT_MAX];
+	DockTabContainer *dock_slots[EditorDock::DOCK_SLOT_MAX] = {};
 	Vector<WindowWrapper *> dock_windows;
 	LocalVector<EditorDock *> all_docks;
 	HashSet<EditorDock *> dirty_docks;
@@ -111,6 +111,9 @@ private:
 	PopupMenu *docks_menu = nullptr;
 	LocalVector<EditorDock *> docks_menu_docks;
 	Control *closed_dock_parent = nullptr;
+	Ref<ConfigFile> initial_layout;
+	String initial_layout_section;
+	bool initial_layout_is_project = false;
 
 	EditorDock *_get_dock_tab_dragged();
 	void _dock_drag_stopped();
@@ -137,6 +140,7 @@ public:
 
 	DockTabContainer *get_dock_container(int p_slot) const;
 	EditorDock *get_dock_by_name(const String &p_name) const;
+	PackedStringArray get_default_dock_order(int p_slot) const;
 
 	void update_docks_menu();
 	void update_tab_styles();
@@ -151,7 +155,8 @@ public:
 	PopupMenu *get_docks_menu();
 
 	void save_docks_to_config(Ref<ConfigFile> p_layout, const String &p_section) const;
-	void load_docks_from_config(Ref<ConfigFile> p_layout, const String &p_section, bool p_first_load = false);
+	void load_initial_layout();
+	void load_docks_from_config(Ref<ConfigFile> p_layout, const String &p_section, bool p_first_load = false, bool p_load_dock_state = true);
 
 	void set_dock_slot_highlighted(int p_slot, bool p_highlighted);
 
