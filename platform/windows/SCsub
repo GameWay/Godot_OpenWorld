@@ -82,6 +82,7 @@ else:
     res_target = "godot_res_template" + env["OBJSUFFIX"]
 res_obj = env.RES(res_target, res_file)
 env.Depends(res_obj, "#core/version_generated.gen.h")
+env.Depends(res_obj, "#platform/windows/godot.ico")
 
 env.add_source_files(sources, common_win)
 
@@ -115,6 +116,7 @@ if env["windows_subsystem"] == "gui":
         res_wrap_target = "godot_res_wrap_template" + env["OBJSUFFIX"]
     res_wrap_obj = env_wrap.RES(res_wrap_target, res_wrap_file)
     env_wrap.Depends(res_wrap_obj, "#core/version_generated.gen.h")
+    env_wrap.Depends(res_wrap_obj, "#platform/windows/godot_console.ico")
 
     if env.msvc:
         env_wrap.Append(LINKFLAGS=["/SUBSYSTEM:CONSOLE"])
