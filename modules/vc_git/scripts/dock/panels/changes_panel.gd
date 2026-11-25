@@ -1306,7 +1306,7 @@ func _draw_change_stats(item: TreeItem, rect: Rect2, stats: Dictionary) -> void:
 		var full_width := line.get_size().x
 		line.width = width
 		line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		line.draw(_tree.get_canvas_item(), Vector2(pos.x, rect.position.y + floorf((rect.size.y - line.get_size().y) * 0.5)), colors[i])
+		line.draw(_tree.get_custom_drawing_canvas_item(), Vector2(pos.x, rect.position.y + floorf((rect.size.y - line.get_size().y) * 0.5)), colors[i])
 		if full_width > width:
 			break
 		pos.x += full_width
