@@ -44,6 +44,7 @@ public:
 	virtual Error lookup_code_for_rename(const String &p_code, const String &p_symbol, const String &p_path, LookupResult &r_result) override;
 
 	virtual int32_t find_function(const String &p_function, const String &p_code) const override;
+	virtual void get_search_symbols(const String &p_code, const String &p_path, Vector<SearchSymbol> &r_symbols) const override;
 
 	virtual void format_code(String &r_code, uint32_t p_from_line, uint32_t p_to_line) const override;
 

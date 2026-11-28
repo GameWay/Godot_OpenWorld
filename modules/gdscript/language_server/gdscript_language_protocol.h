@@ -136,6 +136,7 @@ public:
 	_FORCE_INLINE_ SceneCache *get_scene_cache() { return &scene_cache; }
 
 	_FORCE_INLINE_ bool is_initialized() const { return _initialized; }
+	int get_current_client_id() const { return latest_client_id; }
 
 	void poll(int p_limit_usec);
 	Error start(int p_port, const IPAddress &p_bind_ip);

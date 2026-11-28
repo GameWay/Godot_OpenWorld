@@ -47,6 +47,9 @@
 #include "editor/settings/editor_settings.h"
 
 void GDScriptWorkspace::_bind_methods() {
+	ADD_SIGNAL(MethodInfo("diagnostics_updated", PropertyInfo(Variant::STRING, "path"), PropertyInfo(Variant::ARRAY, "diagnostics"), PropertyInfo(Variant::INT, "client_id")));
+	ADD_SIGNAL(MethodInfo("diagnostics_cleared", PropertyInfo(Variant::STRING, "path"), PropertyInfo(Variant::INT, "client_id")));
+	ADD_SIGNAL(MethodInfo("diagnostics_client_closed", PropertyInfo(Variant::INT, "client_id")));
 	ClassDB::bind_method(D_METHOD("apply_new_signal", "obj", "function", "args"), &GDScriptWorkspace::apply_new_signal);
 	ClassDB::bind_method(D_METHOD("get_file_path", "uri"), &GDScriptWorkspace::get_file_path);
 	ClassDB::bind_method(D_METHOD("get_file_uri", "path"), &GDScriptWorkspace::get_file_uri);
@@ -602,9 +605,27 @@ void GDScriptWorkspace::publish_diagnostics(const String &p_path) {
 			errors[i] = list[i].to_json();
 		}
 	}
+	emit_signal("diagnostics_updated", p_path, errors, GDScriptLanguageProtocol::get_singleton()->get_current_client_id());
 	params["diagnostics"] = errors;
 	params["uri"] = get_file_uri(p_path);
 	GDScriptLanguageProtocol::get_singleton()->notify_client("textDocument/publishDiagnostics", params);
+}
+
+void GDScriptWorkspace::publish_editor_diagnostics(const String &p_path, const GDScriptParser &p_parser) {
+	Array diagnostics;
+	for (const LSP::Diagnostic &diagnostic : ExtendGDScriptParser::diagnostics_from_parser(p_parser)) {
+		diagnostics.push_back(diagnostic.to_json());
+	}
+	// -1 identifies the built-in editor, independently of external LSP clients.
+	emit_signal("diagnostics_updated", p_path, diagnostics, -1);
+}
+
+void GDScriptWorkspace::clear_diagnostics(const String &p_path, int p_client_id) {
+	emit_signal("diagnostics_cleared", p_path, p_client_id);
+}
+
+void GDScriptWorkspace::clear_client_diagnostics(int p_client_id) {
+	emit_signal("diagnostics_client_closed", p_client_id);
 }
 
 void GDScriptWorkspace::completion(const LSP::CompletionParams &p_params, List<EditorLanguage::CompletionOption> *r_options) {

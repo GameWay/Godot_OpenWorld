@@ -39,6 +39,9 @@
 #include "editor/gdscript_docgen.h"
 #include "editor/gdscript_editor_language.h"
 #include "editor/script_templates/templates.gen.h"
+#ifndef GDSCRIPT_NO_LSP
+#include "language_server/gdscript_language_protocol.h"
+#endif
 #endif
 
 #include "core/config/engine.h"
@@ -182,6 +185,12 @@ bool GDScriptEditorLanguage::validate(const String &p_script, const String &p_pa
 		GDScriptLinter linter(parser);
 		err = linter.lint();
 	}
+
+#ifndef GDSCRIPT_NO_LSP
+	if (GDScriptLanguageProtocol::get_singleton()) {
+		GDScriptLanguageProtocol::get_singleton()->get_workspace()->publish_editor_diagnostics(p_path, parser);
+	}
+#endif
 
 	if (r_warnings) {
 		for (const GDScriptWarning &E : parser.get_warnings()) {

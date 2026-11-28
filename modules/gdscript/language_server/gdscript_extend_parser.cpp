@@ -60,10 +60,10 @@ GodotRange GodotRange::from_lsp(const LSP::Range &p_range) {
 	return GodotRange(start, end);
 }
 
-void ExtendGDScriptParser::update_diagnostics() {
-	diagnostics.clear();
+Vector<LSP::Diagnostic> ExtendGDScriptParser::diagnostics_from_parser(const GDScriptParser &p_parser) {
+	Vector<LSP::Diagnostic> diagnostics;
 
-	const List<ParserError> &parser_errors = get_errors();
+	const List<ParserError> &parser_errors = p_parser.get_errors();
 	for (const ParserError &error : parser_errors) {
 		LSP::Diagnostic diagnostic;
 		diagnostic.severity = LSP::DiagnosticSeverity::Error;
@@ -78,7 +78,7 @@ void ExtendGDScriptParser::update_diagnostics() {
 		diagnostics.push_back(diagnostic);
 	}
 
-	const List<GDScriptWarning> &parser_warnings = get_warnings();
+	const List<GDScriptWarning> &parser_warnings = p_parser.get_warnings();
 	for (const GDScriptWarning &warning : parser_warnings) {
 		LSP::Diagnostic diagnostic;
 		diagnostic.severity = LSP::DiagnosticSeverity::Warning;
@@ -93,6 +93,11 @@ void ExtendGDScriptParser::update_diagnostics() {
 		diagnostic.range = godot_range.to_lsp();
 		diagnostics.push_back(diagnostic);
 	}
+	return diagnostics;
+}
+
+void ExtendGDScriptParser::update_diagnostics() {
+	diagnostics = diagnostics_from_parser(*this);
 }
 
 void ExtendGDScriptParser::update_symbols() {

@@ -101,6 +101,7 @@ class EditorSettingsDialog;
 class EditorTitleBar;
 class ExportTemplateManager;
 class EditorQuickOpenDialog;
+class EditorGlobalSearch;
 class FBXImporterManager;
 class FileSystemDock;
 class HistoryDock;
@@ -159,6 +160,7 @@ public:
 		SCENE_SAVE_ALL_SCENES,
 		SCENE_MULTI_SAVE_AS_SCENE,
 		SCENE_QUICK_OPEN,
+		SCENE_GLOBAL_SEARCH,
 		SCENE_QUICK_OPEN_SCENE,
 		SCENE_QUICK_OPEN_SCRIPT,
 		SCENE_EXPORT_AS,
@@ -273,6 +275,7 @@ private:
 
 	EditorCommandPalette *command_palette = nullptr;
 	EditorQuickOpenDialog *quick_open_dialog = nullptr;
+	EditorGlobalSearch *global_search = nullptr;
 	EditorExport *editor_export = nullptr;
 	EditorLog *log = nullptr;
 	EditorNativeShaderSourceVisualizer *native_shader_source_visualizer = nullptr;

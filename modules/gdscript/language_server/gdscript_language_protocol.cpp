@@ -149,6 +149,7 @@ Error GDScriptLanguageProtocol::on_client_connected() {
 }
 
 void GDScriptLanguageProtocol::on_client_disconnected(const int &p_client_id) {
+	workspace->clear_client_diagnostics(p_client_id);
 	clients.erase(p_client_id);
 	if (clients.is_empty()) {
 		scene_cache.clear();
@@ -327,6 +328,7 @@ Error GDScriptLanguageProtocol::start(int p_port, const IPAddress &p_bind_ip) {
 void GDScriptLanguageProtocol::stop() {
 	for (const KeyValue<int, Ref<LSPeer>> &E : clients) {
 		Ref<LSPeer> peer = clients.get(E.key);
+		workspace->clear_client_diagnostics(E.key);
 		peer->connection->disconnect_from_host();
 	}
 
@@ -518,6 +520,7 @@ void GDScriptLanguageProtocol::lsp_did_close(const Dictionary &p_params) {
 	/// A close notification requires a previous open notification to be sent.
 	ERR_FAIL_COND_MSG(!was_opened, "LSP: Client is closing file without opening it.");
 
+	workspace->clear_diagnostics(path, latest_client_id);
 	scene_cache.unload(path);
 }
 

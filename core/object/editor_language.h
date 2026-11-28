@@ -45,6 +45,16 @@
  */
 class EditorLanguage {
 public:
+	struct SearchSymbol {
+		String name;
+		String container;
+		StringName icon;
+		int line = 0; // Zero-based, like ScriptEditor::edit().
+	};
+
+	// Declaration-only search; implementations must not execute or load the script.
+	virtual void get_search_symbols(const String &p_code, const String &p_path, Vector<SearchSymbol> &r_symbols) const {}
+
 	// Keep enums in sync with:
 	// scene/gui/code_edit.h - CodeEdit::CodeCompletionKind
 	enum class CompletionKind {

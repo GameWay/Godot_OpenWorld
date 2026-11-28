@@ -84,6 +84,7 @@
 #include "editor/gui/editor_about.h"
 #include "editor/gui/editor_bottom_panel.h"
 #include "editor/gui/editor_file_dialog.h"
+#include "editor/gui/editor_global_search.h"
 #include "editor/gui/editor_icon_manager.h"
 #include "editor/gui/editor_quick_open_dialog.h"
 #include "editor/gui/editor_title_bar.h"
@@ -3520,6 +3521,9 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 			file->set_title(p_option == SCENE_OPEN_SCENE ? TTR("Open Scene") : TTR("Open Base Scene"));
 			file->popup_file_dialog();
 
+		} break;
+		case SCENE_GLOBAL_SEARCH: {
+			global_search->popup_search();
 		} break;
 		case SCENE_QUICK_OPEN: {
 			quick_open_dialog->popup_dialog({ "Resource" }, callable_mp(this, &EditorNode::_quick_opened), true);
@@ -8362,6 +8366,7 @@ void EditorNode::_build_file_menu(bool p_dark_mode) {
 	file_menu->add_separator();
 
 	file_menu->add_icon_shortcut(get_editor_theme_native_menu_icon(SNAME("Load"), menu_type == MENU_TYPE_GLOBAL, p_dark_mode), ED_GET_SHORTCUT("editor/quick_open"), SCENE_QUICK_OPEN);
+	file_menu->add_shortcut(ED_GET_SHORTCUT("editor/search_everywhere"), SCENE_GLOBAL_SEARCH);
 	file_menu->add_shortcut(ED_GET_SHORTCUT("editor/quick_open_scene"), SCENE_QUICK_OPEN_SCENE);
 	file_menu->add_shortcut(ED_GET_SHORTCUT("editor/quick_open_script"), SCENE_QUICK_OPEN_SCRIPT);
 	file_menu->add_separator();
@@ -9355,6 +9360,7 @@ EditorNode::EditorNode() {
 	ED_SHORTCUT_OVERRIDE_ARRAY("editor/quick_open", "macos", { int32_t(KeyModifierMask::META + KeyModifierMask::CTRL + Key::O), int32_t(KeyModifierMask::CMD_OR_CTRL + Key::P) });
 	ED_SHORTCUT_AND_COMMAND("editor/quick_open_scene", TTRC("Quick Open Scene..."), KeyModifierMask::CMD_OR_CTRL + KeyModifierMask::SHIFT + Key::O);
 	ED_SHORTCUT_AND_COMMAND("editor/quick_open_script", TTRC("Quick Open Script..."), KeyModifierMask::CMD_OR_CTRL + KeyModifierMask::ALT + Key::O);
+	ED_SHORTCUT_AND_COMMAND("editor/search_everywhere", TTRC("Search Everywhere (Double Shift)..."), Key::NONE);
 
 	ED_SHORTCUT("editor/export_as_mesh_library", TTRC("MeshLibrary..."));
 
@@ -9924,6 +9930,8 @@ EditorNode::EditorNode() {
 
 	quick_open_dialog = memnew(EditorQuickOpenDialog);
 	gui_base->add_child(quick_open_dialog);
+	global_search = memnew(EditorGlobalSearch);
+	gui_base->add_child(global_search);
 
 	quick_open_color_palette = memnew(EditorQuickOpenDialog);
 	gui_base->add_child(quick_open_color_palette);

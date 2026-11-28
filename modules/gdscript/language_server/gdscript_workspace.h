@@ -82,6 +82,9 @@ public:
 	String get_file_uri(const String &p_path) const;
 
 	void publish_diagnostics(const String &p_path);
+	void publish_editor_diagnostics(const String &p_path, const GDScriptParser &p_parser);
+	void clear_diagnostics(const String &p_path, int p_client_id);
+	void clear_client_diagnostics(int p_client_id);
 	void completion(const LSP::CompletionParams &p_params, List<EditorLanguage::CompletionOption> *r_options);
 
 	const LSP::DocumentSymbol *resolve_symbol(const LSP::TextDocumentPositionParams &p_doc_pos, const String &p_symbol_name = "", bool p_func_required = false);

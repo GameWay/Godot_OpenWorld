@@ -46,6 +46,9 @@
 #ifndef GDSCRIPT_NO_LSP
 #include "language_server/gdscript_language_protocol.h"
 #include "language_server/gdscript_language_server.h"
+#include "language_server/gdscript_problems_panel.h"
+
+#include "editor/docks/editor_dock_manager.h"
 #endif
 #endif // TOOLS_ENABLED
 
@@ -122,6 +125,9 @@ public:
 };
 
 static void _editor_init() {
+#ifndef GDSCRIPT_NO_LSP
+	EditorDockManager::get_singleton()->add_dock(memnew(GDScriptProblemsPanel));
+#endif
 	Ref<GDScriptExportPlugin> gd_export;
 	gd_export.instantiate();
 	EditorExport::get_singleton()->add_export_plugin(gd_export);
@@ -166,6 +172,7 @@ void initialize_gdscript_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(GDScriptSyntaxHighlighter);
 #ifndef GDSCRIPT_NO_LSP
 		register_lsp_types();
+		GDREGISTER_INTERNAL_CLASS(GDScriptProblemsPanel);
 		memnew(GDScriptLanguageProtocol);
 		EditorPlugins::add_by_type<GDScriptLanguageServer>();
 
